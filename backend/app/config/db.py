@@ -1,12 +1,13 @@
 import logging
 import os
-
+from pathlib import Path
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import ASCENDING
 
-
-load_dotenv()
+# Always load backend/.env even when the app is started from the repository root.
+ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
+load_dotenv(dotenv_path=ENV_PATH)
 
 logger = logging.getLogger(__name__)
 

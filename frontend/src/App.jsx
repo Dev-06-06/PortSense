@@ -1,66 +1,25 @@
-import { useEffect, useState } from 'react'
+import { Navigate, Route, Routes } from 'react-router-dom'
+import ProtectedRoute from './components/ProtectedRoute'
+import DashboardPage from './pages/DashboardPage'
+import LoginPage from './pages/LoginPage'
+import RegisterPage from './pages/RegisterPage'
 
 function App() {
-  const [apiConnected, setApiConnected] = useState(null)
-
-  useEffect(() => {
-    const checkApiConnection = async () => {
-      try {
-        const response = await fetch('http://localhost:8000/')
-        setApiConnected(response.ok)
-      } catch {
-        setApiConnected(false)
-      }
-    }
-
-    checkApiConnection()
-  }, [])
-
   return (
-    <>
-      <style>
-        {`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;700&display=swap');`}
-      </style>
-
-      <div
-        style={{
-          minHeight: '100vh',
-          width: '100%',
-          backgroundColor: '#0d1117',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontFamily: "'DM Sans', sans-serif",
-          textAlign: 'center',
-          gap: '0.5rem'
-        }}
-      >
-        <h1
-          style={{
-            margin: 0,
-            color: '#ffffff',
-            fontSize: 'clamp(2.5rem, 9vw, 5rem)',
-            fontWeight: 700,
-            letterSpacing: '0.02em'
-          }}
-        >
-          PortSense
-        </h1>
-        {apiConnected !== null && (
-          <p
-            style={{
-              margin: 0,
-              color: apiConnected ? '#22c55e' : '#ef4444',
-              fontSize: 'clamp(1rem, 2.4vw, 1.35rem)',
-              fontWeight: 500
-            }}
-          >
-            {apiConnected ? 'API Connected ✓' : 'API Unreachable ✗'}
-          </p>
-        )}
-      </div>
-    </>
+    <Routes>
+      <Route path='/' element={<LoginPage />} />
+      <Route path='/login' element={<LoginPage />} />
+      <Route path='/register' element={<RegisterPage />} />
+      <Route
+        path='/dashboard'
+        element={
+          <ProtectedRoute>
+            <DashboardPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route path='*' element={<Navigate to='/' replace />} />
+    </Routes>
   )
 }
 
