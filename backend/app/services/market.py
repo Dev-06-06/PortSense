@@ -32,13 +32,32 @@ def get_stock_info(ticker: str) -> dict:
         stock = yf.Ticker(ticker)
         fast_info = stock.fast_info
 
-        current_price = _safe_get_fast_info_value(fast_info, "last_price", "last_price")
-        previous_close = _safe_get_fast_info_value(fast_info, "previous_close", "previous_close")
+        try:
+            currentPrice = fast_info.last_price or 0.0
+        except Exception:
+            currentPrice = 0.0
+
+        try:
+            previousClose = fast_info.previous_close or currentPrice
+            if previousClose == currentPrice:
+                logger.warning(
+                    "Using previousClose fallback for %s because fast_info.previous_close was unavailable",
+                    ticker,
+                )
+        except Exception:
+            previousClose = currentPrice
+            logger.warning(
+                "Using previousClose fallback for %s because fast_info.previous_close fetch failed",
+                ticker,
+            )
 
         return {
-            "currentPrice": float(current_price) if current_price is not None else 0.0,
-            "previousClose": float(previous_close) if previous_close is not None else 0.0,
+            "currentPrice": float(currentPrice) if currentPrice is not None else 0.0,
+            "previousClose": float(previousClose) if previousClose is not None else float(currentPrice) if currentPrice is not None else 0.0,
         }
     except Exception as exc:
         logger.exception("Failed to fetch stock info for %s: %s", ticker, exc)
-        return {}
+        return {
+            "currentPrice": 0.0,
+            "previousClose": 0.0,
+        }

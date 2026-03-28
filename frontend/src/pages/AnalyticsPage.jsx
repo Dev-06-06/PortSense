@@ -76,8 +76,110 @@ const normalizeRow = (item) => {
   }
 }
 
+const normalizeStockBetaRow = (item) => {
+  const ticker = item?.ticker || item?.symbol || item?.name || '-'
+  const beta = Number(item?.beta ?? item?.stockBeta ?? 0)
+  const weight = Number(item?.weight ?? item?.weightPct ?? item?.weightPercent ?? 0)
+
+  return {
+    ticker,
+    beta: Number.isFinite(beta) ? Number(beta.toFixed(2)) : 0,
+    weight: Number.isFinite(weight) ? Number(weight.toFixed(2)) : 0,
+  }
+}
+
+const getRiskLabel = (portfolioBeta) => {
+  const value = Number(portfolioBeta)
+
+  if (!Number.isFinite(value)) {
+    return 'Moderate'
+  }
+
+  if (value < 1) {
+    return 'Low Risk'
+  }
+
+  if (value <= 1.2) {
+    return 'Moderate'
+  }
+
+  return 'High Risk'
+}
+
+const getRiskColor = (riskLabel) => {
+  if (riskLabel === 'Low Risk') {
+    return '#22c55e'
+  }
+
+  if (riskLabel === 'High Risk') {
+    return '#ef4444'
+  }
+
+  return '#eab308'
+}
+
+const getDiversificationVerdict = (score) => {
+  const value = Number(score)
+
+  if (!Number.isFinite(value)) {
+    return 'Moderate'
+  }
+
+  if (value >= 7.5) {
+    return 'Well Diversified'
+  }
+
+  if (value >= 5) {
+    return 'Moderate'
+  }
+
+  return 'Concentrated'
+}
+
+const normalizeDiversification = (payload) => {
+  const score = Number(payload?.score ?? payload?.diversificationScore ?? 0)
+  const sectorScore = Number(payload?.sectorScore ?? payload?.subScores?.sectorScore ?? 0)
+  const sizeScore = Number(payload?.sizeScore ?? payload?.subScores?.sizeScore ?? 0)
+  const correlationScore = Number(payload?.correlationScore ?? payload?.subScores?.correlationScore ?? 0)
+  const verdict = payload?.verdict || getDiversificationVerdict(score)
+
+  return {
+    score: Number.isFinite(score) ? Number(score.toFixed(1)) : 0,
+    verdict,
+    sectorScore: Number.isFinite(sectorScore) ? Number(sectorScore.toFixed(1)) : 0,
+    sizeScore: Number.isFinite(sizeScore) ? Number(sizeScore.toFixed(1)) : 0,
+    correlationScore: Number.isFinite(correlationScore) ? Number(correlationScore.toFixed(1)) : 0,
+  }
+}
+
+const scoreBarTrackStyle = {
+  width: '100%',
+  height: '0.5rem',
+  borderRadius: '999px',
+  backgroundColor: '#334155',
+}
+
+const scoreBarFill = (value, color) => ({
+  width: `${Math.max(0, Math.min(100, (Number(value) / 10) * 100))}%`,
+  height: '100%',
+  borderRadius: '999px',
+  backgroundColor: color,
+})
+
 const AnalyticsPage = () => {
   const [rows, setRows] = useState([])
+  const [betaData, setBetaData] = useState({ portfolioBeta: 0, riskLabel: 'Moderate', perStock: [] })
+  const [betaLoading, setBetaLoading] = useState(true)
+  const [betaError, setBetaError] = useState('')
+  const [diversificationData, setDiversificationData] = useState({
+    score: 0,
+    verdict: 'Moderate',
+    sectorScore: 0,
+    sizeScore: 0,
+    correlationScore: 0,
+  })
+  const [diversificationLoading, setDiversificationLoading] = useState(true)
+  const [diversificationError, setDiversificationError] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -87,24 +189,77 @@ const AnalyticsPage = () => {
     const fetchAnalytics = async () => {
       setLoading(true)
       setError('')
+      setBetaLoading(true)
+      setBetaError('')
+      setDiversificationLoading(true)
+      setDiversificationError('')
 
       try {
-        const response = await api.get('/api/analytics/sectors')
-        const payload = response?.data
-        const data = Array.isArray(payload) ? payload : payload?.sectors
-        const normalized = Array.isArray(data) ? data.map(normalizeRow) : []
+        const [sectorsResult, betaResult, diversificationResult] = await Promise.allSettled([
+          api.get('/api/analytics/sectors'),
+          api.get('/api/analytics/beta'),
+          api.get('/api/analytics/diversification'),
+        ])
 
-        if (isMounted) {
+        if (isMounted && sectorsResult.status === 'fulfilled') {
+          const payload = sectorsResult.value?.data
+          const data = Array.isArray(payload) ? payload : payload?.sectors
+          const normalized = Array.isArray(data) ? data.map(normalizeRow) : []
           setRows(normalized)
         }
-      } catch {
-        if (isMounted) {
+
+        if (isMounted && sectorsResult.status === 'rejected') {
           setError('Unable to load sector analytics right now.')
           setRows([])
+        }
+
+        if (isMounted && betaResult.status === 'fulfilled') {
+          const payload = betaResult.value?.data || {}
+          console.log('Beta analytics payload:', payload)
+          const portfolioBeta = Number(payload?.portfolioBeta ?? payload?.beta ?? 0)
+          const perStockRaw = Array.isArray(payload?.perStock)
+            ? payload.perStock
+            : Array.isArray(payload?.stocks)
+              ? payload.stocks
+              : payload?.holdings
+          const perStock = Array.isArray(perStockRaw) ? perStockRaw.map(normalizeStockBetaRow) : []
+          const riskLabel = payload?.riskLabel || payload?.label || getRiskLabel(portfolioBeta)
+
+          const nextBetaData = {
+            portfolioBeta: Number.isFinite(portfolioBeta) ? Number(portfolioBeta.toFixed(2)) : 0,
+            riskLabel,
+            perStock,
+          }
+
+          console.log('Normalized betaData:', nextBetaData)
+          setBetaData(nextBetaData)
+        }
+
+        if (isMounted && betaResult.status === 'rejected') {
+          setBetaError('Unable to load portfolio beta right now.')
+          setBetaData({ portfolioBeta: 0, riskLabel: 'Moderate', perStock: [] })
+        }
+
+        if (isMounted && diversificationResult.status === 'fulfilled') {
+          const payload = diversificationResult.value?.data || {}
+          setDiversificationData(normalizeDiversification(payload))
+        }
+
+        if (isMounted && diversificationResult.status === 'rejected') {
+          setDiversificationError('Unable to load diversification score right now.')
+          setDiversificationData({
+            score: 0,
+            verdict: 'Moderate',
+            sectorScore: 0,
+            sizeScore: 0,
+            correlationScore: 0,
+          })
         }
       } finally {
         if (isMounted) {
           setLoading(false)
+          setBetaLoading(false)
+          setDiversificationLoading(false)
         }
       }
     }
@@ -184,6 +339,113 @@ const AnalyticsPage = () => {
                 </PieChart>
               </div>
             </div>
+          )}
+        </section>
+
+        <section
+          className='rounded-2xl border border-white/8 bg-slate-900/60 p-6'
+          style={{
+            borderRadius: '1rem',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            backgroundColor: 'rgba(15, 23, 42, 0.6)',
+            padding: '1.5rem',
+          }}
+        >
+          <h3 style={{ marginTop: 0, marginBottom: '0.75rem', color: '#f8fafc' }}>Portfolio Beta</h3>
+
+          {betaLoading ? (
+            <p style={{ margin: 0, color: '#94a3b8' }}>Loading portfolio beta...</p>
+          ) : betaError ? (
+            <p style={{ margin: 0, color: '#fca5a5' }}>{betaError}</p>
+          ) : (
+            <>
+              <p style={{ margin: 0, ...numberStyle, fontSize: '3rem', lineHeight: 1, color: '#f8fafc' }}>
+                {betaData.portfolioBeta}
+              </p>
+              <p style={{ margin: '0.35rem 0 1rem', color: getRiskColor(betaData.riskLabel), fontWeight: 600 }}>
+                {betaData.riskLabel}
+              </p>
+
+              {console.log('Portfolio Beta render perStock count (expected 5):', betaData.perStock?.length, betaData.perStock)}
+
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '420px' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid rgba(148, 163, 184, 0.25)' }}>
+                      <th style={{ textAlign: 'left', padding: '0.65rem 0.75rem', color: '#cbd5e1', fontWeight: 600 }}>
+                        Ticker
+                      </th>
+                      <th style={{ textAlign: 'right', padding: '0.65rem 0.75rem', color: '#cbd5e1', fontWeight: 600 }}>
+                        Beta
+                      </th>
+                      <th style={{ textAlign: 'right', padding: '0.65rem 0.75rem', color: '#cbd5e1', fontWeight: 600 }}>
+                        Weight %
+                      </th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {betaData.perStock.map((row) => (
+                      <tr key={`beta-${row.ticker}`} style={{ borderBottom: '1px solid rgba(148, 163, 184, 0.12)' }}>
+                        <td style={{ padding: '0.7rem 0.75rem', color: '#f8fafc' }}>{row.ticker}</td>
+                        <td style={{ padding: '0.7rem 0.75rem', textAlign: 'right', ...numberStyle }}>{row.beta}</td>
+                        <td style={{ padding: '0.7rem 0.75rem', textAlign: 'right', ...numberStyle }}>{row.weight}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </section>
+
+        <section
+          className='rounded-2xl border border-white/8 bg-slate-900/60 p-6'
+          style={{
+            borderRadius: '1rem',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            backgroundColor: 'rgba(15, 23, 42, 0.6)',
+            padding: '1.5rem',
+          }}
+        >
+          <h3 style={{ marginTop: 0, marginBottom: '0.75rem', color: '#f8fafc' }}>Diversification Score</h3>
+
+          {diversificationLoading ? (
+            <p style={{ margin: 0, color: '#94a3b8' }}>Loading diversification score...</p>
+          ) : diversificationError ? (
+            <p style={{ margin: 0, color: '#fca5a5' }}>{diversificationError}</p>
+          ) : (
+            <>
+              <p style={{ margin: 0, ...numberStyle, fontSize: '3rem', lineHeight: 1, color: '#f97316' }}>
+                {diversificationData.score}/10
+              </p>
+              <p style={{ margin: '0.35rem 0 1rem', color: '#cbd5e1', fontWeight: 600 }}>{diversificationData.verdict}</p>
+
+              <div style={{ display: 'grid', gap: '0.9rem' }}>
+                <div style={{ display: 'grid', gap: '0.35rem' }}>
+                  <p style={{ margin: 0, color: '#cbd5e1' }}>Sector Score: {diversificationData.sectorScore}/10</p>
+                  <div style={scoreBarTrackStyle}>
+                    <div style={scoreBarFill(diversificationData.sectorScore, '#f97316')} />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gap: '0.35rem' }}>
+                  <p style={{ margin: 0, color: '#cbd5e1' }}>Size Score: {diversificationData.sizeScore}/10</p>
+                  <div style={scoreBarTrackStyle}>
+                    <div style={scoreBarFill(diversificationData.sizeScore, '#3b82f6')} />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gap: '0.35rem' }}>
+                  <p style={{ margin: 0, color: '#cbd5e1' }}>
+                    Correlation Score: {diversificationData.correlationScore}/10
+                  </p>
+                  <div style={scoreBarTrackStyle}>
+                    <div style={scoreBarFill(diversificationData.correlationScore, '#22c55e')} />
+                  </div>
+                </div>
+              </div>
+            </>
           )}
         </section>
 
