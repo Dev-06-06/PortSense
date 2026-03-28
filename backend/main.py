@@ -7,7 +7,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config.db import close_mongo_connection, connect_to_mongo, ensure_indexes
 from app.routes.analytics import router as analytics_router
 from app.routes.auth import router as auth_router
+from app.routes.genai import router as genai_router
 from app.routes.holdings import router as holdings_router
+from app.routes.sentiment import router as sentiment_router
 
 
 logging.basicConfig(level=logging.INFO)
@@ -34,6 +36,8 @@ app.add_middleware(
 app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
 app.include_router(holdings_router, prefix="/api/holdings", tags=["holdings"])
 app.include_router(analytics_router, prefix="/api/analytics", tags=["analytics"])
+app.include_router(sentiment_router, prefix="/api/sentiment", tags=["sentiment"])
+app.include_router(genai_router, prefix="/api/genai", tags=["genai"])
 
 
 @app.get("/")

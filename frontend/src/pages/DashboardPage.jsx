@@ -90,6 +90,10 @@ const DashboardPage = () => {
   }
 
   useEffect(() => {
+    document.title = 'Dashboard | PortSense'
+  }, [])
+
+  useEffect(() => {
     fetchHoldings()
   }, [])
 
@@ -167,20 +171,62 @@ const DashboardPage = () => {
           animation: spin 0.9s linear infinite;
         }
 
+        .summary-grid {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 0.75rem;
+        }
+
+        .add-holding-form {
+          grid-template-columns: 1fr;
+          width: 100%;
+        }
+
+        .mobile-hide-col {
+          display: none;
+        }
+
+        .holdings-table {
+          min-width: 560px;
+        }
+
+        .animate-pulse {
+          animation: dashboard-pulse 1.4s ease-in-out infinite;
+        }
+
+        @keyframes dashboard-pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.45; }
+        }
+
         @keyframes spin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
+        }
+
+        @media (min-width: 768px) {
+          .summary-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+          }
+
+          .add-holding-form {
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+          }
+
+          .mobile-hide-col {
+            display: table-cell;
+          }
+
+          .holdings-table {
+            min-width: 840px;
+          }
         }
       `}</style>
 
       <div style={containerStyle}>
         <div style={{ ...cardStyle, padding: '1rem' }}>
           <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-              gap: '0.75rem',
-            }}
+            className='summary-grid'
           >
             <div>
               <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.85rem' }}>Total Invested</p>
@@ -239,11 +285,11 @@ const DashboardPage = () => {
           {showAddForm && (
             <form
               onSubmit={onSubmitHolding}
+              className='add-holding-form'
               style={{
                 display: 'grid',
                 gap: '0.7rem',
                 marginBottom: '1rem',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
               }}
             >
               <input
@@ -305,29 +351,65 @@ const DashboardPage = () => {
           {error && <p style={{ color: '#ef4444', marginTop: 0 }}>{error}</p>}
 
           {loading ? (
+            <div style={{ display: 'grid', gap: '0.75rem' }}>
+              {[1, 2, 3].map((index) => (
+                <div
+                  key={`skeleton-${index}`}
+                  className='animate-pulse'
+                  style={{
+                    borderRadius: '0.9rem',
+                    border: '1px solid rgba(148, 163, 184, 0.25)',
+                    backgroundColor: 'rgba(51, 65, 85, 0.35)',
+                    padding: '0.9rem',
+                    display: 'grid',
+                    gap: '0.55rem',
+                  }}
+                >
+                  <div style={{ height: '0.9rem', width: '32%', borderRadius: '0.5rem', backgroundColor: '#475569' }} />
+                  <div style={{ height: '0.9rem', width: '56%', borderRadius: '0.5rem', backgroundColor: '#64748b' }} />
+                </div>
+              ))}
+            </div>
+          ) : holdings.length === 0 ? (
             <div
               style={{
                 display: 'grid',
                 placeItems: 'center',
-                padding: '2rem 0.5rem',
-                gap: '0.65rem',
+                padding: '2rem 1rem',
               }}
             >
               <div
-                className='loader-spin'
                 style={{
-                  width: '2rem',
-                  height: '2rem',
-                  borderRadius: '999px',
-                  border: '3px solid rgba(255, 255, 255, 0.2)',
-                  borderTopColor: '#f97316',
+                  width: '100%',
+                  maxWidth: '30rem',
+                  borderRadius: '1rem',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  backgroundColor: 'rgba(2, 6, 23, 0.55)',
+                  padding: '1.3rem 1rem',
+                  display: 'grid',
+                  justifyItems: 'center',
+                  gap: '0.65rem',
+                  textAlign: 'center',
                 }}
-              />
-              <span style={{ color: '#94a3b8', fontSize: '0.95rem' }}>Loading holdings...</span>
+              >
+                <p style={{ margin: 0, color: '#ffffff', fontWeight: 700, fontSize: '1.05rem' }}>No holdings yet</p>
+                <p style={{ margin: 0, color: '#94a3b8' }}>Add your first stock to get started</p>
+                <button
+                  type='button'
+                  onClick={() => setShowAddForm(true)}
+                  style={{
+                    ...buttonBaseStyle,
+                    backgroundColor: '#f97316',
+                    marginTop: '0.2rem',
+                  }}
+                >
+                  + Add Holding
+                </button>
+              </div>
             </div>
           ) : (
             <div style={{ width: '100%', overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '840px' }}>
+              <table className='holdings-table' style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr>
                     {[
@@ -343,6 +425,7 @@ const DashboardPage = () => {
                     ].map((title) => (
                       <th
                         key={title || 'action'}
+                        className={title === 'Invested' || title === 'Current Value' ? 'mobile-hide-col' : ''}
                         style={{
                           textAlign: title === '' ? 'center' : 'left',
                           color: '#94a3b8',
@@ -358,19 +441,7 @@ const DashboardPage = () => {
                     ))}
                   </tr>
                 </thead>
-
                 <tbody>
-                  {holdings.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={9}
-                        style={{ padding: '1.1rem 0.6rem', color: '#94a3b8', textAlign: 'center' }}
-                      >
-                        No holdings found. Add your first one.
-                      </td>
-                    </tr>
-                  )}
-
                   {holdings.map((holding) => {
                     const invested =
                       Number(holding.invested) || (Number(holding.buyPrice) || 0) * (Number(holding.quantity) || 0)
@@ -391,8 +462,12 @@ const DashboardPage = () => {
                         <td style={{ ...numberStyle, padding: '0.8rem 0.6rem' }}>
                           {formatCurrency(holding.currentPrice)}
                         </td>
-                        <td style={{ ...numberStyle, padding: '0.8rem 0.6rem' }}>{formatCurrency(invested)}</td>
-                        <td style={{ ...numberStyle, padding: '0.8rem 0.6rem' }}>{formatCurrency(currentValue)}</td>
+                        <td className='mobile-hide-col' style={{ ...numberStyle, padding: '0.8rem 0.6rem' }}>
+                          {formatCurrency(invested)}
+                        </td>
+                        <td className='mobile-hide-col' style={{ ...numberStyle, padding: '0.8rem 0.6rem' }}>
+                          {formatCurrency(currentValue)}
+                        </td>
                         <td
                           style={{
                             ...numberStyle,

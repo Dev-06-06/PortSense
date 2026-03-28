@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import api from '../services/api'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
@@ -44,6 +44,16 @@ const buttonStyle = {
   cursor: 'pointer',
 }
 
+const logoStyle = {
+  marginTop: 0,
+  marginBottom: '1rem',
+  fontFamily: "'Barlow Condensed', sans-serif",
+  fontSize: '2rem',
+  fontWeight: 700,
+  letterSpacing: '0.1em',
+  lineHeight: 1,
+}
+
 const getTokenFromResponse = (data) => data?.token || data?.access_token || data?.accessToken
 
 const LoginPage = () => {
@@ -53,6 +63,10 @@ const LoginPage = () => {
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
   const { login } = useAuth()
+
+  useEffect(() => {
+    document.title = 'Login | PortSense'
+  }, [])
 
   const onSubmit = async (event) => {
     event.preventDefault()
@@ -79,6 +93,10 @@ const LoginPage = () => {
   return (
     <div style={shellStyle}>
       <form onSubmit={onSubmit} style={cardStyle}>
+        <h2 style={logoStyle}>
+          <span style={{ color: '#ffffff' }}>PORT</span>
+          <span style={{ color: '#f97316' }}>SENSE</span>
+        </h2>
         <h1 style={{ marginTop: 0, marginBottom: '1rem' }}>Login</h1>
 
         <div style={{ display: 'grid', gap: '0.85rem' }}>

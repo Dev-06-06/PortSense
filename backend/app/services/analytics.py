@@ -1,5 +1,9 @@
 import logging
+from datetime import date, datetime, timedelta
+from itertools import combinations
 
+import numpy as np
+import pandas as pd
 import yfinance as yf
 
 logger = logging.getLogger(__name__)
@@ -199,3 +203,270 @@ def get_diversification_score(holdings: list, sector_breakdown: list) -> dict:
         "correlationScore": correlation_score,
         "verdict": verdict,
     }
+
+
+def get_correlation_matrix(tickers: list) -> dict:
+    normalized_tickers = [str(ticker).strip().upper() for ticker in tickers if str(ticker).strip()]
+    unique_tickers = list(dict.fromkeys(normalized_tickers))
+
+    empty_result = {
+        "tickers": unique_tickers,
+        "matrix": [],
+        "pairs": [],
+    }
+
+    if len(unique_tickers) < 2:
+        return empty_result
+
+    def get_strength(correlation: float) -> str:
+        if correlation > 0.7:
+            return "Strong Positive"
+        if correlation >= 0.3:
+            return "Moderate Positive"
+        if correlation >= -0.3:
+            return "Weak"
+        if correlation >= -0.7:
+            return "Moderate Negative"
+        return "Strong Negative"
+
+    try:
+        price_data = yf.download(unique_tickers, period="6mo", interval="1d", auto_adjust=True)
+        if price_data is None or price_data.empty:
+            return empty_result
+
+        close_by_ticker = {}
+        if isinstance(price_data.columns, pd.MultiIndex):
+            if "Close" not in price_data.columns.get_level_values(0):
+                return empty_result
+            close_level = price_data["Close"]
+            for ticker in unique_tickers:
+                if ticker in close_level.columns:
+                    close_by_ticker[ticker] = close_level[ticker]
+        else:
+            # Single-ticker shape can be OHLC columns with "Close".
+            if "Close" in price_data.columns and len(unique_tickers) == 1:
+                close_by_ticker[unique_tickers[0]] = price_data["Close"]
+            else:
+                for ticker in unique_tickers:
+                    if ticker in price_data.columns:
+                        close_by_ticker[ticker] = price_data[ticker]
+
+        ordered_tickers = [ticker for ticker in unique_tickers if ticker in close_by_ticker]
+        if len(ordered_tickers) < 2:
+            return {
+                "tickers": ordered_tickers,
+                "matrix": [],
+                "pairs": [],
+            }
+
+        close_data = pd.DataFrame({ticker: close_by_ticker[ticker] for ticker in ordered_tickers})
+        close_data = close_data[ordered_tickers]
+
+        corr_df = close_data.corr(method="pearson")
+        corr_df = corr_df.loc[ordered_tickers, ordered_tickers]
+
+        matrix = []
+        for row_ticker in ordered_tickers:
+            row_values = []
+            for col_ticker in ordered_tickers:
+                value = corr_df.at[row_ticker, col_ticker]
+                if value != value:  # NaN check
+                    value = 0.0
+                row_values.append(round(float(value), 2))
+            matrix.append(row_values)
+
+        pairs = []
+        for ticker1, ticker2 in combinations(ordered_tickers, 2):
+            correlation_value = corr_df.at[ticker1, ticker2]
+            if correlation_value != correlation_value:  # NaN check
+                correlation_value = 0.0
+            correlation_value = round(float(correlation_value), 2)
+            pairs.append(
+                {
+                    "ticker1": ticker1,
+                    "ticker2": ticker2,
+                    "correlation": correlation_value,
+                    "strength": get_strength(correlation_value),
+                }
+            )
+
+        pairs.sort(key=lambda item: abs(item["correlation"]), reverse=True)
+
+        return {
+            "tickers": ordered_tickers,
+            "matrix": matrix,
+            "pairs": pairs,
+        }
+    except Exception as exc:
+        logger.exception("Failed to build correlation matrix for tickers %s: %s", unique_tickers, exc)
+        return empty_result
+
+
+def get_benchmark_comparison(holdings: list) -> dict:
+    try:
+        if not holdings:
+            return {}
+
+        dated_holdings = []
+        for holding in holdings:
+            ticker = str(holding.get("ticker", "")).strip().upper()
+            quantity = float(holding.get("quantity", 0.0))
+            buy_date_raw = holding.get("buyDate")
+
+            if not ticker or quantity <= 0 or buy_date_raw is None:
+                continue
+
+            if isinstance(buy_date_raw, datetime):
+                buy_date_value = buy_date_raw.date()
+            elif isinstance(buy_date_raw, date):
+                buy_date_value = buy_date_raw
+            else:
+                buy_date_value = datetime.fromisoformat(str(buy_date_raw)).date()
+
+            dated_holdings.append(
+                {
+                    "ticker": ticker,
+                    "quantity": quantity,
+                    "buyDate": buy_date_value,
+                }
+            )
+
+        if not dated_holdings:
+            return {}
+
+        start_date = min(item["buyDate"] for item in dated_holdings)
+        today = date.today()
+        if start_date >= today:
+            return {}
+
+        end_date = today + timedelta(days=1)
+        tickers = list(dict.fromkeys(item["ticker"] for item in dated_holdings))
+
+        portfolio_data = yf.download(
+            tickers,
+            start=start_date.isoformat(),
+            end=end_date.isoformat(),
+            interval="1d",
+            auto_adjust=True,
+            progress=False,
+        )
+        nifty_data = yf.download(
+            "^NSEI",
+            start=start_date.isoformat(),
+            end=end_date.isoformat(),
+            interval="1d",
+            auto_adjust=True,
+            progress=False,
+        )
+
+        if portfolio_data is None or portfolio_data.empty or nifty_data is None or nifty_data.empty:
+            return {}
+
+        if isinstance(nifty_data.columns, pd.MultiIndex):
+            try:
+                nifty_close = nifty_data["Close"]["^NSEI"]
+            except KeyError:
+                return {}
+        else:
+            nifty_close = nifty_data.get("Close")
+
+        if nifty_close is None:
+            return {}
+
+        portfolio_close_by_ticker = {}
+        if isinstance(portfolio_data.columns, pd.MultiIndex):
+            if "Close" not in portfolio_data.columns.get_level_values(0):
+                return {}
+            close_level = portfolio_data["Close"]
+            for ticker in tickers:
+                if ticker in close_level.columns:
+                    portfolio_close_by_ticker[ticker] = close_level[ticker]
+        else:
+            if "Close" in portfolio_data.columns and len(tickers) == 1:
+                portfolio_close_by_ticker[tickers[0]] = portfolio_data["Close"]
+            else:
+                for ticker in tickers:
+                    if ticker in portfolio_data.columns:
+                        portfolio_close_by_ticker[ticker] = portfolio_data[ticker]
+
+        if not portfolio_close_by_ticker:
+            return {}
+
+        portfolio_close = pd.DataFrame(
+            {ticker: portfolio_close_by_ticker[ticker] for ticker in tickers if ticker in portfolio_close_by_ticker}
+        )
+
+        portfolio_close = portfolio_close.reindex(columns=tickers)
+        portfolio_close = portfolio_close.ffill().dropna(how="all")
+        nifty_close = nifty_close.ffill().dropna()
+
+        if portfolio_close.empty or nifty_close.empty:
+            return {}
+
+        quantities = {ticker: 0.0 for ticker in tickers}
+        for item in dated_holdings:
+            quantities[item["ticker"]] += float(item["quantity"])
+
+        portfolio_values = sum(
+            portfolio_close[ticker].fillna(0.0) * quantities.get(ticker, 0.0)
+            for ticker in tickers
+        )
+        portfolio_values = portfolio_values.dropna()
+        if portfolio_values.empty:
+            return {}
+
+        common_index = portfolio_values.index.intersection(nifty_close.index)
+        if len(common_index) < 2:
+            return {}
+
+        portfolio_values = portfolio_values.loc[common_index]
+        nifty_close = nifty_close.loc[common_index]
+
+        initial_portfolio = float(portfolio_values.iloc[0])
+        final_portfolio = float(portfolio_values.iloc[-1])
+        initial_nifty = float(nifty_close.iloc[0])
+        final_nifty = float(nifty_close.iloc[-1])
+        if initial_portfolio <= 0 or initial_nifty <= 0:
+            return {}
+
+        years = (today - start_date).days / 365.0
+        if years <= 0:
+            return {}
+
+        user_cagr = (final_portfolio / initial_portfolio) ** (1 / years) - 1
+        nifty_cagr = (final_nifty / initial_nifty) ** (1 / years) - 1
+
+        portfolio_returns = portfolio_values.pct_change().dropna()
+        nifty_returns = nifty_close.pct_change().dropna()
+        returns_index = portfolio_returns.index.intersection(nifty_returns.index)
+        if len(returns_index) < 2:
+            return {}
+
+        portfolio_returns = portfolio_returns.loc[returns_index]
+        nifty_returns = nifty_returns.loc[returns_index]
+
+        covariance = float(np.cov(portfolio_returns.values, nifty_returns.values)[0][1])
+        nifty_variance = float(np.var(nifty_returns.values))
+        portfolio_beta = covariance / nifty_variance if nifty_variance != 0 else 0.0
+
+        outperforming = user_cagr > nifty_cagr
+        if user_cagr > nifty_cagr and portfolio_beta <= 1.0:
+            verdict = "You beat the index with lower risk — great job"
+        elif user_cagr > nifty_cagr and portfolio_beta > 1.0:
+            verdict = "You beat the index but took higher risk to do it"
+        elif user_cagr < nifty_cagr and portfolio_beta <= 1.0:
+            verdict = "You underperformed the index with lower risk — consider index funds"
+        else:
+            verdict = "You took more risk for less return than the index"
+
+        return {
+            "userCAGR": round(user_cagr * 100, 2),
+            "niftyCAGR": round(nifty_cagr * 100, 2),
+            "portfolioBeta": portfolio_beta,
+            "startDate": start_date.isoformat(),
+            "verdict": verdict,
+            "outperforming": outperforming,
+        }
+    except Exception as exc:
+        logger.exception("Failed to compute benchmark comparison: %s", exc)
+        return {}

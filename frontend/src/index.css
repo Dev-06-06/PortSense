@@ -18,8 +18,30 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background: #0d1117;
+  background-color: #0d1117;
   color: #e5e7eb;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #f97316;
+  border-radius: 3px;
+}
+
+.page-content {
+  padding-bottom: 80px;
 }
 
 #root {

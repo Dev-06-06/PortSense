@@ -167,6 +167,20 @@ const scoreBarFill = (value, color) => ({
 })
 
 const AnalyticsPage = () => {
+  const [viewportWidth, setViewportWidth] = useState(() => {
+    if (typeof window === 'undefined') {
+      return 1200
+    }
+
+    return window.innerWidth
+  })
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') {
+      return false
+    }
+
+    return window.innerWidth < 768
+  })
   const [rows, setRows] = useState([])
   const [betaData, setBetaData] = useState({ portfolioBeta: 0, riskLabel: 'Moderate', perStock: [] })
   const [betaLoading, setBetaLoading] = useState(true)
@@ -182,6 +196,10 @@ const AnalyticsPage = () => {
   const [diversificationError, setDiversificationError] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    document.title = 'Analytics | PortSense'
+  }, [])
 
   useEffect(() => {
     let isMounted = true
@@ -271,6 +289,19 @@ const AnalyticsPage = () => {
     }
   }, [])
 
+  useEffect(() => {
+    const onResize = () => {
+      setViewportWidth(window.innerWidth)
+      setIsMobile(window.innerWidth < 768)
+    }
+
+    window.addEventListener('resize', onResize)
+
+    return () => {
+      window.removeEventListener('resize', onResize)
+    }
+  }, [])
+
   const overweightSectors = useMemo(() => rows.filter((row) => row.isOverweight), [rows])
 
   const chartData = useMemo(
@@ -282,10 +313,20 @@ const AnalyticsPage = () => {
     [rows],
   )
 
+  const mobilePieChartSize = Math.max(240, Math.min(300, viewportWidth - 72))
+  const pieChartSize = isMobile ? mobilePieChartSize : 400
+  const pieOuterRadius = isMobile ? Math.max(78, Math.round(pieChartSize * 0.32)) : 130
+
   return (
     <div style={shellStyle}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=DM+Sans:wght@400;500;700&display=swap');
+
+        .analytics-stat-grid {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 1rem;
+        }
 
         .analytics-spin {
           animation: analytics-spin 0.9s linear infinite;
@@ -295,6 +336,12 @@ const AnalyticsPage = () => {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
         }
+
+        @media (min-width: 768px) {
+          .analytics-stat-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+        }
       `}</style>
 
       <div style={containerStyle}>
@@ -303,23 +350,26 @@ const AnalyticsPage = () => {
 
           {loading ? (
             <div style={{ minHeight: '410px', display: 'grid', placeItems: 'center' }}>
-              <div className='analytics-spin' style={spinnerStyle} aria-label='Loading analytics' />
+              <div style={{ display: 'grid', justifyItems: 'center', gap: '0.7rem' }}>
+                <div className='analytics-spin' style={spinnerStyle} aria-label='Loading analytics' />
+                <p style={{ margin: 0, color: '#94a3b8' }}>Fetching market data...</p>
+              </div>
             </div>
           ) : error ? (
             <p style={{ margin: 0, color: '#fca5a5' }}>{error}</p>
           ) : rows.length === 0 ? (
-            <p style={{ margin: 0, color: '#94a3b8' }}>No sector data available yet.</p>
+            <p style={{ margin: 0, color: '#94a3b8' }}>Add holdings to see analytics</p>
           ) : (
             <div style={{ display: 'flex', justifyContent: 'center' }}>
-              <div style={{ width: '400px', maxWidth: '100%' }}>
-                <PieChart width={400} height={400}>
+              <div style={{ width: `${pieChartSize}px`, maxWidth: '100%' }}>
+                <PieChart width={pieChartSize} height={pieChartSize}>
                   <Pie
                     data={chartData}
                     dataKey='value'
                     nameKey='name'
                     cx='50%'
                     cy='50%'
-                    outerRadius={130}
+                    outerRadius={pieOuterRadius}
                     labelLine={false}
                     label={({ name, percent }) => `${name} ${(percent * 100).toFixed(1)}%`}
                   >
@@ -342,16 +392,17 @@ const AnalyticsPage = () => {
           )}
         </section>
 
-        <section
-          className='rounded-2xl border border-white/8 bg-slate-900/60 p-6'
-          style={{
-            borderRadius: '1rem',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
-            backgroundColor: 'rgba(15, 23, 42, 0.6)',
-            padding: '1.5rem',
-          }}
-        >
-          <h3 style={{ marginTop: 0, marginBottom: '0.75rem', color: '#f8fafc' }}>Portfolio Beta</h3>
+        <div className='analytics-stat-grid'>
+          <section
+            className='rounded-2xl border border-white/8 bg-slate-900/60 p-6'
+            style={{
+              borderRadius: '1rem',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              backgroundColor: 'rgba(15, 23, 42, 0.6)',
+              padding: '1.5rem',
+            }}
+          >
+            <h3 style={{ marginTop: 0, marginBottom: '0.75rem', color: '#f8fafc' }}>Portfolio Beta</h3>
 
           {betaLoading ? (
             <p style={{ margin: 0, color: '#94a3b8' }}>Loading portfolio beta...</p>
@@ -397,18 +448,18 @@ const AnalyticsPage = () => {
               </div>
             </>
           )}
-        </section>
+          </section>
 
-        <section
-          className='rounded-2xl border border-white/8 bg-slate-900/60 p-6'
-          style={{
-            borderRadius: '1rem',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
-            backgroundColor: 'rgba(15, 23, 42, 0.6)',
-            padding: '1.5rem',
-          }}
-        >
-          <h3 style={{ marginTop: 0, marginBottom: '0.75rem', color: '#f8fafc' }}>Diversification Score</h3>
+          <section
+            className='rounded-2xl border border-white/8 bg-slate-900/60 p-6'
+            style={{
+              borderRadius: '1rem',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              backgroundColor: 'rgba(15, 23, 42, 0.6)',
+              padding: '1.5rem',
+            }}
+          >
+            <h3 style={{ marginTop: 0, marginBottom: '0.75rem', color: '#f8fafc' }}>Diversification Score</h3>
 
           {diversificationLoading ? (
             <p style={{ margin: 0, color: '#94a3b8' }}>Loading diversification score...</p>
@@ -447,7 +498,8 @@ const AnalyticsPage = () => {
               </div>
             </>
           )}
-        </section>
+          </section>
+        </div>
 
         {!loading && overweightSectors.length > 0 && (
           <section style={{ display: 'grid', gap: '0.75rem' }}>
@@ -476,7 +528,10 @@ const AnalyticsPage = () => {
           <h3 style={{ marginTop: 0, marginBottom: '0.75rem', color: '#f8fafc' }}>Sector Breakdown</h3>
 
           {loading ? (
-            <p style={{ margin: 0, color: '#94a3b8' }}>Fetching table data...</p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+              <div className='analytics-spin' style={spinnerStyle} aria-label='Loading analytics table' />
+              <p style={{ margin: 0, color: '#94a3b8' }}>Fetching market data...</p>
+            </div>
           ) : (
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '560px' }}>
@@ -501,7 +556,7 @@ const AnalyticsPage = () => {
                   {rows.length === 0 ? (
                     <tr>
                       <td colSpan={4} style={{ padding: '1rem 0.75rem', color: '#94a3b8' }}>
-                        No sector rows to display.
+                        Add holdings to see analytics
                       </td>
                     </tr>
                   ) : (
