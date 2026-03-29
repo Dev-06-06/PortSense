@@ -1,9 +1,8 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import BottomNav from './components/BottomNav'
 import ProtectedRoute from './components/ProtectedRoute'
+import AccountPage from './pages/AccountPage'
 import AnalyticsPage from './pages/AnalyticsPage'
-import AdvisorPage from './pages/AdvisorPage'
-import BenchmarkPage from './pages/BenchmarkPage'
 import CorrelationPage from './pages/CorrelationPage'
 import DashboardPage from './pages/DashboardPage'
 import LandingPage from './pages/LandingPage'
@@ -65,16 +64,6 @@ function App() {
         }
       />
       <Route
-        path='/benchmark'
-        element={
-          <ProtectedLayout>
-            <PageTransition>
-              <BenchmarkPage />
-            </PageTransition>
-          </ProtectedLayout>
-        }
-      />
-      <Route
         path='/sentiment'
         element={
           <ProtectedLayout>
@@ -85,11 +74,11 @@ function App() {
         }
       />
       <Route
-        path='/advisor'
+        path='/account'
         element={
           <ProtectedLayout>
             <PageTransition>
-              <AdvisorPage />
+              <AccountPage />
             </PageTransition>
           </ProtectedLayout>
         }

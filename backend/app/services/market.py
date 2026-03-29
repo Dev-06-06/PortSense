@@ -40,13 +40,13 @@ def get_stock_info(ticker: str) -> dict:
         try:
             previousClose = fast_info.previous_close or currentPrice
             if previousClose == currentPrice:
-                logger.warning(
+                logger.debug(
                     "Using previousClose fallback for %s because fast_info.previous_close was unavailable",
                     ticker,
                 )
         except Exception:
             previousClose = currentPrice
-            logger.warning(
+            logger.debug(
                 "Using previousClose fallback for %s because fast_info.previous_close fetch failed",
                 ticker,
             )

@@ -1,29 +1,18 @@
 import { Link, useLocation } from 'react-router-dom'
+import { LayoutDashboard, BarChart2, GitBranch, Radio, UserCircle } from 'lucide-react'
 
 const tabs = [
-  { label: 'Dashboard', icon: '📊', path: '/dashboard' },
-  { label: 'Analytics', icon: '🔍', path: '/analytics' },
-  { label: 'Correlation', icon: '🔗', path: '/correlation' },
-  { label: 'Sentiment', icon: '📰', path: '/sentiment' },
-  { label: 'Advisor', icon: '🧠', path: '/advisor' },
+  { label: "Dashboard", icon: <LayoutDashboard size={20} />, path: "/dashboard" },
+  { label: "Analytics", icon: <BarChart2 size={20} />, path: "/analytics" },
+  { label: "Correlation", icon: <GitBranch size={20} />, path: "/correlation" },
+  { label: "Sentiment", icon: <Radio size={20} />, path: "/sentiment" },
+  { label: "Account", icon: <UserCircle size={20} />, path: "/account" },
 ]
 
 const BottomNav = () => {
   const { pathname } = useLocation()
 
-  const isActive = (path) => {
-    if (
-      path === '/dashboard' ||
-      path === '/analytics' ||
-      path === '/correlation' ||
-      path === '/sentiment' ||
-      path === '/advisor'
-    ) {
-      return pathname === path || pathname.startsWith(`${path}/`)
-    }
-
-    return pathname === path
-  }
+  const isActive = (path) => pathname === path || pathname.startsWith(`${path}/`)
 
   return (
     <>
@@ -50,7 +39,7 @@ const BottomNav = () => {
           align-items: center;
           justify-content: center;
           gap: 2px;
-          font-size: 11px;
+          font-size: 9px;
           line-height: 1;
           font-weight: 600;
           min-width: 0;
@@ -76,7 +65,7 @@ const BottomNav = () => {
 
         @media (max-width: 767px) {
           .bottom-nav-link {
-            font-size: 10px;
+            font-size: 8px;
           }
         }
 

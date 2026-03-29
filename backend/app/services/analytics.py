@@ -1,10 +1,16 @@
 import logging
-from datetime import date, datetime, timedelta
+import os
+from datetime import date, timedelta
+from datetime import datetime
 from itertools import combinations
 
 import numpy as np
 import pandas as pd
 import yfinance as yf
+from motor.motor_asyncio import AsyncIOMotorClient
+
+from app.config.db import get_mongo_client
+from app.services.gemini import get_gemini_response
 
 logger = logging.getLogger(__name__)
 
@@ -38,32 +44,76 @@ SECTOR_MAP = {
 }
 
 
-def get_sector(ticker: str) -> str:
-    normalized_ticker = ticker.strip().upper()
+def _get_database(client: AsyncIOMotorClient):
+    db_name = os.getenv("MONGO_DB_NAME")
 
-    sector = SECTOR_MAP.get(normalized_ticker)
-    if sector:
-        return sector
+    if db_name:
+        return client[db_name]
+
+    return client.get_default_database()
+
+
+async def get_sector(ticker: str, db_client=None) -> str:
+    if ticker in SECTOR_MAP:
+        return SECTOR_MAP[ticker]
+
+    if db_client:
+        cached = await db_client.portsense.sector_cache.find_one({"ticker": ticker})
+        if cached:
+            return cached["sector"]
 
     try:
-        stock = yf.Ticker(normalized_ticker)
-        fetched_sector = stock.info.get("sector") if isinstance(stock.info, dict) else None
-        if fetched_sector:
-            return str(fetched_sector)
-    except Exception as exc:
-        logger.exception("Failed to fetch sector for %s: %s", normalized_ticker, exc)
+        info = yf.Ticker(ticker).info
+        sector = info.get("sector") or info.get("industryDisp")
+        if sector and isinstance(sector, str) and len(sector) > 1:
+            if db_client:
+                await db_client.portsense.sector_cache.insert_one({
+                    "ticker": ticker,
+                    "sector": sector,
+                    "source": "yfinance",
+                    "cachedAt": datetime.utcnow()
+                })
+            return sector
+    except Exception:
+        pass
+
+    try:
+        prompt = (
+            f"What sector does {ticker.replace('.NS','').replace('.BO','')} "
+            f"belong to in the Indian stock market? "
+            f"Reply with ONLY the sector name. "
+            f"Examples: IT, Banking, Energy, Pharma, FMCG, Auto, "
+            f"Materials, NBFC, Infrastructure, Conglomerate"
+        )
+        sector = get_gemini_response(prompt).strip().splitlines()[0]
+        if sector and len(sector) < 30:
+            if db_client:
+                await db_client.portsense.sector_cache.insert_one({
+                    "ticker": ticker,
+                    "sector": sector,
+                    "source": "gemini",
+                    "cachedAt": datetime.utcnow()
+                })
+            return sector
+    except Exception:
+        pass
 
     return "Other"
 
 
-def get_sector_breakdown(holdings: list) -> list[dict]:
+async def get_sector_breakdown(
+    holdings: list,
+    mongo_client: AsyncIOMotorClient | None = None,
+    db_client: AsyncIOMotorClient | None = None,
+) -> list[dict]:
+    active_db_client = db_client or mongo_client
     total_portfolio_value = sum(float(holding.get("currentValue", 0.0)) for holding in holdings)
 
     sector_groups = {}
     for holding in holdings:
         ticker = str(holding.get("ticker", "")).strip().upper()
         current_value = float(holding.get("currentValue", 0.0))
-        sector = get_sector(ticker)
+        sector = await get_sector(ticker, db_client=active_db_client)
 
         if sector not in sector_groups:
             sector_groups[sector] = {
@@ -150,6 +200,63 @@ def get_portfolio_beta(holdings: list) -> dict:
         "portfolioBeta": portfolio_beta,
         "label": label,
         "perStock": per_stock,
+    }
+
+
+async def compute_diversification(holdings: list, db_client=None) -> dict:
+    """
+    Compute diversification metrics for portfolio holdings.
+    
+    Args:
+        holdings: List of portfolio holdings
+        db_client: AsyncIOMotorClient for database operations (optional)
+    
+    Returns:
+        Dictionary containing diversification scores and analysis
+    """
+    sector_breakdown = await get_sector_breakdown(holdings, db_client=db_client)
+    diversification = get_diversification_score(holdings, sector_breakdown)
+    
+    # Extract tickers for correlation analysis
+    tickers = [
+        str(holding.get("ticker", "")).strip().upper()
+        for holding in holdings
+        if str(holding.get("ticker", "")).strip()
+    ]
+    correlation_result = get_correlation_matrix(tickers)
+    
+    # Calculate correlation score from pair correlations
+    pair_correlations = []
+    matrix = correlation_result.get("matrix", [])
+    for row_index, row in enumerate(matrix):
+        for col_index in range(row_index + 1, len(row)):
+            pair_correlations.append(float(row[col_index]))
+    
+    average_abs_correlation = (
+        sum(abs(correlation) for correlation in pair_correlations) / len(pair_correlations)
+        if pair_correlations
+        else 0.0
+    )
+    correlation_score = round(10 - (average_abs_correlation * 10), 1)
+    
+    # Recalculate final score with correlation
+    sector_score = float(diversification.get("sectorScore", 0.0))
+    size_score = float(diversification.get("sizeScore", 0.0))
+    diversification_score = round((sector_score + size_score + correlation_score) / 3.0, 1)
+    
+    if diversification_score >= 7.0:
+        verdict = "Well Diversified"
+    elif diversification_score >= 4.0:
+        verdict = "Moderate"
+    else:
+        verdict = "Concentrated"
+    
+    return {
+        "score": diversification_score,
+        "sectorScore": sector_score,
+        "sizeScore": size_score,
+        "correlationScore": correlation_score,
+        "verdict": verdict,
     }
 
 

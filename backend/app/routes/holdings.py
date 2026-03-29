@@ -151,7 +151,7 @@ async def create_holding(payload: HoldingCreate, current_user: dict = Depends(ge
 @router.put("/{holding_id}")
 async def update_holding(
     holding_id: str,
-    payload: HoldingCreate,
+    data: HoldingCreate,
     current_user: dict = Depends(get_current_user),
 ):
     holdings_collection = _get_holdings_collection()
@@ -164,37 +164,28 @@ async def update_holding(
             detail="Invalid holding id",
         ) from exc
 
-    existing_holding = await holdings_collection.find_one({"_id": object_id})
-    if existing_holding is None or existing_holding.get("userId") != current_user.get("_id"):
+    result = await holdings_collection.update_one(
+        {
+            "_id": object_id,
+            "userId": current_user.get("_id"),
+        },
+        {
+            "$set": {
+                "buyPrice": data.buyPrice,
+                "qty": data.quantity,
+                "quantity": data.quantity,
+                "buyDate": datetime.combine(data.buyDate, datetime.min.time()),
+            }
+        },
+    )
+
+    if result.matched_count == 0:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have access to this holding",
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Holding not found",
         )
 
-    ticker = _normalize_ticker(payload.ticker)
-    if not _ticker_exists(ticker):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid ticker",
-        )
-
-    update_data = {
-        "ticker": ticker,
-        "buyDate": datetime.combine(payload.buyDate, datetime.min.time()),
-        "buyPrice": payload.buyPrice,
-        "quantity": payload.quantity,
-    }
-
-    try:
-        await holdings_collection.update_one({"_id": object_id}, {"$set": update_data})
-    except DuplicateKeyError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Holding already exists for this ticker",
-        ) from exc
-
-    updated_holding = await holdings_collection.find_one({"_id": object_id})
-    return _serialize_holding(updated_holding)
+    return {"message": "Updated"}
 
 
 @router.delete("/{holding_id}")

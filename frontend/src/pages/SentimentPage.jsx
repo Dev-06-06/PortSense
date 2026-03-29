@@ -322,11 +322,12 @@ const SentimentPage = () => {
                           const label = typeof item === 'string' ? 'neutral' : item?.label
 
                           return (
-                            <li key={`${stock.ticker}-${index}`} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <li key={`${stock.ticker}-${index}`} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
                               <span
                                 aria-hidden='true'
                                 style={{
                                   ...dotStyle(label),
+                                  marginTop: '0.35rem',
                                   width: '0.45rem',
                                   height: '0.45rem',
                                   borderRadius: '999px',
@@ -337,9 +338,11 @@ const SentimentPage = () => {
                                 style={{
                                   color: '#94a3b8',
                                   fontSize: '0.82rem',
-                                  whiteSpace: 'nowrap',
+                                  lineHeight: 1.4,
+                                  display: '-webkit-box',
+                                  WebkitLineClamp: 2,
+                                  WebkitBoxOrient: 'vertical',
                                   overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
                                 }}
                                 title={headline}
                               >

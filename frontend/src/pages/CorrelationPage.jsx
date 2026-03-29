@@ -143,6 +143,9 @@ const CorrelationPage = () => {
   const [matrixData, setMatrixData] = useState({ tickers: [], matrix: [] })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [expandedPair, setExpandedPair] = useState(null)
+  const [explanations, setExplanations] = useState({})
+  const [loadingPair, setLoadingPair] = useState(null)
 
   useEffect(() => {
     document.title = 'Correlation | PortSense'
@@ -203,6 +206,39 @@ const CorrelationPage = () => {
     return pairs.sort((a, b) => b.absCorrelation - a.absCorrelation).slice(0, 5)
   }, [matrixData])
 
+  const handleExplain = async (pair) => {
+    const key = `${pair.ticker1}-${pair.ticker2}`
+
+    if (expandedPair === key) {
+      setExpandedPair(null)
+      return
+    }
+
+    if (explanations[key]) {
+      setExpandedPair(key)
+      return
+    }
+
+    setLoadingPair(key)
+
+    try {
+      const res = await api.post('/api/genai/explain-correlation', {
+        ticker1: pair.ticker1,
+        ticker2: pair.ticker2,
+        correlation: pair.correlation,
+        strength: getStrengthLabel(pair.correlation),
+      })
+
+      setExplanations((prev) => ({ ...prev, [key]: res.data.explanation }))
+      setExpandedPair(key)
+    } catch {
+      setExplanations((prev) => ({ ...prev, [key]: 'Unable to load explanation.' }))
+      setExpandedPair(key)
+    } finally {
+      setLoadingPair(null)
+    }
+  }
+
   const hasMatrix = matrixData.tickers.length > 0 && matrixData.matrix.length > 0
 
   return (
@@ -212,7 +248,7 @@ const CorrelationPage = () => {
 
         .top-pairs-grid {
           display: grid;
-          gap: 0.75rem;
+          gap: 0.5rem;
           grid-template-columns: 1fr;
         }
 
@@ -370,31 +406,68 @@ const CorrelationPage = () => {
             <p style={{ margin: 0, color: '#94a3b8' }}>Not enough data to compute pairs.</p>
           ) : (
             <div className='top-pairs-grid'>
-              {topPairs.map((pair) => (
-                <article
-                  key={`${pair.ticker1}-${pair.ticker2}`}
-                  className='top-pair-card'
-                  style={{
-                    borderRadius: '0.85rem',
-                    border: `1px solid ${getPairBorderColor(pair.correlation)}`,
-                    backgroundColor: 'rgba(2, 6, 23, 0.45)',
-                    padding: '0.85rem 1rem',
-                    display: 'flex',
-                    flexWrap: 'wrap',
-                    gap: '0.75rem',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <p style={{ margin: 0, color: '#e2e8f0', fontWeight: 600 }}>
-                    {pair.ticker1} ↔ {pair.ticker2}
-                  </p>
-                  <p style={{ margin: 0, color: '#cbd5e1', ...numberStyle, fontSize: '1.15rem' }}>
-                    {pair.correlation.toFixed(2)}
-                  </p>
-                  <p style={{ margin: 0, color: '#94a3b8' }}>{getStrengthLabel(pair.correlation)}</p>
-                </article>
-              ))}
+              {topPairs.map((pair) => {
+                const key = `${pair.ticker1}-${pair.ticker2}`
+
+                return (
+                  <div key={key}>
+                    <article
+                      className='top-pair-card'
+                      style={{
+                        borderRadius: '0.85rem',
+                        border: `1px solid ${getPairBorderColor(pair.correlation)}`,
+                        backgroundColor: 'rgba(2, 6, 23, 0.45)',
+                        padding: '0.85rem 1rem',
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: '0.75rem',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <p style={{ margin: 0, color: '#e2e8f0', fontWeight: 600 }}>
+                        {pair.ticker1} ↔ {pair.ticker2}
+                      </p>
+                      <p style={{ margin: 0, color: '#cbd5e1', ...numberStyle, fontSize: '1.15rem' }}>
+                        {pair.correlation.toFixed(2)}
+                      </p>
+                      <p style={{ margin: 0, color: '#94a3b8' }}>{getStrengthLabel(pair.correlation)}</p>
+                      <button
+                        onClick={() => handleExplain(pair)}
+                        disabled={loadingPair === key}
+                        style={{
+                          border: '1px solid rgba(249,115,22,0.4)',
+                          backgroundColor: 'rgba(249,115,22,0.1)',
+                          color: '#f97316',
+                          borderRadius: '0.6rem',
+                          padding: '0.35rem 0.85rem',
+                          fontSize: '0.8rem',
+                          fontWeight: 700,
+                          cursor: loadingPair === key ? 'not-allowed' : 'pointer',
+                          opacity: loadingPair === key ? 0.6 : 1,
+                        }}
+                      >
+                        {loadingPair === key ? 'Loading...' : expandedPair === key ? 'Hide' : 'Explain'}
+                      </button>
+                    </article>
+                    {expandedPair === key && explanations[key] && (
+                      <div
+                        style={{
+                          borderRadius: '0.75rem',
+                          border: '1px solid rgba(255,255,255,0.07)',
+                          backgroundColor: 'rgba(2,6,23,0.6)',
+                          padding: '0.85rem 1rem',
+                          marginTop: '-0.25rem',
+                        }}
+                      >
+                        <p style={{ margin: 0, color: '#cbd5e1', fontSize: '0.85rem', lineHeight: 1.6 }}>
+                          {explanations[key]}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           )}
         </section>

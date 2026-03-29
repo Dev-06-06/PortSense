@@ -44,7 +44,6 @@ def fetch_news_headlines(ticker: str) -> list:
 
     try:
         logger.info("NewsAPI search company: %s", company_name)
-        logger.info("NewsAPI key prefix (first 8 chars): %s", NEWS_API_KEY[:8])
 
         response = requests.get(
             "https://newsapi.org/v2/everything",
@@ -57,7 +56,6 @@ def fetch_news_headlines(ticker: str) -> list:
             headers={"X-Api-Key": NEWS_API_KEY},
             timeout=10,
         )
-        logger.info("NewsAPI response status=%s body=%s", response.status_code, response.text)
         response.raise_for_status()
         payload = response.json()
 

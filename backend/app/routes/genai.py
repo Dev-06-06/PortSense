@@ -78,8 +78,9 @@ async def _get_user_holdings(user_id):
 @router.post("/rebalance")
 async def rebalance_portfolio(current_user: dict = Depends(get_current_user)):
     holdings = await _get_user_holdings(current_user.get("_id"))
+    mongo_client = get_mongo_client()
 
-    sector_breakdown = get_sector_breakdown(holdings)
+    sector_breakdown = await get_sector_breakdown(holdings, mongo_client=mongo_client)
     portfolio_beta_data = get_portfolio_beta(holdings)
     diversification_data = get_diversification_score(holdings, sector_breakdown)
 

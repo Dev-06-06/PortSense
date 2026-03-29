@@ -88,7 +88,6 @@ async def register(payload: UserRegister):
         )
 
     hashed_password = pwd_context.hash(payload.password)
-    now = datetime.utcnow()
     # Use datetime.now with timezone awareness (UTC)
     now = datetime.now(timezone.utc)
 

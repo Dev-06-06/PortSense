@@ -1,19 +1,46 @@
 import os
+import itertools
 from pathlib import Path
 from dotenv import load_dotenv
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import logging
 
 ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
 load_dotenv(dotenv_path=ENV_PATH)
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-genai.configure(api_key=GEMINI_API_KEY)
+GEMINI_KEYS = [
+    os.getenv("GEMINI_API_KEY_1"),
+    os.getenv("GEMINI_API_KEY_2"),
+    os.getenv("GEMINI_API_KEY_3"),
+]
+GEMINI_KEYS = [k for k in GEMINI_KEYS if k]
+key_cycle = itertools.cycle(GEMINI_KEYS)
 
 logger = logging.getLogger(__name__)
 
-if not GEMINI_API_KEY:
-    logger.warning("GEMINI_API_KEY is not set")
+if not GEMINI_KEYS:
+    logger.warning("No Gemini API keys are set")
+
+
+def get_gemini_response(prompt: str) -> str:
+    for _ in range(len(GEMINI_KEYS)):
+        key = next(key_cycle)
+        try:
+            client = genai.Client(api_key=key)
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt
+            )
+            return response.text
+        except Exception as e:
+            if "429" in str(e):
+                logging.warning("Gemini key quota exceeded, trying next key")
+                continue
+            logging.error(f"Gemini error: {e}")
+            return "Unable to generate response at this time."
+
+    return "All Gemini API keys exhausted. Please try again later."
 
 
 def _format_holdings(holdings: list[dict]) -> str:
@@ -121,10 +148,8 @@ Be specific to these companies. Do not be generic.
 
 def get_rebalancing_advice(portfolio_data: dict) -> str:
     try:
-        model = genai.GenerativeModel("gemini-2.5-flash")
         prompt = build_rebalancing_prompt(portfolio_data)
-        response = model.generate_content(prompt)
-        return response.text
+        return get_gemini_response(prompt)
     except Exception as exc:
         logger.exception("Failed to generate rebalancing advice: %s", exc)
         return "Unable to generate advice at this time."
@@ -137,10 +162,8 @@ def get_correlation_explanation(
     strength: str,
 ) -> str:
     try:
-        model = genai.GenerativeModel("gemini-2.5-flash")
         prompt = build_correlation_prompt(ticker1, ticker2, correlation, strength)
-        response = model.generate_content(prompt)
-        return response.text
+        return get_gemini_response(prompt)
     except Exception as exc:
         logger.exception("Failed to generate correlation explanation: %s", exc)
         return "Unable to generate explanation at this time."

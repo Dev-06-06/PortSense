@@ -12,10 +12,11 @@ load_dotenv(dotenv_path=ENV_PATH)
 logger = logging.getLogger(__name__)
 
 _mongo_client: AsyncIOMotorClient | None = None
+client: AsyncIOMotorClient | None = None
 
 
 async def connect_to_mongo() -> AsyncIOMotorClient:
-    global _mongo_client
+    global _mongo_client, client
 
     mongo_uri = os.getenv("MONGO_URI")
     if not mongo_uri:
@@ -24,6 +25,7 @@ async def connect_to_mongo() -> AsyncIOMotorClient:
 
     try:
         _mongo_client = AsyncIOMotorClient(mongo_uri)
+        client = _mongo_client
         await _mongo_client.admin.command("ping")
         logger.info("MongoDB connected ✓")
         return _mongo_client
@@ -33,10 +35,11 @@ async def connect_to_mongo() -> AsyncIOMotorClient:
 
 
 def close_mongo_connection() -> None:
-    global _mongo_client
+    global _mongo_client, client
     if _mongo_client is not None:
         _mongo_client.close()
         _mongo_client = None
+        client = None
 
 
 def get_mongo_client() -> AsyncIOMotorClient | None:
@@ -59,6 +62,7 @@ async def ensure_indexes(client: AsyncIOMotorClient) -> None:
 
     users_collection = db["users"]
     holdings_collection = db["holdings"]
+    sector_cache_collection = db["sector_cache"]
 
     await users_collection.create_index(
         [("email", ASCENDING)],
@@ -73,6 +77,12 @@ async def ensure_indexes(client: AsyncIOMotorClient) -> None:
 
     await holdings_collection.create_index(
         [("userId", ASCENDING), ("ticker", ASCENDING)],
+        unique=True,
+        background=True,
+    )
+
+    await sector_cache_collection.create_index(
+        [("ticker", ASCENDING)],
         unique=True,
         background=True,
     )

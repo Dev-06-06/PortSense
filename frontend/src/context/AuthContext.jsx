@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useContext, useMemo, useState } from 'react'
 
 const AuthContext = createContext(null)
 
@@ -20,30 +20,29 @@ const decodeUserFromToken = (token) => {
 }
 
 export const AuthProvider = ({ children }) => {
-  const [token, setToken] = useState(null)
-  const [user, setUser] = useState(null)
+  const [token, setToken] = useState(() => localStorage.getItem("token") || null)
+  const [user, setUser] = useState(() => {
+    try {
+      const u = localStorage.getItem("user")
+      return u ? JSON.parse(u) : null
+    } catch {
+      return null
+    }
+  })
 
-  const login = (nextToken) => {
-    localStorage.setItem('token', nextToken)
-    setToken(nextToken)
-    setUser(decodeUserFromToken(nextToken))
+  const login = (receivedToken, userData = decodeUserFromToken(receivedToken)) => {
+    localStorage.setItem("token", receivedToken)
+    localStorage.setItem("user", JSON.stringify(userData))
+    setToken(receivedToken)
+    setUser(userData)
   }
 
   const logout = () => {
-    localStorage.removeItem('token')
+    localStorage.removeItem("token")
+    localStorage.removeItem("user")
     setToken(null)
     setUser(null)
   }
-
-  useEffect(() => {
-    const storedToken = localStorage.getItem('token')
-    if (!storedToken) {
-      return
-    }
-
-    setToken(storedToken)
-    setUser(decodeUserFromToken(storedToken))
-  }, [])
 
   const value = useMemo(
     () => ({ user, token, login, logout }),

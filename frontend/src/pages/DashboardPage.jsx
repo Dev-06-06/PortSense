@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import api from '../services/api'
+import StockIntelDrawer from '../components/StockIntelDrawer'
 
 const shellStyle = {
   minHeight: '100vh',
@@ -62,12 +63,86 @@ const formatNumber = (value) =>
     maximumFractionDigits: 2,
   }).format(Number(value) || 0)
 
+const NSE_TICKERS = [
+  { symbol: 'RELIANCE', full: 'Reliance Industries' },
+  { symbol: 'INFY', full: 'Infosys' },
+  { symbol: 'TCS', full: 'TCS' },
+  { symbol: 'HDFCBANK', full: 'HDFC Bank' },
+  { symbol: 'ICICIBANK', full: 'ICICI Bank' },
+  { symbol: 'SBIN', full: 'State Bank of India' },
+  { symbol: 'AXISBANK', full: 'Axis Bank' },
+  { symbol: 'KOTAKBANK', full: 'Kotak Mahindra Bank' },
+  { symbol: 'WIPRO', full: 'Wipro' },
+  { symbol: 'HCLTECH', full: 'HCL Technologies' },
+  { symbol: 'TECHM', full: 'Tech Mahindra' },
+  { symbol: 'TATASTEEL', full: 'Tata Steel' },
+  { symbol: 'JSWSTEEL', full: 'JSW Steel' },
+  { symbol: 'HINDALCO', full: 'Hindalco' },
+  { symbol: 'ADANIPOWER', full: 'Adani Power' },
+  { symbol: 'ADANIENT', full: 'Adani Enterprises' },
+  { symbol: 'ADANIPORTS', full: 'Adani Ports' },
+  { symbol: 'SUNPHARMA', full: 'Sun Pharma' },
+  { symbol: 'DRREDDY', full: 'Dr Reddys' },
+  { symbol: 'CIPLA', full: 'Cipla' },
+  { symbol: 'DIVISLAB', full: 'Divis Laboratories' },
+  { symbol: 'HINDUNILVR', full: 'Hindustan Unilever' },
+  { symbol: 'ITC', full: 'ITC' },
+  { symbol: 'NESTLEIND', full: 'Nestle India' },
+  { symbol: 'BAJFINANCE', full: 'Bajaj Finance' },
+  { symbol: 'BAJAJFINSV', full: 'Bajaj Finserv' },
+  { symbol: 'MARUTI', full: 'Maruti Suzuki' },
+  { symbol: 'TATAMOTORS', full: 'Tata Motors' },
+  { symbol: 'M&M', full: 'Mahindra & Mahindra' },
+  { symbol: 'HEROMOTOCO', full: 'Hero MotoCorp' },
+  { symbol: 'BAJAJ-AUTO', full: 'Bajaj Auto' },
+  { symbol: 'ONGC', full: 'ONGC' },
+  { symbol: 'NTPC', full: 'NTPC' },
+  { symbol: 'POWERGRID', full: 'Power Grid' },
+  { symbol: 'COALINDIA', full: 'Coal India' },
+  { symbol: 'LT', full: 'Larsen & Toubro' },
+  { symbol: 'ULTRACEMCO', full: 'UltraTech Cement' },
+  { symbol: 'GRASIM', full: 'Grasim Industries' },
+  { symbol: 'TITAN', full: 'Titan Company' },
+  { symbol: 'ASIANPAINT', full: 'Asian Paints' },
+  { symbol: 'HDFCLIFE', full: 'HDFC Life Insurance' },
+  { symbol: 'SBILIFE', full: 'SBI Life Insurance' },
+  { symbol: 'BHARTIARTL', full: 'Bharti Airtel' },
+  { symbol: 'JIO', full: 'Jio Financial Services' },
+  { symbol: 'VEDL', full: 'Vedanta' },
+  { symbol: 'BEL', full: 'Bharat Electronics' },
+  { symbol: 'BHEL', full: 'Bharat Heavy Electricals' },
+  { symbol: 'HAL', full: 'Hindustan Aeronautics' },
+  { symbol: 'IRCTC', full: 'IRCTC' },
+  { symbol: 'ZOMATO', full: 'Zomato' },
+  { symbol: 'NYKAA', full: 'Nykaa' },
+  { symbol: 'PAYTM', full: 'Paytm' },
+  { symbol: 'DMART', full: 'DMart (Avenue Supermarts)' },
+  { symbol: 'TATACONSUM', full: 'Tata Consumer Products' },
+  { symbol: 'PIDILITIND', full: 'Pidilite Industries' },
+  { symbol: 'SIEMENS', full: 'Siemens India' },
+  { symbol: 'ABB', full: 'ABB India' },
+  { symbol: 'BANKBARODA', full: 'Bank of Baroda' },
+  { symbol: 'PNB', full: 'Punjab National Bank' },
+  { symbol: 'CANBK', full: 'Canara Bank' },
+  { symbol: 'INDUSINDBK', full: 'IndusInd Bank' },
+  { symbol: 'IDFC', full: 'IDFC First Bank' },
+]
+
 const DashboardPage = () => {
   const [holdings, setHoldings] = useState([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [showAddForm, setShowAddForm] = useState(false)
+  const [selectedTicker, setSelectedTicker] = useState('')
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [editTarget, setEditTarget] = useState(null)
+  const [editForm, setEditForm] = useState({ buyPrice: '', qty: '', buyDate: '' })
+  const [editSaving, setEditSaving] = useState(false)
+  const [editError, setEditError] = useState('')
+  const [tickerQuery, setTickerQuery] = useState('')
+  const [showTickerDrop, setShowTickerDrop] = useState(false)
   const [formData, setFormData] = useState({
     ticker: '',
     buyDate: '',
@@ -75,12 +150,18 @@ const DashboardPage = () => {
     quantity: '',
   })
 
+  const tickerSuggestions = tickerQuery.length < 1 ? [] :
+    NSE_TICKERS.filter((t) =>
+      t.symbol.startsWith(tickerQuery.toUpperCase()) ||
+      t.full.toLowerCase().includes(tickerQuery.toLowerCase())
+    ).slice(0, 6)
+
   const fetchHoldings = async () => {
     setLoading(true)
     setError('')
 
     try {
-      const response = await api.get('/api/holdings')
+      const response = await api.get('/api/holdings/')
       setHoldings(Array.isArray(response.data) ? response.data : [])
     } catch {
       setError('Unable to load holdings. Please try again.')
@@ -143,6 +224,7 @@ const DashboardPage = () => {
         buyPrice: '',
         quantity: '',
       })
+      setTickerQuery('')
       setShowAddForm(false)
       await fetchHoldings()
     } catch (requestError) {
@@ -153,7 +235,7 @@ const DashboardPage = () => {
     }
   }
 
-  const onDeleteHolding = async (holdingId) => {
+  const handleDelete = async (holdingId) => {
     setError('')
 
     try {
@@ -188,6 +270,15 @@ const DashboardPage = () => {
 
         .holdings-table {
           min-width: 560px;
+        }
+
+        .holding-row {
+          cursor: pointer;
+          transition: background-color 0.16s ease;
+        }
+
+        .holding-row:hover {
+          background: rgba(255, 255, 255, 0.04);
         }
 
         .animate-pulse {
@@ -285,55 +376,169 @@ const DashboardPage = () => {
           {showAddForm && (
             <form
               onSubmit={onSubmitHolding}
-              className='add-holding-form'
               style={{
-                display: 'grid',
+                display: 'flex',
+                flexDirection: 'column',
                 gap: '0.7rem',
                 marginBottom: '1rem',
               }}
             >
-              <input
-                name='ticker'
-                type='text'
-                placeholder='Ticker (e.g. INFY)'
-                value={formData.ticker}
-                onChange={onChangeForm}
-                required
-                style={inputStyle}
-              />
+              <div style={{ position: 'relative' }}>
+                <p style={{ margin: '0 0 0.3rem', color: '#94a3b8', fontSize: '0.75rem', fontWeight: 600 }}>TICKER</p>
+                <input
+                  name='ticker'
+                  type='text'
+                  placeholder='Search e.g. INFY, Infosys...'
+                  value={tickerQuery}
+                  autoComplete='off'
+                  onChange={(e) => {
+                    const val = e.target.value.toUpperCase()
+                    setTickerQuery(e.target.value)
+                    setFormData((p) => ({ ...p, ticker: val }))
+                    setShowTickerDrop(true)
+                  }}
+                  onBlur={() => setTimeout(() => setShowTickerDrop(false), 150)}
+                  onFocus={() => { if (tickerQuery.length > 0) setShowTickerDrop(true) }}
+                  required
+                  style={{ ...inputStyle, fontSize: '1rem', minHeight: '2.75rem' }}
+                />
 
-              <input
-                name='buyDate'
-                type='date'
-                value={formData.buyDate}
-                onChange={onChangeForm}
-                required
-                style={inputStyle}
-              />
+                {showTickerDrop && tickerSuggestions.length > 0 && (
+                  <div style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 4px)',
+                    left: 0,
+                    right: 0,
+                    backgroundColor: '#0f172a',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    borderRadius: '0.75rem',
+                    overflow: 'hidden',
+                    zIndex: 100,
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                  }}>
+                    {tickerSuggestions.map((t) => (
+                      <div
+                        key={t.symbol}
+                        onMouseDown={() => {
+                          setFormData((p) => ({ ...p, ticker: `${t.symbol}.NS` }))
+                          setTickerQuery(t.symbol)
+                          setShowTickerDrop(false)
+                        }}
+                        style={{
+                          padding: '0.7rem 1rem',
+                          cursor: 'pointer',
+                          borderBottom: '1px solid rgba(255,255,255,0.06)',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(249,115,22,0.1)'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                      >
+                        <span style={{ color: '#f97316', fontWeight: 700, fontSize: '0.9rem' }}>{t.symbol}</span>
+                        <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>{t.full}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
 
-              <input
-                name='buyPrice'
-                type='number'
-                min='0'
-                step='0.01'
-                placeholder='Buy Price'
-                value={formData.buyPrice}
-                onChange={onChangeForm}
-                required
-                style={inputStyle}
-              />
+              <div>
+                <p style={{ margin: '0 0 0.3rem', color: '#94a3b8', fontSize: '0.75rem', fontWeight: 600 }}>BUY DATE</p>
+                <input
+                  name='buyDate'
+                  type='date'
+                  value={formData.buyDate}
+                  onChange={onChangeForm}
+                  required
+                  style={inputStyle}
+                />
+              </div>
 
-              <input
-                name='quantity'
-                type='number'
-                min='1'
-                step='1'
-                placeholder='Quantity'
-                value={formData.quantity}
-                onChange={onChangeForm}
-                required
-                style={inputStyle}
-              />
+              <div>
+                <p style={{ margin: '0 0 0.3rem', color: '#94a3b8', fontSize: '0.75rem', fontWeight: 600 }}>BUY PRICE (₹)</p>
+                <input
+                  name='buyPrice'
+                  type='text'
+                  inputMode='decimal'
+                  placeholder='e.g. 1380.50'
+                  value={formData.buyPrice}
+                  onChange={(e) => {
+                    const val = e.target.value
+                    if (/^\d*\.?\d*$/.test(val)) {
+                      setFormData((p) => ({ ...p, buyPrice: val }))
+                    }
+                  }}
+                  required
+                  style={{ ...inputStyle, fontSize: '1rem', minHeight: '2.75rem' }}
+                />
+              </div>
+
+              <div>
+                <p style={{ margin: '0 0 0.3rem', color: '#94a3b8', fontSize: '0.75rem', fontWeight: 600 }}>QUANTITY</p>
+                <div style={{ display: 'flex', alignItems: 'center', border: '1px solid rgba(255,255,255,0.18)', borderRadius: '0.75rem', overflow: 'hidden', backgroundColor: '#0f172a' }}>
+                  <button
+                    type='button'
+                    onClick={() => setFormData((p) => ({ ...p, quantity: String(Math.max(1, Number(p.quantity) - 1)) }))}
+                    style={{
+                      width: '3rem',
+                      height: '2.75rem',
+                      backgroundColor: 'transparent',
+                      border: 'none',
+                      borderRight: '1px solid rgba(255,255,255,0.18)',
+                      color: '#f97316',
+                      fontSize: '1.4rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                    }}
+                  >
+                    −
+                  </button>
+                  <input
+                    name='quantity'
+                    type='text'
+                    inputMode='numeric'
+                    placeholder='0'
+                    value={formData.quantity}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      if (/^\d*$/.test(val)) {
+                        setFormData((p) => ({ ...p, quantity: val }))
+                      }
+                    }}
+                    required
+                    style={{
+                      flex: 1,
+                      backgroundColor: 'transparent',
+                      border: 'none',
+                      padding: '0.7rem 0.5rem',
+                      color: '#e5e7eb',
+                      fontSize: '1rem',
+                      textAlign: 'center',
+                      minWidth: 0,
+                    }}
+                  />
+                  <button
+                    type='button'
+                    onClick={() => setFormData((p) => ({ ...p, quantity: String(Number(p.quantity || 0) + 1) }))}
+                    style={{
+                      width: '3rem',
+                      height: '2.75rem',
+                      backgroundColor: 'transparent',
+                      border: 'none',
+                      borderLeft: '1px solid rgba(255,255,255,0.18)',
+                      color: '#f97316',
+                      fontSize: '1.4rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                    }}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
 
               <button
                 type='submit'
@@ -453,9 +658,17 @@ const DashboardPage = () => {
                     const isPositivePnl = pnl >= 0
 
                     return (
-                      <tr key={holding.id}>
+                      <tr
+                        key={holding.id}
+                        className='holding-row'
+                        title='Click for Stock Intel'
+                        onClick={() => {
+                          setSelectedTicker(holding.ticker)
+                          setDrawerOpen(true)
+                        }}
+                      >
                         <td style={{ padding: '0.8rem 0.6rem', color: '#f8fafc', fontWeight: 700 }}>
-                          {holding.ticker}
+                          {holding.ticker.replace(/\.NS$/i, '')}
                         </td>
                         <td style={{ ...numberStyle, padding: '0.8rem 0.6rem' }}>{formatNumber(holding.quantity)}</td>
                         <td style={{ ...numberStyle, padding: '0.8rem 0.6rem' }}>{formatCurrency(holding.buyPrice)}</td>
@@ -487,22 +700,51 @@ const DashboardPage = () => {
                           {`${pnlPercent.toFixed(2)}%`}
                         </td>
                         <td style={{ padding: '0.8rem 0.6rem', textAlign: 'center' }}>
-                          <button
-                            type='button'
-                            aria-label={`Delete ${holding.ticker}`}
-                            onClick={() => onDeleteHolding(holding.id)}
-                            style={{
-                              ...buttonBaseStyle,
-                              backgroundColor: '#1f2937',
-                              border: '1px solid rgba(255, 255, 255, 0.12)',
-                              width: '2.25rem',
-                              height: '2.25rem',
-                              padding: 0,
-                              lineHeight: 1,
-                            }}
-                          >
-                            🗑
-                          </button>
+                          <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                            <button
+                              type='button'
+                              aria-label={`Edit ${holding.ticker}`}
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                setEditTarget(holding)
+                                setEditForm({
+                                  buyPrice: holding.buyPrice,
+                                  qty: holding.qty ?? holding.quantity,
+                                  buyDate: holding.buyDate,
+                                })
+                              }}
+                              style={{
+                                ...buttonBaseStyle,
+                                backgroundColor: '#1f2937',
+                                border: '1px solid rgba(255, 255, 255, 0.12)',
+                                width: '2.25rem',
+                                height: '2.25rem',
+                                padding: 0,
+                                lineHeight: 1,
+                              }}
+                            >
+                              ✏
+                            </button>
+                            <button
+                              type='button'
+                              aria-label={`Delete ${holding.ticker}`}
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                setDeleteTarget(holding)
+                              }}
+                              style={{
+                                ...buttonBaseStyle,
+                                backgroundColor: '#1f2937',
+                                border: '1px solid rgba(255, 255, 255, 0.12)',
+                                width: '2.25rem',
+                                height: '2.25rem',
+                                padding: 0,
+                                lineHeight: 1,
+                              }}
+                            >
+                              🗑
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     )
@@ -513,6 +755,253 @@ const DashboardPage = () => {
           )}
         </div>
       </div>
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-white/10 rounded-2xl p-6 w-80 text-center">
+            <p className="text-white font-semibold text-lg mb-1">Remove holding?</p>
+            <p className="text-slate-400 text-sm mb-6">
+              This will permanently remove <span className="text-orange-400 font-bold">{deleteTarget.ticker}</span> from your portfolio.
+            </p>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="px-5 py-2 rounded-xl border border-white/10 text-slate-300 hover:bg-white/5"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  handleDelete(deleteTarget._id)
+                  setDeleteTarget(null)
+                }}
+                className="px-5 py-2 rounded-xl bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 font-bold"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editTarget && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 50,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          backgroundColor: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)',
+        }}>
+          <div style={{
+            backgroundColor: '#0f172a',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: '1rem',
+            padding: '1.5rem',
+            width: '100%',
+            maxWidth: '20rem',
+          }}>
+            <p style={{ margin: '0 0 1rem', color: '#ffffff', fontWeight: 600, fontSize: '1.05rem' }}>
+              Edit {editTarget.ticker.replace(/\.NS$/i, '')}
+            </p>
+
+            <div style={{ display: 'grid', gap: '0.85rem', marginBottom: '1rem' }}>
+              {/* Buy Price */}
+              <div style={{ display: 'grid', gap: '0' }}>
+                <p style={{ margin: '0 0 0.3rem', color: '#94a3b8', fontSize: '0.75rem', fontWeight: 600 }}>BUY PRICE (₹)</p>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="Buy Price (₹)"
+                  value={editForm.buyPrice}
+                  onChange={(e) => {
+                    const val = e.target.value
+                    if (/^\d*\.?\d*$/.test(val)) {
+                      setEditForm((p) => ({ ...p, buyPrice: val }))
+                    }
+                  }}
+                  style={{
+                    backgroundColor: '#1e293b',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: '0.75rem',
+                    padding: '0.7rem 0.85rem',
+                    color: '#ffffff',
+                    fontSize: '1rem',
+                    width: '100%',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              {/* Quantity Stepper */}
+              <div style={{ display: 'grid', gap: '0' }}>
+                <p style={{ margin: '0 0 0.3rem', color: '#94a3b8', fontSize: '0.75rem', fontWeight: 600 }}>QUANTITY</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '0.75rem', overflow: 'hidden' }}>
+                  <button
+                    type="button"
+                    onClick={() => setEditForm((p) => ({ ...p, qty: String(Math.max(1, Number(p.qty) - 1)) }))}
+                    style={{
+                      width: '3rem',
+                      height: '2.75rem',
+                      backgroundColor: '#1e293b',
+                      border: 'none',
+                      borderRight: '1px solid rgba(255,255,255,0.1)',
+                      color: '#f97316',
+                      fontSize: '1.3rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                    }}
+                  >
+                    −
+                  </button>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={editForm.qty}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      if (/^\d*$/.test(val)) {
+                        setEditForm((p) => ({ ...p, qty: val }))
+                      }
+                    }}
+                    style={{
+                      flex: 1,
+                      backgroundColor: '#1e293b',
+                      border: 'none',
+                      padding: '0.7rem 0.5rem',
+                      color: '#ffffff',
+                      fontSize: '1rem',
+                      textAlign: 'center',
+                      minWidth: 0,
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setEditForm((p) => ({ ...p, qty: String(Number(p.qty) + 1) }))}
+                    style={{
+                      width: '3rem',
+                      height: '2.75rem',
+                      backgroundColor: '#1e293b',
+                      border: 'none',
+                      borderLeft: '1px solid rgba(255,255,255,0.1)',
+                      color: '#f97316',
+                      fontSize: '1.3rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                    }}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              {/* Buy Date */}
+              <div style={{ display: 'grid', gap: '0' }}>
+                <p style={{ margin: '0 0 0.3rem', color: '#94a3b8', fontSize: '0.75rem', fontWeight: 600 }}>BUY DATE</p>
+                <input
+                  type="date"
+                  value={editForm.buyDate}
+                  onChange={(e) => setEditForm((p) => ({ ...p, buyDate: e.target.value }))}
+                  style={{
+                    backgroundColor: '#1e293b',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: '0.75rem',
+                    padding: '0.7rem 0.85rem',
+                    color: '#ffffff',
+                    fontSize: '1rem',
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    minHeight: '2.75rem',
+                  }}
+                />
+              </div>
+            </div>
+
+            {editError && (
+              <p style={{ margin: '0 0 0.75rem', color: '#f87171', fontSize: '0.82rem' }}>
+                {editError}
+              </p>
+            )}
+
+            <div style={{ display: 'flex', gap: '0.65rem' }}>
+              <button
+                type="button"
+                onClick={() => { setEditTarget(null); setEditError('') }}
+                style={{
+                  flex: 1,
+                  padding: '0.6rem',
+                  borderRadius: '0.75rem',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  backgroundColor: 'transparent',
+                  color: '#94a3b8',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={editSaving}
+                onClick={async () => {
+                  const buyPrice = Number(editForm.buyPrice)
+                  const quantity = Number(editForm.qty)
+
+                  if (!buyPrice || buyPrice <= 0) {
+                    setEditError('Enter a valid buy price.')
+                    return
+                  }
+                  if (!quantity || quantity <= 0 || !Number.isInteger(quantity)) {
+                    setEditError('Enter a valid whole number quantity.')
+                    return
+                  }
+                  if (!editForm.buyDate) {
+                    setEditError('Select a buy date.')
+                    return
+                  }
+
+                  setEditSaving(true)
+                  setEditError('')
+
+                  try {
+                    await api.put(`/api/holdings/${editTarget.id || editTarget._id}`, {
+                      ticker: editTarget.ticker,
+                      buyPrice: buyPrice,
+                      quantity: quantity,
+                      buyDate: editForm.buyDate,
+                    })
+                    setEditTarget(null)
+                    fetchHoldings()
+                  } catch (err) {
+                    const msg = err?.response?.data?.detail || 'Unable to update. Try again.'
+                    setEditError(msg)
+                  } finally {
+                    setEditSaving(false)
+                  }
+                }}
+                style={{
+                  flex: 1,
+                  padding: '0.6rem',
+                  borderRadius: '0.75rem',
+                  border: '1px solid rgba(249,115,22,0.35)',
+                  backgroundColor: editSaving ? 'rgba(249,115,22,0.1)' : 'rgba(249,115,22,0.2)',
+                  color: '#f97316',
+                  cursor: editSaving ? 'not-allowed' : 'pointer',
+                  fontWeight: 700,
+                  opacity: editSaving ? 0.7 : 1,
+                }}
+              >
+                {editSaving ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <StockIntelDrawer
+        ticker={selectedTicker}
+        isOpen={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+      />
     </div>
   )
 }
