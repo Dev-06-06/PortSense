@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import { prefetchRoute } from '../routes/prefetch'
 
 const features = [
   {
@@ -51,10 +52,22 @@ function LandingPage() {
           </p>
 
           <div style={styles.ctaRow}>
-            <Link to='/register' style={{ ...styles.button, ...styles.primaryButton }}>
+            <Link
+              to='/register'
+              style={{ ...styles.button, ...styles.primaryButton }}
+              onMouseEnter={() => prefetchRoute('/register')}
+              onFocus={() => prefetchRoute('/register')}
+              onTouchStart={() => prefetchRoute('/register')}
+            >
               Get Started
             </Link>
-            <Link to='/login' style={{ ...styles.button, ...styles.secondaryButton }}>
+            <Link
+              to='/login'
+              style={{ ...styles.button, ...styles.secondaryButton }}
+              onMouseEnter={() => prefetchRoute('/login')}
+              onFocus={() => prefetchRoute('/login')}
+              onTouchStart={() => prefetchRoute('/login')}
+            >
               Try Demo
             </Link>
           </div>

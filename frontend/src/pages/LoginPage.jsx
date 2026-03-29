@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import api from '../services/api'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { prefetchRoute } from '../routes/prefetch'
 
 const shellStyle = {
   minHeight: '100vh',
@@ -129,7 +130,13 @@ const LoginPage = () => {
 
         <p style={{ marginBottom: 0, marginTop: '1rem', color: '#cbd5e1' }}>
           Don&apos;t have an account?{' '}
-          <Link to='/register' style={{ color: '#f97316', fontWeight: 700 }}>
+          <Link
+            to='/register'
+            style={{ color: '#f97316', fontWeight: 700 }}
+            onMouseEnter={() => prefetchRoute('/register')}
+            onFocus={() => prefetchRoute('/register')}
+            onTouchStart={() => prefetchRoute('/register')}
+          >
             Register
           </Link>
         </p>

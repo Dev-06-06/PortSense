@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom'
 import { LayoutDashboard, BarChart2, GitBranch, Radio, UserCircle } from 'lucide-react'
+import { prefetchRoute } from '../routes/prefetch'
 
 const tabs = [
   { label: "Dashboard", icon: <LayoutDashboard size={20} />, path: "/dashboard" },
@@ -89,6 +90,9 @@ const BottomNav = () => {
             key={tab.path}
             to={tab.path}
             className={`bottom-nav-link ${active ? 'active' : ''}`}
+            onMouseEnter={() => prefetchRoute(tab.path)}
+            onFocus={() => prefetchRoute(tab.path)}
+            onTouchStart={() => prefetchRoute(tab.path)}
           >
             <span className='bottom-nav-icon' aria-hidden='true'>
               {tab.icon}

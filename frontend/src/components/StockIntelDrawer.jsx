@@ -51,6 +51,22 @@ const formatNumber = (value, digits = 2) => {
   }).format(num)
 }
 
+const formatPercentish = (value) => {
+  if (value === null || value === undefined) return 'N/A'
+
+  const text = String(value).trim()
+  if (!text || text.toLowerCase() === 'n/a') return 'N/A'
+
+  // Backend may already send a percent string like "12.3%".
+  if (text.includes('%')) return text
+
+  const num = toNumber(value)
+  if (num === null) return text
+
+  const normalized = Math.abs(num) <= 1 ? num * 100 : num
+  return `${formatNumber(normalized, 2)}%`
+}
+
 const formatDate = (dateStr) => {
   if (!dateStr || dateStr === 'null' || dateStr === 'None') return 'N/A'
   try {
@@ -243,8 +259,6 @@ const StockIntelDrawer = ({ ticker, isOpen, onClose }) => {
       }}
     >
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=DM+Sans:wght@400;500;700&display=swap');
-
         .intel-drawer {
           width: 100%;
           height: 85vh;
@@ -560,23 +574,19 @@ const StockIntelDrawer = ({ ticker, isOpen, onClose }) => {
               <div style={{ border: '1px solid rgba(255,255,255,0.08)', borderRadius: '0.6rem', padding: '0.55rem' }}>
                 <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.75rem' }}>Revenue Growth</p>
                 <p className='intel-number' style={{ margin: '0.2rem 0 0', fontSize: '1.15rem' }}>
-                  {toNumber(fundamentals.revenue_growth) === null
-                    ? 'N/A'
-                    : `${formatNumber((toNumber(fundamentals.revenue_growth) || 0) * 100, 2)}%`}
+                  {formatPercentish(fundamentals.revenue_growth)}
                 </p>
               </div>
               <div style={{ border: '1px solid rgba(255,255,255,0.08)', borderRadius: '0.6rem', padding: '0.55rem' }}>
                 <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.75rem' }}>Profit Margins</p>
                 <p className='intel-number' style={{ margin: '0.2rem 0 0', fontSize: '1.15rem' }}>
-                  {toNumber(fundamentals.profit_margin) === null
-                    ? 'N/A'
-                    : `${formatNumber((toNumber(fundamentals.profit_margin) || 0) * 100, 2)}%`}
+                  {formatPercentish(fundamentals.profit_margins)}
                 </p>
               </div>
               <div style={{ border: '1px solid rgba(255,255,255,0.08)', borderRadius: '0.6rem', padding: '0.55rem' }}>
                 <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.75rem' }}>Analyst Rating</p>
                 <p className='intel-number' style={{ margin: '0.2rem 0 0', fontSize: '1.15rem' }}>
-                  {String(fundamentals.analyst_rating || 'N/A')}
+                  {String(fundamentals.recommendation || 'N/A')}
                 </p>
               </div>
             </div>

@@ -1,20 +1,33 @@
+import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import BottomNav from './components/BottomNav'
 import ProtectedRoute from './components/ProtectedRoute'
-import AccountPage from './pages/AccountPage'
-import AnalyticsPage from './pages/AnalyticsPage'
-import CorrelationPage from './pages/CorrelationPage'
-import DashboardPage from './pages/DashboardPage'
-import LandingPage from './pages/LandingPage'
-import LoginPage from './pages/LoginPage'
-import RegisterPage from './pages/RegisterPage'
-import SentimentPage from './pages/SentimentPage'
+
+const LandingPage = lazy(() => import('./pages/LandingPage'))
+const LoginPage = lazy(() => import('./pages/LoginPage'))
+const RegisterPage = lazy(() => import('./pages/RegisterPage'))
+const DashboardPage = lazy(() => import('./pages/DashboardPage'))
+const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'))
+const CorrelationPage = lazy(() => import('./pages/CorrelationPage'))
+const SentimentPage = lazy(() => import('./pages/SentimentPage'))
+const AccountPage = lazy(() => import('./pages/AccountPage'))
 
 const routeTransitionStyle = {
   animation: 'fadeIn 0.2s ease-in',
 }
 
 const PageTransition = ({ children }) => <div style={routeTransitionStyle}>{children}</div>
+
+const routeFallbackStyle = {
+  minHeight: '100vh',
+  display: 'grid',
+  placeItems: 'center',
+  color: '#94a3b8',
+  backgroundColor: '#0d1117',
+  fontFamily: "'DM Sans', sans-serif",
+}
+
+const RouteFallback = () => <div style={routeFallbackStyle}>Loading...</div>
 
 const ProtectedLayout = ({ children }) => (
   <ProtectedRoute>
@@ -29,62 +42,64 @@ function App() {
   return (
     <>
       <style>{`@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }`}</style>
-      <Routes>
-      <Route path='/' element={<PageTransition><LandingPage /></PageTransition>} />
-      <Route path='/login' element={<PageTransition><LoginPage /></PageTransition>} />
-      <Route path='/register' element={<PageTransition><RegisterPage /></PageTransition>} />
-      <Route
-        path='/dashboard'
-        element={
-          <ProtectedLayout>
-            <PageTransition>
-              <DashboardPage />
-            </PageTransition>
-          </ProtectedLayout>
-        }
-      />
-      <Route
-        path='/analytics'
-        element={
-          <ProtectedLayout>
-            <PageTransition>
-              <AnalyticsPage />
-            </PageTransition>
-          </ProtectedLayout>
-        }
-      />
-      <Route
-        path='/correlation'
-        element={
-          <ProtectedLayout>
-            <PageTransition>
-              <CorrelationPage />
-            </PageTransition>
-          </ProtectedLayout>
-        }
-      />
-      <Route
-        path='/sentiment'
-        element={
-          <ProtectedLayout>
-            <PageTransition>
-              <SentimentPage />
-            </PageTransition>
-          </ProtectedLayout>
-        }
-      />
-      <Route
-        path='/account'
-        element={
-          <ProtectedLayout>
-            <PageTransition>
-              <AccountPage />
-            </PageTransition>
-          </ProtectedLayout>
-        }
-      />
-      <Route path='*' element={<Navigate to='/' replace />} />
-      </Routes>
+      <Suspense fallback={<RouteFallback />}>
+        <Routes>
+        <Route path='/' element={<PageTransition><LandingPage /></PageTransition>} />
+        <Route path='/login' element={<PageTransition><LoginPage /></PageTransition>} />
+        <Route path='/register' element={<PageTransition><RegisterPage /></PageTransition>} />
+        <Route
+          path='/dashboard'
+          element={
+            <ProtectedLayout>
+              <PageTransition>
+                <DashboardPage />
+              </PageTransition>
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path='/analytics'
+          element={
+            <ProtectedLayout>
+              <PageTransition>
+                <AnalyticsPage />
+              </PageTransition>
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path='/correlation'
+          element={
+            <ProtectedLayout>
+              <PageTransition>
+                <CorrelationPage />
+              </PageTransition>
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path='/sentiment'
+          element={
+            <ProtectedLayout>
+              <PageTransition>
+                <SentimentPage />
+              </PageTransition>
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path='/account'
+          element={
+            <ProtectedLayout>
+              <PageTransition>
+                <AccountPage />
+              </PageTransition>
+            </ProtectedLayout>
+          }
+        />
+        <Route path='*' element={<Navigate to='/' replace />} />
+        </Routes>
+      </Suspense>
     </>
   )
 }

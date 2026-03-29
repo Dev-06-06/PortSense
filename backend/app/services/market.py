@@ -33,7 +33,6 @@ def get_current_price(ticker: str) -> float:
 @cached(cache=price_cache)
 def get_stock_info(ticker: str) -> dict:
     try:
-        logger.info("Cache miss - fetching %s from yfinance", ticker)
         stock = yf.Ticker(ticker)
         fast_info = stock.fast_info
 

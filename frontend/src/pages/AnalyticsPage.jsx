@@ -167,7 +167,6 @@ const AnalyticsPage = () => {
   return (
     <div style={shellStyle}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=DM+Sans:wght@400;500;700&display=swap');
         .analytics-spin { animation: analytics-spin 0.9s linear infinite; }
         @keyframes analytics-spin {
           from { transform: rotate(0deg); }

@@ -22,11 +22,17 @@ const decodeUserFromToken = (token) => {
 export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(() => localStorage.getItem("token") || null)
   const [user, setUser] = useState(() => {
+    const storedToken = localStorage.getItem("token")
+
     try {
       const u = localStorage.getItem("user")
-      return u ? JSON.parse(u) : null
+      if (u) {
+        return JSON.parse(u)
+      }
+
+      return storedToken ? decodeUserFromToken(storedToken) : null
     } catch {
-      return null
+      return storedToken ? decodeUserFromToken(storedToken) : null
     }
   })
 
@@ -44,9 +50,32 @@ export const AuthProvider = ({ children }) => {
     setUser(null)
   }
 
+  const decodedToken = useMemo(() => user || decodeUserFromToken(token), [user, token])
+
+  const tokenExpiryMs = useMemo(() => {
+    const exp = Number(decodedToken?.exp)
+    if (!Number.isFinite(exp)) {
+      return null
+    }
+
+    return exp * 1000
+  }, [decodedToken])
+
+  const isTokenExpired = useMemo(() => {
+    if (!token) {
+      return true
+    }
+
+    if (tokenExpiryMs === null) {
+      return false
+    }
+
+    return Date.now() >= tokenExpiryMs
+  }, [token, tokenExpiryMs])
+
   const value = useMemo(
-    () => ({ user, token, login, logout }),
-    [user, token],
+    () => ({ user, token, login, logout, decodedToken, tokenExpiryMs, isTokenExpired }),
+    [user, token, decodedToken, tokenExpiryMs, isTokenExpired],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

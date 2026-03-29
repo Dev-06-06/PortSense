@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import api from '../services/api'
@@ -54,12 +54,19 @@ const formatMemberSince = (createdAt) => {
   return `Member since ${monthYear}`
 }
 
+const EMPTY_SUMMARY = {
+  totalInvested: 0,
+  totalCurrentValue: 0,
+  totalPnl: 0,
+  holdingCount: 0,
+}
+
 const AccountPage = () => {
   const navigate = useNavigate()
   const { logout } = useAuth()
 
   const [userDetails, setUserDetails] = useState(null)
-  const [holdings, setHoldings] = useState([])
+  const [summary, setSummary] = useState(EMPTY_SUMMARY)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -73,15 +80,19 @@ const AccountPage = () => {
       setError('')
 
       try {
-        const [meResponse, holdingsResponse] = await Promise.all([
+        const [meResponse, summaryResponse] = await Promise.all([
           api.get('/api/auth/me'),
-          api.get('/api/holdings/'),
+          api.get('/api/holdings/summary'),
         ])
 
         setUserDetails(meResponse.data || null)
-        setHoldings(Array.isArray(holdingsResponse.data) ? holdingsResponse.data : [])
+        setSummary({
+          ...EMPTY_SUMMARY,
+          ...(summaryResponse.data || {}),
+        })
       } catch {
         setError('Unable to load account details. Please refresh and try again.')
+        setSummary(EMPTY_SUMMARY)
       } finally {
         setLoading(false)
       }
@@ -89,30 +100,6 @@ const AccountPage = () => {
 
     fetchData()
   }, [])
-
-  const summary = useMemo(() => {
-    return holdings.reduce(
-      (acc, holding) => {
-        const invested = Number(holding.invested) || (Number(holding.buyPrice) || 0) * (Number(holding.quantity) || 0)
-        const currentValue =
-          Number(holding.currentValue) || (Number(holding.currentPrice) || 0) * (Number(holding.quantity) || 0)
-        const pnl = Number(holding.pnl) || currentValue - invested
-
-        return {
-          totalInvested: acc.totalInvested + invested,
-          totalCurrentValue: acc.totalCurrentValue + currentValue,
-          totalPnl: acc.totalPnl + pnl,
-          holdingsCount: acc.holdingsCount + 1,
-        }
-      },
-      {
-        totalInvested: 0,
-        totalCurrentValue: 0,
-        totalPnl: 0,
-        holdingsCount: 0,
-      },
-    )
-  }, [holdings])
 
   const displayName = userDetails?.name?.trim() || 'User'
   const avatarLetter = (displayName.charAt(0) || 'U').toUpperCase()
@@ -236,7 +223,7 @@ const AccountPage = () => {
             <div className='account-stat'>
               <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.82rem' }}>Holdings Count</p>
               <p style={{ ...numberStyle, margin: '0.15rem 0 0', fontSize: '1.55rem', color: '#f8fafc' }}>
-                {summary.holdingsCount}
+                {summary.holdingCount}
               </p>
             </div>
           </div>
