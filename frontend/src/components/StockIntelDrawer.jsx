@@ -523,11 +523,19 @@ const StockIntelDrawer = ({ ticker, isOpen, onClose }) => {
             </span>
 
             <ul style={{ margin: '0.6rem 0 0', paddingLeft: '1.1rem', color: '#94a3b8' }}>
-              {(Array.isArray(sentiment.headlines) ? sentiment.headlines : []).slice(0, 3).map((headline, index) => (
-                <li key={`${headline}-${index}`} style={{ marginBottom: '0.32rem' }}>
-                  {headline}
-                </li>
-              ))}
+              {(Array.isArray(sentiment.headlines) ? sentiment.headlines : []).slice(0, 3).map((item, index) => {
+                const headline = typeof item === 'string' ? item : String(item?.headline || '')
+                const summary = typeof item === 'object' && item !== null ? String(item?.summary || '') : ''
+
+                if (!headline) return null
+
+                return (
+                  <li key={`${headline}-${index}`} style={{ marginBottom: '0.32rem' }}>
+                    <div>{headline}</div>
+                    {summary ? <div style={{ marginTop: '0.18rem', color: '#64748b', fontSize: '0.82rem' }}>{summary}</div> : null}
+                  </li>
+                )
+              })}
             </ul>
 
             <p style={{ margin: '0.45rem 0 0', color: '#ffffff', fontStyle: 'italic' }}>

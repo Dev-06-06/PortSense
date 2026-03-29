@@ -35,10 +35,21 @@ async def _get_holdings_with_current_values(
 
     holdings_with_values = []
     for holding, stock_info in zip(holdings, stock_infos):
-        current_price = float(stock_info.get("currentPrice", 0.0))
-        quantity = int(holding.get("quantity", 0))
+        buy_price = float(holding.get("buyPrice", 0) or 0)
+        current_price = float((stock_info or {}).get("currentPrice") or buy_price)
+
+        raw_quantity = holding.get("quantity", 0)
+        try:
+            quantity = int(float(raw_quantity))
+        except (TypeError, ValueError):
+            quantity = 0
+
+        if quantity > 0 and current_price <= 0 and buy_price > 0:
+            current_price = buy_price
 
         current_value = current_price * quantity
+        if quantity > 0 and current_value <= 0 and buy_price > 0:
+            current_value = buy_price * quantity
         holdings_with_values.append(
             {
                 "ticker": holding.get("ticker", ""),

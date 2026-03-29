@@ -1,19 +1,37 @@
 import asyncio
 import json
+import re
 from collections import Counter
 from datetime import date, datetime
 from typing import Any
 
 import yfinance as yf
 from fastapi import APIRouter, Depends
+from motor.motor_asyncio import AsyncIOMotorCollection
 
+from app.deps import get_holdings_collection
 from app.middleware.auth import get_current_user
 from app.services.gemini import get_gemini_response
-from app.services.sentiment import fetch_news_headlines, run_finbert
+from app.services.market import get_stock_info
+from app.services.sentiment import (
+    fetch_news_articles,
+    _prepare_finbert_inputs,
+    _truncate,
+    run_finbert,
+)
 from app.services.technical import get_technical_indicators
 
 
 router = APIRouter()
+
+
+NEWS_REASONING_FALLBACK = (
+    "Recent news coverage is mixed and does not show a strong directional sentiment."
+)
+RIPPLE_EFFECT_FALLBACK = (
+    "Current developments do not yet show a clear second-order spillover across the market. "
+    "Watch sector peers, key suppliers/customers, and benchmark indices for confirmation."
+)
 
 
 def _to_float(value: Any, digits: int | None = None) -> float | None:
@@ -213,6 +231,9 @@ def _collect_fast_data(ticker: str) -> dict:
     recommendation = analyst_rating
 
     return {
+        "company_name": str(info.get("longName") or info.get("shortName") or ticker).strip(),
+        "sector": str(info.get("sector") or "Unknown").strip(),
+        "industry": str(info.get("industry") or "Unknown").strip(),
         "price": current_price,
         "change_pct": change_pct,
         "change_rs": change_rs,
@@ -272,38 +293,118 @@ def _build_prompt(
     fast_data: dict,
     technicals: dict,
     sentiment_badge: str,
+    news_context_str: str,
     top_headlines: list[str],
+    portfolio_context: dict | None,
 ) -> str:
-    joined_headlines = "; ".join(top_headlines) if top_headlines else "No major headlines"
+    company_name = fast_data.get("company_name") or ticker
+    sector = fast_data.get("sector") or "Unknown"
+    industry = fast_data.get("industry") or "Unknown"
+    price = fast_data.get("price", "N/A")
+    change_pct = fast_data.get("change_pct", "N/A")
+    change_rs = fast_data.get("change_rs", "N/A")
+    rsi_signal = technicals.get("rsi_signal", "N/A")
+    macd_signal = technicals.get("macd_signal", "N/A")
+    w52_high = fast_data.get("week52_high", "N/A")
+    w52_low = fast_data.get("week52_low", "N/A")
+
+    try:
+        pct_from_high = round((float(price) / float(w52_high) - 1) * 100, 1)
+        w52_context = f"{pct_from_high}% from 52W high"
+    except Exception:
+        w52_context = "N/A"
+
+    headline_lines = []
+    for index in range(3):
+        if index < len(top_headlines):
+            headline_lines.append(f"{index + 1}. {top_headlines[index]}")
+        else:
+            headline_lines.append(f"{index + 1}. No additional headline available")
+    top_headlines_block = "\n".join(headline_lines)
+
+    portfolio_line = ""
+    if portfolio_context is not None:
+        holding_pct = float(portfolio_context.get("holding_pct", 0.0) or 0.0)
+        pnl_pct = float(portfolio_context.get("pnl_pct", 0.0) or 0.0)
+        days_held = int(portfolio_context.get("days_held", 0) or 0)
+        portfolio_line = (
+            f"\nPortfolio Context:\n"
+            f"- This stock is {holding_pct:.1f}% of the user's portfolio\n"
+            f"- Current P&L on this holding: {pnl_pct:+.1f}%\n"
+            f"- Days held: {days_held} "
+            f"({'LTCG eligible' if days_held >= 365 else 'STCG applies'})\n"
+        )
 
     return f"""
 You are a financial analyst briefing an Indian retail investor on {ticker}.
 
-Current Data:
-- Price: ₹{fast_data.get("price", "N/A")} ({fast_data.get("change_pct", "N/A")}% today)
-- Volume: {fast_data.get("volume_ratio", "N/A")}x normal volume
+Company: {company_name}
+Sector: {sector}
+Industry: {industry}
+
+Price Context:
+- Price: ₹{price} ({change_pct}% today)
+- 52W Range: ₹{w52_low} – ₹{w52_high} ({w52_context})
+- Volume: {fast_data.get("volume_ratio", "N/A")}x average {"⚠ UNUSUAL" if fast_data.get("unusual_volume") else ""}
+
+Technical Signals:
 - RSI: {technicals.get("rsi", "N/A")} ({technicals.get("rsi_signal", "N/A")})
+- MACD: {technicals.get("macd_signal", "N/A")}
+- Moving Averages: {technicals.get("ma_signal", "N/A")}
 - Pattern: {technicals.get("pattern", "N/A")}
-- Recent headlines: {joined_headlines}
-- Sentiment: {sentiment_badge}
+
+News & Sentiment (FinBERT: {sentiment_badge}):
+{news_context_str}
+
+Top 3 News Headlines:
+{top_headlines_block}
+
+Mandatory Context For Reasoning:
+- Price change: {change_rs} ({change_pct}%)
+- RSI signal: {rsi_signal}
+- MACD signal: {macd_signal}
+- Top headlines and summaries are listed above (use headlines even if summary is unavailable)
+
+Second-Order Effects Task (for ripple_effect):
+- Explain possible second-order market effects of the current news + technical setup.
+- Specifically consider: sector peer impact, supplier/customer impact, and broader index movement.
+- Write a short paragraph in exactly 2 or 3 concise sentences.
+
+Fundamentals:
 - P/E: {fast_data.get("pe_ratio", "N/A")}
 - Debt/Equity: {fast_data.get("debt_equity", "N/A")}
+- Revenue Growth: {fast_data.get("revenue_growth", "N/A")}
+- Profit Margin: {fast_data.get("profit_margins", "N/A")}
+- Analyst Rating: {fast_data.get("recommendation", "N/A")}
+{portfolio_line}
 
 Respond ONLY in this exact JSON format with no markdown:
 {{
-  "news_reasoning": "2 sentences explaining why stock moved today based on headlines",
-  "ripple_effect": "2-3 sentences on how current macro events flow to this stock and affect other stocks in Indian markets",
-  "contradiction": "1 sentence if sentiment and price direction contradict each other, empty string if they agree",
-  "fundamental_verdict": "1 sentence on fundamental health - stable/stretched/under pressure",
-  "volume_reasoning": "1 sentence explaining unusual volume if present, empty string if normal"
+  "news_reasoning": "2 sentences explaining why this stock moved today based on the news and price action",
+    "ripple_effect": "2-3 concise sentences on second-order effects covering sector peers, supply chain links, and index movement",
+  "contradiction": "1 sentence if FinBERT sentiment contradicts price direction, empty string if they agree",
+  "fundamental_verdict": "1 sentence on fundamental health based on P/E, margins, debt, analyst view",
+  "volume_reasoning": "1 sentence explaining unusual volume if present, empty string if normal volume"
 }}
 """.strip()
 
 
+def _ensure_two_to_three_sentences(text: str, fallback: str) -> str:
+    cleaned = str(text or "").strip()
+    if not cleaned:
+        return fallback
+
+    parts = [part.strip() for part in re.split(r"(?<=[.!?])\s+", cleaned) if part.strip()]
+    if len(parts) < 2:
+        return fallback
+
+    return " ".join(parts[:3])
+
+
 def _parse_gemini_json(raw_text: str) -> dict:
     fallback = {
-        "news_reasoning": "",
-        "ripple_effect": "",
+        "news_reasoning": NEWS_REASONING_FALLBACK,
+        "ripple_effect": RIPPLE_EFFECT_FALLBACK,
         "contradiction": "",
         "fundamental_verdict": "",
         "volume_reasoning": "",
@@ -317,9 +418,13 @@ def _parse_gemini_json(raw_text: str) -> dict:
         if not isinstance(parsed, dict):
             return fallback
 
+        news_reasoning = str(parsed.get("news_reasoning", "") or "").strip()
+        ripple_effect = str(parsed.get("ripple_effect", "") or "").strip()
+        ripple_effect = _ensure_two_to_three_sentences(ripple_effect, RIPPLE_EFFECT_FALLBACK)
+
         return {
-            "news_reasoning": str(parsed.get("news_reasoning", "") or ""),
-            "ripple_effect": str(parsed.get("ripple_effect", "") or ""),
+            "news_reasoning": news_reasoning or NEWS_REASONING_FALLBACK,
+            "ripple_effect": ripple_effect,
             "contradiction": str(parsed.get("contradiction", "") or ""),
             "fundamental_verdict": str(parsed.get("fundamental_verdict", "") or ""),
             "volume_reasoning": str(parsed.get("volume_reasoning", "") or ""),
@@ -329,29 +434,142 @@ def _parse_gemini_json(raw_text: str) -> dict:
 
 
 @router.get("/{ticker}")
-async def get_stock_intel(ticker: str, current_user: dict = Depends(get_current_user)):
-    _ = current_user
+async def get_stock_intel(
+    ticker: str,
+    current_user: dict = Depends(get_current_user),
+    holdings_collection: AsyncIOMotorCollection = Depends(get_holdings_collection),
+):
     normalized_ticker = str(ticker).strip().upper()
 
     fast_data_task = asyncio.to_thread(_collect_fast_data, normalized_ticker)
     technicals_task = asyncio.to_thread(get_technical_indicators, normalized_ticker)
-    headlines_task = asyncio.to_thread(fetch_news_headlines, normalized_ticker)
+    articles_task = asyncio.to_thread(fetch_news_articles, normalized_ticker)
 
-    fast_data, technicals, headlines = await asyncio.gather(
+    fast_data, technicals, articles = await asyncio.gather(
         fast_data_task,
         technicals_task,
-        headlines_task,
+        articles_task,
     )
 
-    scored_headlines = await asyncio.to_thread(run_finbert, headlines)
-    sentiment_badge, sentiment_confidence, top_headlines = _build_sentiment(scored_headlines)
+    user_holdings = await holdings_collection.find(
+        {"userId": current_user.get("_id")}
+    ).to_list(length=None)
+
+    portfolio_context = None
+    if user_holdings:
+        unique_tickers = []
+        for holding in user_holdings:
+            holding_ticker = str(holding.get("ticker", "")).strip().upper()
+            if holding_ticker and holding_ticker not in unique_tickers:
+                unique_tickers.append(holding_ticker)
+
+        stock_infos = await asyncio.gather(
+            *[asyncio.to_thread(get_stock_info, holding_ticker) for holding_ticker in unique_tickers]
+        ) if unique_tickers else []
+
+        price_by_ticker = {}
+        for holding_ticker, stock_info in zip(unique_tickers, stock_infos):
+            current_price = _to_float(stock_info.get("currentPrice")) or 0.0
+            price_by_ticker[holding_ticker] = current_price
+
+        total_portfolio_value = 0.0
+        matched_holding = None
+        matched_current_price = 0.0
+
+        for holding in user_holdings:
+            holding_ticker = str(holding.get("ticker", "")).strip().upper()
+            quantity = _to_float(holding.get("quantity")) or 0.0
+            current_price = price_by_ticker.get(holding_ticker, 0.0)
+
+            total_portfolio_value += current_price * quantity
+
+            if matched_holding is None and holding_ticker == normalized_ticker:
+                matched_holding = holding
+                matched_current_price = current_price
+
+        if matched_holding is not None and total_portfolio_value > 0:
+            quantity = _to_float(matched_holding.get("quantity")) or 0.0
+            buy_price = _to_float(matched_holding.get("buyPrice"))
+            holding_value = matched_current_price * quantity
+            holding_pct = (holding_value / total_portfolio_value) * 100.0
+
+            pnl_pct = 0.0
+            if buy_price not in (None, 0):
+                pnl_pct = ((matched_current_price - buy_price) / buy_price) * 100.0
+
+            buy_date_value = matched_holding.get("buyDate")
+            buy_date = None
+            if isinstance(buy_date_value, datetime):
+                buy_date = buy_date_value.date()
+            elif isinstance(buy_date_value, date):
+                buy_date = buy_date_value
+            elif hasattr(buy_date_value, "to_pydatetime"):
+                try:
+                    buy_date = buy_date_value.to_pydatetime().date()
+                except Exception:
+                    buy_date = None
+            elif isinstance(buy_date_value, str):
+                try:
+                    buy_date = datetime.fromisoformat(buy_date_value.replace("Z", "+00:00")).date()
+                except Exception:
+                    buy_date = None
+
+            days_held = (date.today() - buy_date).days if buy_date else 0
+
+            portfolio_context = {
+                "holding_pct": holding_pct,
+                "pnl_pct": pnl_pct,
+                "days_held": days_held,
+            }
+
+    finbert_inputs = _prepare_finbert_inputs(articles)
+    scored_headlines = await asyncio.to_thread(
+        run_finbert, finbert_inputs
+    ) if finbert_inputs else []
+
+    # Map scores back to articles for _build_sentiment
+    sentiment_input = []
+    for i, art in enumerate(articles):
+        sc = scored_headlines[i] if i < len(scored_headlines) else {}
+        sentiment_input.append({
+            "headline": art["title"],
+            "label": sc.get("label", "neutral"),
+            "score": sc.get("score", 0.0),
+        })
+    sentiment_badge, sentiment_confidence, top_headlines = _build_sentiment(
+        sentiment_input
+    )
+
+    # Build enriched news context for Gemini with top 3 headlines and summaries (if available).
+    news_context_lines = []
+    top_articles = articles[:3]
+    for index, art in enumerate(top_articles, start=1):
+        title = _truncate(art.get("title", ""), 120).strip() or "No headline provided"
+        summary = _truncate(art.get("summary", ""), 220).strip()
+        if summary:
+            news_context_lines.append(f"{index}. Headline: {title} | Summary: {summary}")
+        else:
+            news_context_lines.append(f"{index}. Headline: {title} | Summary: Not available")
+
+    if len(top_articles) < 3:
+        for index in range(len(top_articles) + 1, 4):
+            news_context_lines.append(
+                f"{index}. Headline: No additional headline available | Summary: Not available"
+            )
+    news_context_str = (
+        "\n".join(news_context_lines)
+        if news_context_lines
+        else "No major headlines"
+    )
 
     prompt = _build_prompt(
         normalized_ticker,
         fast_data=fast_data,
         technicals=technicals,
         sentiment_badge=sentiment_badge,
+        news_context_str=news_context_str,
         top_headlines=top_headlines,
+        portfolio_context=portfolio_context,
     )
     gemini_raw = await asyncio.to_thread(get_gemini_response, prompt)
     gemini_data = _parse_gemini_json(gemini_raw)
@@ -383,7 +601,18 @@ async def get_stock_intel(ticker: str, current_user: dict = Depends(get_current_
         "sentiment": {
             "badge": sentiment_badge,
             "confidence": sentiment_confidence,
-            "headlines": top_headlines,
+            "headlines": [
+                {
+                    "headline": item["headline"],
+                    "summary": next(
+                        (a.get("summary", "") for a in articles
+                         if a["title"] == item["headline"]),
+                        "",
+                    ),
+                    "label": item.get("label", "neutral"),
+                }
+                for item in sentiment_input[:3]
+            ],
         },
         "events": {
             "next_dividend_date": fast_data.get("next_dividend_date"),

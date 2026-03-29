@@ -142,15 +142,32 @@ def get_stock_beta(ticker: str) -> float:
     if not normalized_ticker:
         return 1.0
 
+    # Removed yfinance JSON cache clearing for compatibility with newer yfinance versions.
+
     try:
         stock = yf.Ticker(normalized_ticker)
         stock_info = stock.info if isinstance(stock.info, dict) else {}
         beta = stock_info.get("beta")
-        if beta is None:
-            return 1.0
-        return float(beta)
+        if beta is not None:
+            return float(beta)
     except Exception as exc:
-        logger.exception("Failed to fetch beta for %s: %s", normalized_ticker, exc)
+        error_text = str(exc).lower()
+        is_401_error = (
+            "401" in error_text
+            or "unauthorized" in error_text
+            or "forbidden" in error_text
+            or "crumb" in error_text
+        )
+        if not is_401_error:
+            logger.exception("Failed to fetch beta for %s: %s", normalized_ticker, exc)
+            return 1.0
+
+    try:
+        # Retry with a fresh ticker and use fast_info as a resilient fallback source.
+        stock = yf.Ticker(normalized_ticker)
+        return float(stock.fast_info.get("beta", 1.0) or 1.0)
+    except Exception as exc:
+        logger.exception("Failed to fetch beta from fast_info for %s: %s", normalized_ticker, exc)
         return 1.0
 
 
@@ -416,12 +433,33 @@ def get_benchmark_comparison(holdings: list) -> dict:
             if not ticker or quantity <= 0 or buy_date_raw is None:
                 continue
 
-            if isinstance(buy_date_raw, datetime):
-                buy_date_value = buy_date_raw.date()
-            elif isinstance(buy_date_raw, date):
-                buy_date_value = buy_date_raw
-            else:
-                buy_date_value = datetime.fromisoformat(str(buy_date_raw)).date()
+            try:
+                if isinstance(buy_date_raw, datetime):
+                    buy_date_value = buy_date_raw.date()
+                elif isinstance(buy_date_raw, date):
+                    buy_date_value = buy_date_raw
+                else:
+                    # Handle ISO timestamps ending with Z and other string date formats.
+                    buy_date_str = str(buy_date_raw).strip()
+                    buy_date_str = buy_date_str.replace("Z", "")
+                    try:
+                        buy_date_value = datetime.fromisoformat(buy_date_str).date()
+                    except ValueError:
+                        parsed_fallback = None
+                        for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%Y/%m/%d", "%d/%m/%Y"):
+                            try:
+                                parsed_fallback = datetime.strptime(buy_date_str, fmt).date()
+                                break
+                            except ValueError:
+                                continue
+
+                        if parsed_fallback is None:
+                            # fallback: skip only if completely invalid
+                            continue
+                        buy_date_value = parsed_fallback
+            except Exception:
+                # fallback: skip only if completely invalid
+                continue
 
             dated_holdings.append(
                 {
@@ -430,6 +468,8 @@ def get_benchmark_comparison(holdings: list) -> dict:
                     "buyDate": buy_date_value,
                 }
             )
+
+        print("Valid dated holdings:", len(dated_holdings))
 
         if not dated_holdings:
             return {}

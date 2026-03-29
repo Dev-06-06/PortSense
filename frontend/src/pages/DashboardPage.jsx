@@ -805,7 +805,7 @@ const DashboardPage = () => {
 
                     return (
                       <tr
-                        key={holding.id}
+                        key={holding.id || holding._id}
                         className="holding-row"
                         title="Click for Stock Intel"
                         onClick={() => {
