@@ -1,53 +1,40 @@
-import os
+import asyncio
 import traceback
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
+from motor.motor_asyncio import AsyncIOMotorCollection
 
 from app.config.db import get_mongo_client
+from app.deps import get_holdings_collection
 from app.middleware.auth import get_current_user
 from app.services.analytics import (
     compute_diversification,
     get_benchmark_comparison,
     get_correlation_matrix,
-    get_diversification_score,
     get_portfolio_beta,
     get_sector,
 )
+from app.services.concurrency import gather_in_threads_bounded
 from app.services.market import get_stock_info
 
 
 router = APIRouter()
 
 
-def _get_holdings_collection():
-    client = get_mongo_client()
-    if client is None:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database connection not available",
-        )
+async def _get_holdings_with_current_values(
+    user_id,
+    holdings_collection: AsyncIOMotorCollection,
+):
 
-    db_name = os.getenv("MONGO_DB_NAME")
-    if db_name:
-        db = client[db_name]
-    else:
-        try:
-            db = client.get_default_database()
-        except Exception as exc:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Database name is not configured",
-            ) from exc
+    holdings = []
+    async for holding in holdings_collection.find({"userId": user_id}):
+        holdings.append(holding)
 
-    return db["holdings"]
-
-
-async def _get_holdings_with_current_values(user_id):
-    holdings_collection = _get_holdings_collection()
+    tickers = [holding.get("ticker", "") for holding in holdings]
+    stock_infos = await gather_in_threads_bounded(tickers, get_stock_info, limit=5)
 
     holdings_with_values = []
-    async for holding in holdings_collection.find({"userId": user_id}):
-        stock_info = get_stock_info(holding.get("ticker", ""))
+    for holding, stock_info in zip(holdings, stock_infos):
         current_price = float(stock_info.get("currentPrice", 0.0))
         quantity = int(holding.get("quantity", 0))
 
@@ -62,8 +49,7 @@ async def _get_holdings_with_current_values(user_id):
     return holdings_with_values
 
 
-async def _get_user_tickers(user_id):
-    holdings_collection = _get_holdings_collection()
+async def _get_user_tickers(user_id, holdings_collection: AsyncIOMotorCollection):
 
     tickers = []
     async for holding in holdings_collection.find({"userId": user_id}):
@@ -75,9 +61,11 @@ async def _get_user_tickers(user_id):
 
 
 @router.get("/sectors")
-async def sectors_breakdown(current_user=Depends(get_current_user)):
+async def sectors_breakdown(
+    current_user=Depends(get_current_user),
+    holdings_collection: AsyncIOMotorCollection = Depends(get_holdings_collection),
+):
     try:
-        holdings_collection = _get_holdings_collection()
         holdings = await holdings_collection.find(
             {"userId": current_user["_id"]}
         ).to_list(None)
@@ -120,19 +108,27 @@ async def sectors_breakdown(current_user=Depends(get_current_user)):
 
 
 @router.get("/beta")
-async def get_beta_analytics(current_user: dict = Depends(get_current_user)):
+async def get_beta_analytics(
+    current_user: dict = Depends(get_current_user),
+    holdings_collection: AsyncIOMotorCollection = Depends(get_holdings_collection),
+):
     try:
-        holdings_with_values = await _get_holdings_with_current_values(current_user.get("_id"))
-        return get_portfolio_beta(holdings_with_values)
+        holdings_with_values = await _get_holdings_with_current_values(
+            current_user.get("_id"),
+            holdings_collection,
+        )
+        return await get_portfolio_beta(holdings_with_values)
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/diversification")
-async def get_diversification(current_user=Depends(get_current_user)):
+async def get_diversification(
+    current_user=Depends(get_current_user),
+    holdings_collection: AsyncIOMotorCollection = Depends(get_holdings_collection),
+):
     try:
-        holdings_collection = _get_holdings_collection()
         holdings = await holdings_collection.find(
             {"userId": current_user["_id"]}
         ).to_list(None)
@@ -168,25 +164,29 @@ async def get_diversification(current_user=Depends(get_current_user)):
 
 
 @router.get("/correlation")
-async def get_correlation_analytics(current_user: dict = Depends(get_current_user)):
+async def get_correlation_analytics(
+    current_user: dict = Depends(get_current_user),
+    holdings_collection: AsyncIOMotorCollection = Depends(get_holdings_collection),
+):
     try:
-        tickers = await _get_user_tickers(current_user.get("_id"))
-        return get_correlation_matrix(tickers)
+        tickers = await _get_user_tickers(current_user.get("_id"), holdings_collection)
+        return await asyncio.to_thread(get_correlation_matrix, tickers)
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/benchmark")
-async def get_benchmark_analytics(current_user: dict = Depends(get_current_user)):
+async def get_benchmark_analytics(
+    current_user: dict = Depends(get_current_user),
+    holdings_collection: AsyncIOMotorCollection = Depends(get_holdings_collection),
+):
     try:
-        holdings_collection = _get_holdings_collection()
-
         holdings = []
         async for holding in holdings_collection.find({"userId": current_user.get("_id")}):
             holdings.append(holding)
 
-        return get_benchmark_comparison(holdings)
+        return await asyncio.to_thread(get_benchmark_comparison, holdings)
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))

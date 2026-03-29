@@ -9,6 +9,8 @@ from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
 from passlib.context import CryptContext
 
+from app.config.db import get_database_from_client
+
 
 ENV_PATH = Path(__file__).resolve().parent / ".env"
 load_dotenv(dotenv_path=ENV_PATH)
@@ -27,21 +29,6 @@ DEMO_HOLDINGS = [
     {"ticker": "SUNPHARMA.NS", "buyDate": "2023-06-01", "buyPrice": 980, "quantity": 12},
     {"ticker": "ADANIPOWER.NS", "buyDate": "2023-04-15", "buyPrice": 205, "quantity": 50},
 ]
-
-
-def _get_database(client: AsyncIOMotorClient):
-    db_name = os.getenv("MONGO_DB_NAME")
-    if db_name:
-        return client[db_name]
-
-    try:
-        return client.get_default_database()
-    except Exception as exc:
-        raise ValueError(
-            "Database name is not configured. Include a database in MONGO_URI or set MONGO_DB_NAME."
-        ) from exc
-
-
 async def main() -> None:
     mongo_uri = os.getenv("MONGO_URI")
     if not mongo_uri:
@@ -52,7 +39,7 @@ async def main() -> None:
     try:
         await client.admin.command("ping")
 
-        db = _get_database(client)
+        db = get_database_from_client(client)
         users_collection = db["users"]
         holdings_collection = db["holdings"]
 

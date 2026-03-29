@@ -7,6 +7,19 @@ import yfinance as yf
 logger = logging.getLogger(__name__)
 
 
+def _default_technical_indicators() -> dict:
+    return {
+        "rsi": "N/A",
+        "rsi_signal": "Unavailable",
+        "macd_signal": "Unavailable",
+        "ma_signal": "Unavailable",
+        "sma20": None,
+        "sma50": None,
+        "pattern": "No clear pattern",
+        "pattern_explanation": "Insufficient data to compute technical indicators.",
+    }
+
+
 def _is_doji(candle: pd.Series) -> bool:
     open_price = float(candle["Open"])
     close_price = float(candle["Close"])
@@ -104,6 +117,8 @@ def _to_float(value: object, round_to: int | None = None) -> float | None:
 
 
 def get_technical_indicators(ticker: str) -> dict:
+    fallback = _default_technical_indicators()
+
     try:
         df = yf.download(
             ticker,
@@ -114,7 +129,7 @@ def get_technical_indicators(ticker: str) -> dict:
         )
 
         if df.empty:
-            return {}
+            return fallback
 
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
@@ -134,7 +149,7 @@ def get_technical_indicators(ticker: str) -> dict:
         current_price = _to_float(latest.get("Close"))
 
         if None in (rsi, macd_line, signal_line, sma20, sma50, current_price):
-            return {}
+            return fallback
 
         if rsi > 70:
             rsi_signal = "Overbought"
@@ -168,4 +183,4 @@ def get_technical_indicators(ticker: str) -> dict:
         }
     except Exception as exc:
         logger.exception("Failed to compute technical indicators for %s: %s", ticker, exc)
-        return {}
+        return fallback

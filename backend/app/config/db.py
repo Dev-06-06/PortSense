@@ -46,19 +46,30 @@ def get_mongo_client() -> AsyncIOMotorClient | None:
     return _mongo_client
 
 
-async def ensure_indexes(client: AsyncIOMotorClient) -> None:
+def get_database_from_client(client: AsyncIOMotorClient):
     db_name = os.getenv("MONGO_DB_NAME")
 
     if db_name:
-        db = client[db_name]
-    else:
-        try:
-            db = client.get_default_database()
-        except Exception as exc:
-            raise ValueError(
-                "Database name is not configured. Include a database in MONGO_URI "
-                "or set MONGO_DB_NAME."
-            ) from exc
+        return client[db_name]
+
+    try:
+        return client.get_default_database()
+    except Exception as exc:
+        raise ValueError(
+            "Database name is not configured. Include a database in MONGO_URI "
+            "or set MONGO_DB_NAME."
+        ) from exc
+
+
+def get_database():
+    active_client = get_mongo_client()
+    if active_client is None:
+        raise ValueError("Database connection not available")
+    return get_database_from_client(active_client)
+
+
+async def ensure_indexes(client: AsyncIOMotorClient) -> None:
+    db = get_database_from_client(client)
 
     users_collection = db["users"]
     holdings_collection = db["holdings"]

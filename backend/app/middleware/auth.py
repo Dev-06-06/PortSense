@@ -8,7 +8,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 
-from app.config.db import get_mongo_client
+from app.deps import get_users_collection
 
 
 # Always load backend/.env even when app is started from repository root.
@@ -27,29 +27,6 @@ def _get_jwt_secret() -> str:
             detail="JWT secret not configured",
         )
     return jwt_secret
-
-
-def _get_users_collection():
-    client = get_mongo_client()
-    if client is None:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database connection not available",
-        )
-
-    db_name = os.getenv("MONGO_DB_NAME")
-    if db_name:
-        db = client[db_name]
-    else:
-        try:
-            db = client.get_default_database()
-        except Exception as exc:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Database name is not configured",
-            ) from exc
-
-    return db["users"]
 
 
 async def get_current_user(
@@ -87,7 +64,7 @@ async def get_current_user(
             detail="Missing or invalid token",
         ) from exc
 
-    users_collection = _get_users_collection()
+    users_collection = get_users_collection()
     user = await users_collection.find_one({"_id": object_id})
     if user is None:
         raise HTTPException(

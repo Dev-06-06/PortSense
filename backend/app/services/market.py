@@ -1,9 +1,12 @@
 import logging
 from typing import Any
 
+from cachetools import TTLCache, cached
 import yfinance as yf
 
 logger = logging.getLogger(__name__)
+
+price_cache = TTLCache(maxsize=200, ttl=300)
 
 
 def _safe_get_fast_info_value(fast_info: Any, attr_name: str, key_name: str) -> Any:
@@ -27,8 +30,10 @@ def get_current_price(ticker: str) -> float:
         return 0.0
 
 
+@cached(cache=price_cache)
 def get_stock_info(ticker: str) -> dict:
     try:
+        logger.info("Cache miss - fetching %s from yfinance", ticker)
         stock = yf.Ticker(ticker)
         fast_info = stock.fast_info
 
@@ -61,3 +66,11 @@ def get_stock_info(ticker: str) -> dict:
             "currentPrice": 0.0,
             "previousClose": 0.0,
         }
+
+
+def cache_info() -> dict:
+    return {
+        "size": len(price_cache),
+        "maxsize": price_cache.maxsize,
+        "ttl": price_cache.ttl,
+    }

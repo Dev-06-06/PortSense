@@ -1,42 +1,21 @@
+import asyncio
 from datetime import datetime
-import os
 
 from bson import ObjectId
 from bson.errors import InvalidId
 from fastapi import APIRouter, Depends, HTTPException, status
+from motor.motor_asyncio import AsyncIOMotorCollection
 from pymongo.errors import DuplicateKeyError
 import yfinance as yf
 
-from app.config.db import get_mongo_client
+from app.deps import get_holdings_collection
 from app.middleware.auth import get_current_user
 from app.models.holding import HoldingCreate
+from app.services.concurrency import gather_in_threads_bounded
 from app.services.market import get_stock_info
 
 
 router = APIRouter(tags=["holdings"])
-
-
-def _get_holdings_collection():
-    client = get_mongo_client()
-    if client is None:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database connection not available",
-        )
-
-    db_name = os.getenv("MONGO_DB_NAME")
-    if db_name:
-        db = client[db_name]
-    else:
-        try:
-            db = client.get_default_database()
-        except Exception as exc:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Database name is not configured",
-            ) from exc
-
-    return db["holdings"]
 
 
 def _normalize_ticker(ticker: str) -> str:
@@ -81,14 +60,97 @@ def _serialize_holding(holding: dict) -> dict:
     }
 
 
-@router.get("/")
-async def get_holdings(current_user: dict = Depends(get_current_user)):
-    holdings_collection = _get_holdings_collection()
+async def _build_enriched_holdings(
+    current_user: dict,
+    holdings_collection: AsyncIOMotorCollection,
+) -> list[dict]:
+    db_holdings = []
+    async for holding in holdings_collection.find({"userId": current_user.get("_id")}):
+        db_holdings.append(holding)
+
+    tickers = [holding.get("ticker", "") for holding in db_holdings]
+    stock_infos = await gather_in_threads_bounded(tickers, get_stock_info, limit=5)
 
     holdings = []
-    async for holding in holdings_collection.find({"userId": current_user.get("_id")}):
-        stock_info = get_stock_info(holding.get("ticker", ""))
+    for holding, stock_info in zip(db_holdings, stock_infos):
+        current_price = float(stock_info.get("currentPrice", 0.0))
+        previous_close = float(stock_info.get("previousClose", 0.0))
+        quantity = int(holding.get("quantity", 0))
+        buy_price = float(holding.get("buyPrice", 0.0))
 
+        current_value = current_price * quantity
+        invested = buy_price * quantity
+        pnl = current_value - invested
+        pnl_percent = (pnl / invested * 100.0) if invested else 0.0
+        day_change = (current_price - previous_close) * quantity
+
+        serialized = _serialize_holding(holding)
+        serialized.update(
+            {
+                "currentPrice": current_price,
+                "currentValue": current_value,
+                "invested": invested,
+                "pnl": pnl,
+                "pnlPercent": pnl_percent,
+                "dayChange": day_change,
+            }
+        )
+        holdings.append(serialized)
+
+    return holdings
+
+
+@router.get("/summary")
+async def get_holdings_summary(
+    current_user: dict = Depends(get_current_user),
+    holdings_collection: AsyncIOMotorCollection = Depends(get_holdings_collection),
+):
+    holdings = await _build_enriched_holdings(current_user, holdings_collection)
+
+    total_invested = sum(float(holding.get("invested", 0.0)) for holding in holdings)
+    total_current_value = sum(float(holding.get("currentValue", 0.0)) for holding in holdings)
+    total_pnl = total_current_value - total_invested
+    total_pnl_percent = (total_pnl / total_invested * 100.0) if total_invested > 0 else 0.0
+
+    top_gainer = None
+    top_loser = None
+    if holdings:
+        gainer = max(holdings, key=lambda item: float(item.get("pnlPercent", 0.0)))
+        loser = min(holdings, key=lambda item: float(item.get("pnlPercent", 0.0)))
+        top_gainer = {
+            "ticker": gainer.get("ticker", ""),
+            "pnlPercent": float(gainer.get("pnlPercent", 0.0)),
+        }
+        top_loser = {
+            "ticker": loser.get("ticker", ""),
+            "pnlPercent": float(loser.get("pnlPercent", 0.0)),
+        }
+
+    return {
+        "totalInvested": total_invested,
+        "totalCurrentValue": total_current_value,
+        "totalPnl": total_pnl,
+        "totalPnlPercent": total_pnl_percent,
+        "topGainer": top_gainer,
+        "topLoser": top_loser,
+        "holdingCount": len(holdings),
+    }
+
+
+@router.get("/")
+async def get_holdings(
+    current_user: dict = Depends(get_current_user),
+    holdings_collection: AsyncIOMotorCollection = Depends(get_holdings_collection),
+):
+    holdings_list = [h async for h in holdings_collection.find({"userId": current_user.get("_id")})]
+
+    stock_infos = await asyncio.gather(*[
+        asyncio.to_thread(get_stock_info, h.get("ticker", ""))
+        for h in holdings_list
+    ])
+
+    holdings = []
+    for holding, stock_info in zip(holdings_list, stock_infos):
         current_price = float(stock_info.get("currentPrice", 0.0))
         previous_close = float(stock_info.get("previousClose", 0.0))
         quantity = int(holding.get("quantity", 0))
@@ -117,8 +179,11 @@ async def get_holdings(current_user: dict = Depends(get_current_user)):
 
 
 @router.post("/")
-async def create_holding(payload: HoldingCreate, current_user: dict = Depends(get_current_user)):
-    holdings_collection = _get_holdings_collection()
+async def create_holding(
+    payload: HoldingCreate,
+    current_user: dict = Depends(get_current_user),
+    holdings_collection: AsyncIOMotorCollection = Depends(get_holdings_collection),
+):
 
     ticker = _normalize_ticker(payload.ticker)
     if not _ticker_exists(ticker):
@@ -153,9 +218,8 @@ async def update_holding(
     holding_id: str,
     data: HoldingCreate,
     current_user: dict = Depends(get_current_user),
+    holdings_collection: AsyncIOMotorCollection = Depends(get_holdings_collection),
 ):
-    holdings_collection = _get_holdings_collection()
-
     try:
         object_id = ObjectId(holding_id)
     except InvalidId as exc:
@@ -172,7 +236,6 @@ async def update_holding(
         {
             "$set": {
                 "buyPrice": data.buyPrice,
-                "qty": data.quantity,
                 "quantity": data.quantity,
                 "buyDate": datetime.combine(data.buyDate, datetime.min.time()),
             }
@@ -189,8 +252,11 @@ async def update_holding(
 
 
 @router.delete("/{holding_id}")
-async def delete_holding(holding_id: str, current_user: dict = Depends(get_current_user)):
-    holdings_collection = _get_holdings_collection()
+async def delete_holding(
+    holding_id: str,
+    current_user: dict = Depends(get_current_user),
+    holdings_collection: AsyncIOMotorCollection = Depends(get_holdings_collection),
+):
 
     try:
         object_id = ObjectId(holding_id)

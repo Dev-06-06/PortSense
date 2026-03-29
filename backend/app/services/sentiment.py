@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import time
@@ -187,11 +188,12 @@ def get_stock_sentiment(ticker: str) -> dict:
     }
 
 
-def get_portfolio_sentiment(tickers: list) -> dict:
-    stock_results = []
-
-    for ticker in tickers:
-        stock_results.append(get_stock_sentiment(str(ticker)))
+async def get_portfolio_sentiment(tickers: list) -> dict:
+    stock_results = await asyncio.gather(*[
+        asyncio.to_thread(get_stock_sentiment, str(ticker))
+        for ticker in tickers
+    ])
+    stock_results = list(stock_results)
 
     badge_counts = Counter(str(item.get("badge", "Neutral")) for item in stock_results)
 

@@ -1,16 +1,17 @@
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
+from datetime import timezone
 
 from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, HTTPException, status
 from jose import jwt
 from passlib.context import CryptContext
+from motor.motor_asyncio import AsyncIOMotorCollection
 
-from app.config.db import get_mongo_client
+from app.deps import get_users_collection
 from app.middleware.auth import get_current_user
 from app.models.user import UserLogin, UserRegister, UserResponse
-from datetime import timezone
 
 
 # Always load backend/.env even when app is started from repository root.
@@ -34,31 +35,8 @@ def _get_jwt_secret() -> str:
     return jwt_secret
 
 
-def _get_users_collection():
-    client = get_mongo_client()
-    if client is None:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database connection not available",
-        )
-
-    db_name = os.getenv("MONGO_DB_NAME")
-    if db_name:
-        db = client[db_name]
-    else:
-        try:
-            db = client.get_default_database()
-        except Exception as exc:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Database name is not configured",
-            ) from exc
-
-    return db["users"]
-
-
 def _create_access_token(user_id: str) -> str:
-    expire = datetime.utcnow() + timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS)
+    expire = datetime.now(timezone.utc) + timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS)
     payload = {"sub": user_id, "exp": expire}
     return jwt.encode(payload, _get_jwt_secret(), algorithm=ALGORITHM)
 
@@ -77,8 +55,10 @@ def _to_user_response(user: dict) -> UserResponse:
 
 
 @router.post("/register")
-async def register(payload: UserRegister):
-    users_collection = _get_users_collection()
+async def register(
+    payload: UserRegister,
+    users_collection: AsyncIOMotorCollection = Depends(get_users_collection),
+):
 
     existing_user = await users_collection.find_one({"email": payload.email})
     if existing_user is not None:
@@ -105,8 +85,10 @@ async def register(payload: UserRegister):
 
 
 @router.post("/login")
-async def login(payload: UserLogin):
-    users_collection = _get_users_collection()
+async def login(
+    payload: UserLogin,
+    users_collection: AsyncIOMotorCollection = Depends(get_users_collection),
+):
 
     user = await users_collection.find_one({"email": payload.email})
     if user is None:

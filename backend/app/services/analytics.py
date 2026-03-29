@@ -1,5 +1,5 @@
+import asyncio
 import logging
-import os
 from datetime import date, timedelta
 from datetime import datetime
 from itertools import combinations
@@ -9,7 +9,7 @@ import pandas as pd
 import yfinance as yf
 from motor.motor_asyncio import AsyncIOMotorClient
 
-from app.config.db import get_mongo_client
+from app.config.db import get_database_from_client, get_mongo_client
 from app.services.gemini import get_gemini_response
 
 logger = logging.getLogger(__name__)
@@ -42,23 +42,12 @@ SECTOR_MAP = {
     "TECHM.NS": "IT",
     "LT.NS": "Infrastructure",
 }
-
-
-def _get_database(client: AsyncIOMotorClient):
-    db_name = os.getenv("MONGO_DB_NAME")
-
-    if db_name:
-        return client[db_name]
-
-    return client.get_default_database()
-
-
 async def get_sector(ticker: str, db_client=None) -> str:
     if ticker in SECTOR_MAP:
         return SECTOR_MAP[ticker]
 
     if db_client:
-        cached = await db_client.portsense.sector_cache.find_one({"ticker": ticker})
+        cached = await get_database_from_client(db_client).sector_cache.find_one({"ticker": ticker})
         if cached:
             return cached["sector"]
 
@@ -67,7 +56,7 @@ async def get_sector(ticker: str, db_client=None) -> str:
         sector = info.get("sector") or info.get("industryDisp")
         if sector and isinstance(sector, str) and len(sector) > 1:
             if db_client:
-                await db_client.portsense.sector_cache.insert_one({
+                await get_database_from_client(db_client).sector_cache.insert_one({
                     "ticker": ticker,
                     "sector": sector,
                     "source": "yfinance",
@@ -88,7 +77,7 @@ async def get_sector(ticker: str, db_client=None) -> str:
         sector = get_gemini_response(prompt).strip().splitlines()[0]
         if sector and len(sector) < 30:
             if db_client:
-                await db_client.portsense.sector_cache.insert_one({
+                await get_database_from_client(db_client).sector_cache.insert_one({
                     "ticker": ticker,
                     "sector": sector,
                     "source": "gemini",
@@ -165,18 +154,22 @@ def get_stock_beta(ticker: str) -> float:
         return 1.0
 
 
-def get_portfolio_beta(holdings: list) -> dict:
+async def get_portfolio_beta(holdings: list) -> dict:
     total_value = sum(float(holding.get("currentValue", 0.0)) for holding in holdings)
+
+    tickers = [str(holding.get("ticker", "")).strip().upper() for holding in holdings]
+    betas = await asyncio.gather(
+        *[asyncio.to_thread(get_stock_beta, ticker) for ticker in tickers]
+    )
 
     per_stock = []
     portfolio_beta = 0.0
 
-    for holding in holdings:
+    for holding, beta in zip(holdings, betas):
         ticker = str(holding.get("ticker", "")).strip().upper()
         current_value = float(holding.get("currentValue", 0.0))
         weight = (current_value / total_value) if total_value > 0 else 0.0
         weight_pct = round(weight * 100.0, 1)
-        beta = get_stock_beta(ticker)
 
         portfolio_beta += weight * beta
         per_stock.append(
