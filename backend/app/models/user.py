@@ -6,7 +6,7 @@ from pydantic import BaseModel, EmailStr
 
 
 class UserRegister(BaseModel):
-    name: str
+    username: str
     email: EmailStr
     password: str
 
@@ -18,6 +18,6 @@ class UserLogin(BaseModel):
 
 class UserResponse(BaseModel):
     id: str
-    name: str
+    username: str
     email: EmailStr
     createdAt: datetime

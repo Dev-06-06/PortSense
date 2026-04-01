@@ -101,7 +101,7 @@ const AccountPage = () => {
     fetchData()
   }, [])
 
-  const displayName = userDetails?.name?.trim() || 'User'
+  const displayName = userDetails?.username?.trim() || 'User'
   const avatarLetter = (displayName.charAt(0) || 'U').toUpperCase()
 
   const onLogout = () => {

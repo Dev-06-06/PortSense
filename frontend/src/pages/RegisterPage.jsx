@@ -58,7 +58,7 @@ const logoStyle = {
 const getTokenFromResponse = (data) => data?.token || data?.access_token || data?.accessToken
 
 const RegisterPage = () => {
-  const [name, setName] = useState('')
+  const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -76,7 +76,7 @@ const RegisterPage = () => {
     setLoading(true)
 
     try {
-      const response = await api.post('/api/auth/register', { name, email, password })
+      const response = await api.post('/api/auth/register', { username, email, password })
       const token = getTokenFromResponse(response.data)
 
       if (!token) {
@@ -105,9 +105,9 @@ const RegisterPage = () => {
           <input
             className='border border-white/20 bg-slate-900 text-white rounded-xl p-3'
             type='text'
-            placeholder='Name'
-            value={name}
-            onChange={(event) => setName(event.target.value)}
+            placeholder='Username'
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
             required
             style={fieldStyle}
           />

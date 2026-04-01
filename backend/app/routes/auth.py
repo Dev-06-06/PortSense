@@ -48,7 +48,7 @@ def _to_user_response(user: dict) -> UserResponse:
 
     return UserResponse(
         id=str(user.get("_id")),
-        name=user.get("name", ""),
+        username=user.get("username") or user.get("name", ""),
         email=user.get("email", ""),
         createdAt=created_at,
     )
@@ -73,7 +73,7 @@ async def register(
 
     insert_result = await users_collection.insert_one(
         {
-            "name": payload.name,
+            "username": payload.username,
             "email": payload.email,
             "password": hashed_password,
             "createdAt": now,
