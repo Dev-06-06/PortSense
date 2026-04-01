@@ -117,8 +117,9 @@ def _extract_calendar_value(calendar: Any, keys: list[str]) -> Any:
 
 def _collect_fast_data(ticker: str) -> dict:
     ticker_obj = yf.Ticker(ticker)
-    ticker_info = ticker_obj.info
-    info = ticker_obj.info if isinstance(ticker_obj.info, dict) else {}
+    _raw_info = ticker_obj.info
+    info = _raw_info if isinstance(_raw_info, dict) else {}
+    ticker_info = info
 
     history = ticker_obj.history(period="5d", interval="1d", auto_adjust=False)
 

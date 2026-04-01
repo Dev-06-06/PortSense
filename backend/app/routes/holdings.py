@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -11,6 +11,7 @@ import yfinance as yf
 from app.deps import get_holdings_collection
 from app.middleware.auth import get_current_user
 from app.models.holding import HoldingCreate
+from app.services.cache import invalidate_user
 from app.services.concurrency import gather_in_threads_bounded
 from app.services.market import get_stock_info
 
@@ -47,7 +48,7 @@ def _serialize_holding(holding: dict) -> dict:
     if isinstance(created_at, datetime):
         created_at_value = created_at
     else:
-        created_at_value = datetime.utcnow()
+        created_at_value = datetime.now(timezone.utc)
 
     return {
         "id": str(holding.get("_id")),
@@ -137,45 +138,46 @@ async def get_holdings_summary(
     }
 
 
+@router.get("/dashboard")
+async def get_dashboard(
+    current_user: dict = Depends(get_current_user),
+    holdings_collection: AsyncIOMotorCollection = Depends(get_holdings_collection),
+):
+    holdings = await _build_enriched_holdings(current_user, holdings_collection)
+
+    total_invested = sum(float(h.get("invested", 0.0)) for h in holdings)
+    total_current_value = sum(float(h.get("currentValue", 0.0)) for h in holdings)
+    total_pnl = total_current_value - total_invested
+    total_pnl_percent = (total_pnl / total_invested * 100.0) if total_invested > 0 else 0.0
+
+    top_gainer = None
+    top_loser = None
+    if holdings:
+        gainer = max(holdings, key=lambda h: float(h.get("pnlPercent", 0.0)))
+        loser = min(holdings, key=lambda h: float(h.get("pnlPercent", 0.0)))
+        top_gainer = {"ticker": gainer.get("ticker"), "pnlPercent": float(gainer.get("pnlPercent", 0.0))}
+        top_loser = {"ticker": loser.get("ticker"), "pnlPercent": float(loser.get("pnlPercent", 0.0))}
+
+    return {
+        "holdings": holdings,
+        "summary": {
+            "totalInvested": total_invested,
+            "totalCurrentValue": total_current_value,
+            "totalPnl": total_pnl,
+            "totalPnlPercent": total_pnl_percent,
+            "topGainer": top_gainer,
+            "topLoser": top_loser,
+            "holdingCount": len(holdings),
+        },
+    }
+
+
 @router.get("/")
 async def get_holdings(
     current_user: dict = Depends(get_current_user),
     holdings_collection: AsyncIOMotorCollection = Depends(get_holdings_collection),
 ):
-    holdings_list = [h async for h in holdings_collection.find({"userId": current_user.get("_id")})]
-
-    stock_infos = await asyncio.gather(*[
-        asyncio.to_thread(get_stock_info, h.get("ticker", ""))
-        for h in holdings_list
-    ])
-
-    holdings = []
-    for holding, stock_info in zip(holdings_list, stock_infos):
-        current_price = float(stock_info.get("currentPrice", 0.0))
-        previous_close = float(stock_info.get("previousClose", 0.0))
-        quantity = int(holding.get("quantity", 0))
-        buy_price = float(holding.get("buyPrice", 0.0))
-
-        current_value = current_price * quantity
-        invested = buy_price * quantity
-        pnl = current_value - invested
-        pnl_percent = (pnl / invested * 100.0) if invested else 0.0
-        day_change = (current_price - previous_close) * quantity
-
-        serialized = _serialize_holding(holding)
-        serialized.update(
-            {
-                "currentPrice": current_price,
-                "currentValue": current_value,
-                "invested": invested,
-                "pnl": pnl,
-                "pnlPercent": pnl_percent,
-                "dayChange": day_change,
-            }
-        )
-        holdings.append(serialized)
-
-    return holdings
+    return await _build_enriched_holdings(current_user, holdings_collection)
 
 
 @router.post("/")
@@ -186,7 +188,7 @@ async def create_holding(
 ):
 
     ticker = _normalize_ticker(payload.ticker)
-    if not _ticker_exists(ticker):
+    if not await asyncio.to_thread(_ticker_exists, ticker):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid ticker",
@@ -198,7 +200,7 @@ async def create_holding(
         "buyDate": datetime.combine(payload.buyDate, datetime.min.time()),
         "buyPrice": payload.buyPrice,
         "quantity": payload.quantity,
-        "createdAt": datetime.utcnow(),
+        "createdAt": datetime.now(timezone.utc),
     }
 
     try:
@@ -210,6 +212,7 @@ async def create_holding(
         ) from exc
 
     inserted_holding = await holdings_collection.find_one({"_id": insert_result.inserted_id})
+    invalidate_user(str(current_user.get("_id")))
     return _serialize_holding(inserted_holding)
 
 
@@ -248,6 +251,7 @@ async def update_holding(
             detail="Holding not found",
         )
 
+    invalidate_user(str(current_user.get("_id")))
     return {"message": "Updated"}
 
 
@@ -274,4 +278,5 @@ async def delete_holding(
         )
 
     await holdings_collection.delete_one({"_id": object_id})
+    invalidate_user(str(current_user.get("_id")))
     return {"message": "Holding deleted"}

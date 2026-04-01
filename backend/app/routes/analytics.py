@@ -7,15 +7,19 @@ from motor.motor_asyncio import AsyncIOMotorCollection
 from app.config.db import get_mongo_client
 from app.deps import get_holdings_collection
 from app.middleware.auth import get_current_user
+from app.services.cache import get_cached, set_cached
 from app.services.analytics import (
     compute_diversification,
     get_benchmark_comparison,
     get_correlation_matrix,
     get_portfolio_beta,
+    get_stock_beta,
     get_sector,
 )
 from app.services.concurrency import gather_in_threads_bounded
 from app.services.market import get_stock_info
+from app.services.risk_decomposition import compute_risk_decomposition
+from app.services.stress_test import run_stress_test
 
 
 router = APIRouter()
@@ -76,6 +80,11 @@ async def sectors_breakdown(
     current_user=Depends(get_current_user),
     holdings_collection: AsyncIOMotorCollection = Depends(get_holdings_collection),
 ):
+    user_id = str(current_user.get("_id"))
+    cached = get_cached(user_id, "sectors")
+    if cached is not None:
+        return cached
+
     try:
         holdings = await holdings_collection.find(
             {"userId": current_user["_id"]}
@@ -99,9 +108,11 @@ async def sectors_breakdown(
             total_value += value
 
         if total_value == 0:
-            return {"sectors": []}
+            result = {"sectors": []}
+            set_cached(user_id, "sectors", result)
+            return result
 
-        return {
+        result = {
             "sectors": [
                 {
                     "sector": s,
@@ -112,6 +123,8 @@ async def sectors_breakdown(
                 for s, v in sector_weights.items()
             ]
         }
+        set_cached(user_id, "sectors", result)
+        return result
 
     except Exception as e:
         traceback.print_exc()
@@ -123,12 +136,19 @@ async def get_beta_analytics(
     current_user: dict = Depends(get_current_user),
     holdings_collection: AsyncIOMotorCollection = Depends(get_holdings_collection),
 ):
+    user_id = str(current_user.get("_id"))
+    cached = get_cached(user_id, "beta")
+    if cached is not None:
+        return cached
+
     try:
         holdings_with_values = await _get_holdings_with_current_values(
             current_user.get("_id"),
             holdings_collection,
         )
-        return await get_portfolio_beta(holdings_with_values)
+        result = await get_portfolio_beta(holdings_with_values)
+        set_cached(user_id, "beta", result)
+        return result
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
@@ -139,34 +159,44 @@ async def get_diversification(
     current_user=Depends(get_current_user),
     holdings_collection: AsyncIOMotorCollection = Depends(get_holdings_collection),
 ):
+    user_id = str(current_user.get("_id"))
+    cached = get_cached(user_id, "diversification")
+    if cached is not None:
+        return cached
+
     try:
         holdings = await holdings_collection.find(
             {"userId": current_user["_id"]}
         ).to_list(None)
 
         if not holdings:
-            return {
+            result = {
                 "score": 0,
                 "sectorScore": 0,
                 "stockCountScore": 0,
                 "correlationScore": 0,
                 "message": "No holdings"
             }
+            set_cached(user_id, "diversification", result)
+            return result
 
         if len(holdings) < 2:
-            return {
+            result = {
                 "score": 0,
                 "sectorScore": 0,
                 "stockCountScore": 0,
                 "correlationScore": 0,
                 "message": "Add at least 2 stocks to calculate diversification"
             }
+            set_cached(user_id, "diversification", result)
+            return result
 
         mongo_client = get_mongo_client()
         if mongo_client is None:
             raise HTTPException(status_code=500, detail="Database unavailable")
 
         result = await compute_diversification(holdings, db_client=mongo_client)
+        set_cached(user_id, "diversification", result)
         return result
 
     except Exception as e:
@@ -179,9 +209,16 @@ async def get_correlation_analytics(
     current_user: dict = Depends(get_current_user),
     holdings_collection: AsyncIOMotorCollection = Depends(get_holdings_collection),
 ):
+    user_id = str(current_user.get("_id"))
+    cached = get_cached(user_id, "correlation")
+    if cached is not None:
+        return cached
+
     try:
         tickers = await _get_user_tickers(current_user.get("_id"), holdings_collection)
-        return await asyncio.to_thread(get_correlation_matrix, tickers)
+        result = await asyncio.to_thread(get_correlation_matrix, tickers)
+        set_cached(user_id, "correlation", result)
+        return result
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
@@ -192,12 +229,71 @@ async def get_benchmark_analytics(
     current_user: dict = Depends(get_current_user),
     holdings_collection: AsyncIOMotorCollection = Depends(get_holdings_collection),
 ):
+    user_id = str(current_user.get("_id"))
+    cached = get_cached(user_id, "benchmark")
+    if cached is not None:
+        return cached
+
     try:
         holdings = []
         async for holding in holdings_collection.find({"userId": current_user.get("_id")}):
             holdings.append(holding)
 
-        return await asyncio.to_thread(get_benchmark_comparison, holdings)
+        result = await asyncio.to_thread(get_benchmark_comparison, holdings)
+        set_cached(user_id, "benchmark", result)
+        return result
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/stress-test")
+async def get_stress_test(
+    custom_shock: float | None = None,
+    current_user: dict = Depends(get_current_user),
+    holdings_collection: AsyncIOMotorCollection = Depends(get_holdings_collection),
+):
+    try:
+        holdings_with_values = await _get_holdings_with_current_values(
+            current_user.get("_id"),
+            holdings_collection,
+        )
+
+        if not holdings_with_values:
+            return {"scenarios": []}
+
+        tickers = [str(h.get("ticker", "")) for h in holdings_with_values]
+        beta_list = await asyncio.gather(
+            *[asyncio.to_thread(get_stock_beta, t) for t in tickers]
+        )
+        betas = dict(zip(tickers, beta_list))
+
+        mongo_client = get_mongo_client()
+        results = await run_stress_test(
+            holdings_with_values,
+            betas,
+            db_client=mongo_client,
+            custom_shock=custom_shock,
+        )
+        return {"scenarios": results}
+
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/risk-decomposition")
+async def get_risk_decomposition(
+    current_user: dict = Depends(get_current_user),
+    holdings_collection: AsyncIOMotorCollection = Depends(get_holdings_collection),
+):
+    try:
+        holdings_with_values = await _get_holdings_with_current_values(
+            current_user.get("_id"),
+            holdings_collection,
+        )
+        result = await asyncio.to_thread(compute_risk_decomposition, holdings_with_values)
+        return result
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))

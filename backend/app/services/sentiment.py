@@ -1,10 +1,13 @@
+import asyncio
 import logging
 import os
 import re
+import threading
 import time
 from collections import Counter
 
 import feedparser
+from cachetools import TTLCache, cached as cachetools_cached
 import requests
 import yfinance as yf
 from dotenv import load_dotenv
@@ -119,16 +122,17 @@ def _fetch_google_news_rss(ticker: str) -> list[dict]:
 def fetch_news_articles(ticker: str) -> list[dict]:
     """
     Returns up to 5 articles as {title, summary}.
-    Primary: yfinance. Supplement with Google RSS if < 3 results.
+    Primary: Google News RSS (more relevant for Indian stocks).
+    Supplement with yfinance if RSS returns fewer than 3 results.
     """
-    articles = _fetch_yfinance_news(ticker)
+    articles = _fetch_google_news_rss(ticker)
 
     if len(articles) < 3:
         existing = {a["title"][:40].lower() for a in articles}
-        for rss in _fetch_google_news_rss(ticker):
-            if rss["title"][:40].lower() not in existing:
-                articles.append(rss)
-                existing.add(rss["title"][:40].lower())
+        for item in _fetch_yfinance_news(ticker):
+            if item["title"][:40].lower() not in existing:
+                articles.append(item)
+                existing.add(item["title"][:40].lower())
             if len(articles) >= 5:
                 break
 
@@ -147,7 +151,7 @@ def _prepare_finbert_inputs(articles: list[dict]) -> list[str]:
     ]
 
 
-def run_finbert(headlines: list, price_context: dict | None = None) -> list:
+def run_finbert(headlines: list) -> list:
     if not headlines:
         return []
 
@@ -155,51 +159,7 @@ def run_finbert(headlines: list, price_context: dict | None = None) -> list:
         logger.error("Missing HF_API_KEY environment variable")
         return []
 
-    context = price_context or {}
-    enriched_inputs = []
-    for headline in headlines:
-        if not context:
-            enriched_inputs.append(headline)
-            continue
-
-        prefix_parts = []
-
-        change_pct = context.get("change_pct")
-        price = context.get("price")
-        if change_pct is not None and price is not None:
-            try:
-                prefix_parts.append(f"Stock: {float(change_pct):+.2f}% today at ₹{price}.")
-            except (TypeError, ValueError):
-                prefix_parts.append(f"Stock: {change_pct}% today at ₹{price}.")
-        elif change_pct is not None:
-            try:
-                prefix_parts.append(f"Stock: {float(change_pct):+.2f}% today.")
-            except (TypeError, ValueError):
-                prefix_parts.append(f"Stock: {change_pct}% today.")
-        elif price is not None:
-            prefix_parts.append(f"Stock: at ₹{price}.")
-
-        rsi = context.get("rsi")
-        rsi_signal = context.get("rsi_signal")
-        if rsi is not None and rsi_signal is not None:
-            prefix_parts.append(f"RSI {rsi} ({rsi_signal}).")
-        elif rsi is not None:
-            prefix_parts.append(f"RSI {rsi}.")
-        elif rsi_signal is not None:
-            prefix_parts.append(f"RSI signal: {rsi_signal}.")
-
-        macd_signal = context.get("macd_signal")
-        if macd_signal is not None:
-            prefix_parts.append(f"MACD: {macd_signal}.")
-
-        analyst_rating = context.get("analyst_rating")
-        if analyst_rating is not None:
-            prefix_parts.append(f"Analyst: {analyst_rating}.")
-
-        if prefix_parts:
-            enriched_inputs.append(f"{' '.join(prefix_parts)} News: {headline}")
-        else:
-            enriched_inputs.append(headline)
+    enriched_inputs = list(headlines)
 
     try:
         response = requests.post(
@@ -211,7 +171,7 @@ def run_finbert(headlines: list, price_context: dict | None = None) -> list:
 
         if response.status_code == 503:
             logger.info("HuggingFace model loading, retrying...")
-            time.sleep(10)
+            time.sleep(3)
             response = requests.post(
                 "https://router.huggingface.co/hf-inference/models/ProsusAI/finbert",
                 headers={"Authorization": f"Bearer {HF_API_KEY}"},
@@ -268,6 +228,11 @@ def _to_badge(label: str) -> str:
     return "Neutral"
 
 
+_sentiment_cache: TTLCache = TTLCache(maxsize=100, ttl=900)
+_sentiment_cache_lock = threading.Lock()
+
+
+@cachetools_cached(cache=_sentiment_cache, lock=_sentiment_cache_lock)
 def get_stock_sentiment(ticker: str) -> dict:
     normalized_ticker = str(ticker).strip().upper()
     articles = fetch_news_articles(normalized_ticker)
@@ -301,12 +266,31 @@ def get_stock_sentiment(ticker: str) -> dict:
             "headlines": headlines_out,
         }
 
-    labels = [str(s.get("label", "neutral")).lower() for s in scored]
-    label_counts = Counter(labels)
-    majority_label, _ = label_counts.most_common(1)[0]
+    CONFIDENCE_THRESHOLD = 0.65
+
+    confident_scored = [
+        s for s in scored
+        if float(s.get("score", 0.0)) >= CONFIDENCE_THRESHOLD
+    ]
+
+    if not confident_scored:
+        return {
+            "ticker": normalized_ticker,
+            "badge": "Neutral",
+            "confidence": 0,
+            "headlines": headlines_out,
+        }
+
+    weighted_scores: dict[str, float] = {}
+    for s in confident_scored:
+        label = str(s.get("label", "neutral")).lower()
+        score = float(s.get("score", 0.0))
+        weighted_scores[label] = weighted_scores.get(label, 0.0) + score
+
+    majority_label = max(weighted_scores, key=lambda lbl: weighted_scores[lbl])
     majority_scores = [
         float(s.get("score", 0.0))
-        for s in scored
+        for s in confident_scored
         if str(s.get("label", "")).lower() == majority_label
     ]
     confidence = (
@@ -324,14 +308,8 @@ def get_stock_sentiment(ticker: str) -> dict:
 
 
 async def get_portfolio_sentiment(tickers: list) -> dict:
-    import asyncio
-
-    loop = asyncio.get_event_loop()
     stock_results = await asyncio.gather(
-        *[
-            loop.run_in_executor(None, get_stock_sentiment, str(ticker))
-            for ticker in tickers
-        ]
+        *[asyncio.to_thread(get_stock_sentiment, str(ticker)) for ticker in tickers]
     )
     stock_results = list(stock_results)
     badge_counts = Counter(str(item.get("badge", "Neutral")) for item in stock_results)

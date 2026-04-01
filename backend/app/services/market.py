@@ -1,4 +1,5 @@
 import logging
+import threading
 from typing import Any
 
 from cachetools import TTLCache, cached
@@ -7,6 +8,7 @@ import yfinance as yf
 logger = logging.getLogger(__name__)
 
 price_cache = TTLCache(maxsize=200, ttl=300)
+_cache_lock = threading.Lock()
 
 
 def _safe_get_fast_info_value(fast_info: Any, attr_name: str, key_name: str) -> Any:
@@ -30,7 +32,7 @@ def get_current_price(ticker: str) -> float:
         return 0.0
 
 
-@cached(cache=price_cache)
+@cached(cache=price_cache, lock=_cache_lock)
 def get_stock_info(ticker: str) -> dict:
     try:
         stock = yf.Ticker(ticker)

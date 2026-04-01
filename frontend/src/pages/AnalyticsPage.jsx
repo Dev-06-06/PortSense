@@ -104,7 +104,16 @@ const AnalyticsPage = () => {
   const [beta, setBeta] = useState(null)
   const [diversification, setDiversification] = useState(null)
   const [benchmark, setBenchmark] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [loadingSectors, setLoadingSectors] = useState(true)
+  const [loadingBeta, setLoadingBeta] = useState(true)
+  const [loadingDiv, setLoadingDiv] = useState(true)
+  const [loadingBench, setLoadingBench] = useState(true)
+  const [stressData, setStressData] = useState(null)
+  const [loadingStress, setLoadingStress] = useState(true)
+  const [riskData, setRiskData] = useState(null)
+  const [loadingRisk, setLoadingRisk] = useState(true)
+  const [customShock, setCustomShock] = useState('')
+  const [runningCustom, setRunningCustom] = useState(false)
   const [error, setError] = useState(null)
   const [adviceText, setAdviceText] = useState('')
   const [adviceLoading, setAdviceLoading] = useState(false)
@@ -129,18 +138,33 @@ const AnalyticsPage = () => {
     }
   }
 
+  const onRunCustomStress = async () => {
+    const shock = parseFloat(customShock)
+    if (!shock || shock >= 0 || shock < -100) return
+    setRunningCustom(true)
+    try {
+      const res = await api.get(`/api/analytics/stress-test?custom_shock=${shock / 100}`)
+      setStressData(res.data)
+    } catch {
+      // keep existing data
+    } finally {
+      setRunningCustom(false)
+    }
+  }
+
   // Initial fetch - all endpoints in parallel
   useEffect(() => {
     document.title = 'Analytics | PortSense'
 
     const fetchAll = async () => {
       try {
-        setLoading(true)
-        const [sectorsRes, betaRes, divRes, benchRes] = await Promise.allSettled([
-          api.get('/api/analytics/sectors'),
-          api.get('/api/analytics/beta'),
-          api.get('/api/analytics/diversification'),
-          api.get('/api/analytics/benchmark'),
+        const [sectorsRes, betaRes, divRes, benchRes, stressRes, riskRes] = await Promise.allSettled([
+          api.get('/api/analytics/sectors').finally(() => setLoadingSectors(false)),
+          api.get('/api/analytics/beta').finally(() => setLoadingBeta(false)),
+          api.get('/api/analytics/diversification').finally(() => setLoadingDiv(false)),
+          api.get('/api/analytics/benchmark').finally(() => setLoadingBench(false)),
+          api.get('/api/analytics/stress-test').finally(() => setLoadingStress(false)),
+          api.get('/api/analytics/risk-decomposition').finally(() => setLoadingRisk(false)),
         ])
 
         if (sectorsRes.status === 'fulfilled') {
@@ -155,10 +179,10 @@ const AnalyticsPage = () => {
         if (benchRes.status === 'fulfilled') {
           setBenchmark(benchRes.value.data)
         }
+        if (stressRes.status === 'fulfilled') setStressData(stressRes.value.data)
+        if (riskRes.status === 'fulfilled') setRiskData(riskRes.value.data)
       } catch (e) {
         setError('Failed to load analytics')
-      } finally {
-        setLoading(false)
       }
     }
     fetchAll()
@@ -180,7 +204,7 @@ const AnalyticsPage = () => {
           <div style={cardStyle}>
             <h2 style={sectionTitleStyle}>Sector Breakdown</h2>
 
-            {loading ? (
+            {loadingSectors ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'center', padding: '2rem 0' }}>
                 <div
                   className="analytics-spin"
@@ -278,7 +302,7 @@ const AnalyticsPage = () => {
           <div style={cardStyle}>
             <h2 style={sectionTitleStyle}>Beta Analysis</h2>
 
-            {loading ? (
+            {loadingBeta ? (
               <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.88rem' }}>Loading beta...</p>
             ) : (
               <>
@@ -317,7 +341,7 @@ const AnalyticsPage = () => {
           <div style={cardStyle}>
             <h2 style={sectionTitleStyle}>Diversification Score</h2>
 
-            {loading ? (
+            {loadingDiv ? (
               <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.88rem' }}>Loading diversification...</p>
             ) : (
               <>
@@ -384,7 +408,7 @@ const AnalyticsPage = () => {
           <div style={cardStyle}>
             <h2 style={sectionTitleStyle}>Benchmark vs Nifty 50</h2>
 
-            {loading ? (
+            {loadingBench ? (
               <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.88rem' }}>Loading benchmark...</p>
             ) : (
               <>
@@ -439,7 +463,211 @@ const AnalyticsPage = () => {
           </div>
         )}
 
-        {/* ========== 5. REBALANCING ADVISOR ========== */}
+        {/* ========== 5. STRESS TEST ========== */}
+        <div style={cardStyle}>
+          <h2 style={{ margin: '0 0 0.25rem', fontSize: '1.1rem', fontWeight: 700, color: '#f8fafc' }}>
+            Stress Test
+          </h2>
+          <p style={{ margin: '0 0 1rem', color: '#94a3b8', fontSize: '0.85rem' }}>
+            Estimated portfolio impact under market scenarios
+          </p>
+
+          {loadingStress ? (
+            <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.88rem' }}>Running scenarios...</p>
+          ) : (
+            <>
+              <div style={{ display: 'grid', gap: '0.75rem' }}>
+                {(stressData?.scenarios || []).filter((s) => s.id !== 'custom').map((scenario) => {
+                  const isLoss = scenario.total_portfolio_loss < 0
+                  return (
+                    <div
+                      key={scenario.id}
+                      style={{
+                        borderRadius: '0.75rem',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        backgroundColor: 'rgba(30,41,59,0.3)',
+                        padding: '0.75rem',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
+                        <div>
+                          <p style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#f8fafc' }}>
+                            {scenario.name}
+                          </p>
+                          <p style={{ margin: '0.2rem 0 0', fontSize: '0.8rem', color: '#94a3b8' }}>
+                            {scenario.description}
+                          </p>
+                        </div>
+
+                        <div style={{ textAlign: 'right' }}>
+                          <p style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: isLoss ? '#f87171' : '#4ade80' }}>
+                            {scenario.total_portfolio_loss_pct > 0 ? '+' : ''}{scenario.total_portfolio_loss_pct}%
+                          </p>
+                          <p style={{ margin: '0.2rem 0 0', fontSize: '0.82rem', color: '#cbd5e1' }}>
+                            {isLoss ? '−' : '+'}₹{Math.abs(scenario.total_portfolio_loss).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
+                <input
+                  type="number"
+                  placeholder="Custom shock (e.g., -12)"
+                  value={customShock}
+                  onChange={(e) => setCustomShock(e.target.value)}
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#0f172a',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    borderRadius: '0.75rem',
+                    padding: '0.6rem 0.85rem',
+                    color: '#e5e7eb',
+                    fontSize: '0.9rem',
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={onRunCustomStress}
+                  disabled={runningCustom}
+                  style={{
+                    border: 'none',
+                    borderRadius: '0.75rem',
+                    backgroundColor: '#f97316',
+                    color: '#fff',
+                    padding: '0.6rem 0.9rem',
+                    fontWeight: 700,
+                    cursor: runningCustom ? 'not-allowed' : 'pointer',
+                    opacity: runningCustom ? 0.85 : 1,
+                  }}
+                >
+                  {runningCustom ? 'Running...' : 'Run Custom'}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* ========== 6. RISK DECOMPOSITION ========== */}
+        <div style={cardStyle}>
+          <h2 style={{ margin: '0 0 0.25rem', fontSize: '1.1rem', fontWeight: 700, color: '#f8fafc' }}>
+            Portfolio Risk Decomposition
+          </h2>
+          <p style={{ margin: '0 0 1rem', color: '#94a3b8', fontSize: '0.85rem' }}>
+            What is driving your portfolio's volatility?
+          </p>
+
+          {loadingRisk ? (
+            <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.88rem' }}>Calculating risk components...</p>
+          ) : !riskData || riskData.systematic_pct === null ? (
+            <div
+              style={{
+                borderRadius: '0.75rem',
+                border: '1px solid rgba(248,113,113,0.35)',
+                backgroundColor: 'rgba(127,29,29,0.2)',
+                padding: '0.85rem',
+              }}
+            >
+              <p style={{ margin: 0, color: '#fca5a5', fontSize: '0.88rem' }}>
+                {riskData?.verdict || 'Risk decomposition is unavailable right now.'}
+              </p>
+            </div>
+          ) : (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.85rem' }}>
+                <div
+                  style={{
+                    borderRadius: '0.75rem',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    backgroundColor: 'rgba(30,41,59,0.3)',
+                    padding: '0.75rem',
+                  }}
+                >
+                  <p style={labelStyle}>Portfolio Volatility</p>
+                  <p style={{ ...numberStyle, margin: 0, fontSize: '1.55rem', fontWeight: 700, color: '#f97316' }}>
+                    {formatPercent(riskData.portfolio_vol_pct || 0)}
+                  </p>
+                </div>
+                <div
+                  style={{
+                    borderRadius: '0.75rem',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    backgroundColor: 'rgba(30,41,59,0.3)',
+                    padding: '0.75rem',
+                  }}
+                >
+                  <p style={labelStyle}>Systematic Risk</p>
+                  <p style={{ ...numberStyle, margin: 0, fontSize: '1.55rem', fontWeight: 700, color: '#60a5fa' }}>
+                    {formatPercent(riskData.systematic_pct || 0)}
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gap: '0.75rem' }}>
+                <div>
+                  <p style={labelStyle}>Systematic (Market)</p>
+                  <div style={{ height: '7px', backgroundColor: '#1e293b', borderRadius: '999px', overflow: 'hidden' }}>
+                    <div
+                      style={{
+                        height: '100%',
+                        borderRadius: '999px',
+                        width: `${Math.min(100, Number(riskData.systematic_pct) || 0)}%`,
+                        backgroundColor: '#60a5fa',
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <p style={labelStyle}>Sector Concentration</p>
+                  <div style={{ height: '7px', backgroundColor: '#1e293b', borderRadius: '999px', overflow: 'hidden' }}>
+                    <div
+                      style={{
+                        height: '100%',
+                        borderRadius: '999px',
+                        width: `${Math.min(100, Number(riskData.sector_concentration_pct) || 0)}%`,
+                        backgroundColor: '#f59e0b',
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <p style={labelStyle}>Idiosyncratic (Stock-Specific)</p>
+                  <div style={{ height: '7px', backgroundColor: '#1e293b', borderRadius: '999px', overflow: 'hidden' }}>
+                    <div
+                      style={{
+                        height: '100%',
+                        borderRadius: '999px',
+                        width: `${Math.min(100, Number(riskData.idiosyncratic_pct) || 0)}%`,
+                        backgroundColor: '#34d399',
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  marginTop: '0.85rem',
+                  borderRadius: '0.75rem',
+                  border: '1px solid rgba(56,189,248,0.35)',
+                  backgroundColor: 'rgba(14,116,144,0.15)',
+                  padding: '0.8rem',
+                }}
+              >
+                <p style={{ margin: 0, color: '#bae6fd', fontSize: '0.86rem', lineHeight: 1.5 }}>
+                  {riskData.verdict || 'Risk decomposition calculated successfully.'}
+                </p>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* ========== 7. REBALANCING ADVISOR ========== */}
         <div style={{ borderRadius: '1rem', border: '1px solid rgba(255,255,255,0.08)', backgroundColor: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(8px)', padding: '1.25rem' }}>
           <h2 style={{ margin: '0 0 0.25rem', fontSize: '1.1rem', fontWeight: 700, color: '#f8fafc' }}>
             Rebalancing Advisor

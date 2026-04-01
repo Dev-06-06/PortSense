@@ -1,12 +1,14 @@
 import asyncio
 import logging
+import threading
 from datetime import date, timedelta
-from datetime import datetime
+from datetime import datetime, timezone
 from itertools import combinations
 
 import numpy as np
 import pandas as pd
 import yfinance as yf
+from cachetools import TTLCache, cached as cachetools_cached
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from app.config.db import get_database_from_client, get_mongo_client
@@ -56,12 +58,11 @@ async def get_sector(ticker: str, db_client=None) -> str:
         sector = info.get("sector") or info.get("industryDisp")
         if sector and isinstance(sector, str) and len(sector) > 1:
             if db_client:
-                await get_database_from_client(db_client).sector_cache.insert_one({
-                    "ticker": ticker,
-                    "sector": sector,
-                    "source": "yfinance",
-                    "cachedAt": datetime.utcnow()
-                })
+                await get_database_from_client(db_client).sector_cache.update_one(
+                    {"ticker": ticker},
+                    {"$setOnInsert": {"ticker": ticker, "sector": sector, "source": "yfinance", "cachedAt": datetime.now(timezone.utc)}},
+                    upsert=True
+                )
             return sector
     except Exception:
         pass
@@ -74,15 +75,15 @@ async def get_sector(ticker: str, db_client=None) -> str:
             f"Examples: IT, Banking, Energy, Pharma, FMCG, Auto, "
             f"Materials, NBFC, Infrastructure, Conglomerate"
         )
-        sector = get_gemini_response(prompt).strip().splitlines()[0]
+        raw = await asyncio.to_thread(get_gemini_response, prompt)
+        sector = raw.strip().splitlines()[0]
         if sector and len(sector) < 30:
             if db_client:
-                await get_database_from_client(db_client).sector_cache.insert_one({
-                    "ticker": ticker,
-                    "sector": sector,
-                    "source": "gemini",
-                    "cachedAt": datetime.utcnow()
-                })
+                await get_database_from_client(db_client).sector_cache.update_one(
+                    {"ticker": ticker},
+                    {"$setOnInsert": {"ticker": ticker, "sector": sector, "source": "gemini", "cachedAt": datetime.now(timezone.utc)}},
+                    upsert=True
+                )
             return sector
     except Exception:
         pass
@@ -136,6 +137,11 @@ async def get_sector_breakdown(
     return breakdown
 
 
+_beta_cache: TTLCache = TTLCache(maxsize=100, ttl=600)
+_beta_cache_lock = threading.Lock()
+
+
+@cachetools_cached(cache=_beta_cache, lock=_beta_cache_lock)
 def get_stock_beta(ticker: str) -> float:
     normalized_ticker = ticker.strip().upper()
 
@@ -233,7 +239,7 @@ async def compute_diversification(holdings: list, db_client=None) -> dict:
         for holding in holdings
         if str(holding.get("ticker", "")).strip()
     ]
-    correlation_result = get_correlation_matrix(tickers)
+    correlation_result = await asyncio.to_thread(get_correlation_matrix, tickers)
     
     # Calculate correlation score from pair correlations
     pair_correlations = []
@@ -469,7 +475,7 @@ def get_benchmark_comparison(holdings: list) -> dict:
                 }
             )
 
-        print("Valid dated holdings:", len(dated_holdings))
+        logger.debug("Valid dated holdings: %s", len(dated_holdings))
 
         if not dated_holdings:
             return {}

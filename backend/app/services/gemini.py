@@ -16,6 +16,7 @@ GEMINI_KEYS = [
 ]
 GEMINI_KEYS = [k for k in GEMINI_KEYS if k]
 key_cycle = itertools.cycle(GEMINI_KEYS)
+_clients = {k: genai.Client(api_key=k) for k in GEMINI_KEYS}
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,7 @@ def get_gemini_response(prompt: str) -> str:
     for _ in range(len(GEMINI_KEYS)):
         key = next(key_cycle)
         try:
-            client = genai.Client(api_key=key)
+            client = _clients[key]
             response = client.models.generate_content(
                 model="gemini-2.5-flash",
                 contents=prompt
