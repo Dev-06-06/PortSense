@@ -109,11 +109,13 @@ const AnalyticsPage = () => {
   const [loadingDiv, setLoadingDiv] = useState(true)
   const [loadingBench, setLoadingBench] = useState(true)
   const [stressData, setStressData] = useState(null)
-  const [loadingStress, setLoadingStress] = useState(true)
-  const [riskData, setRiskData] = useState(null)
-  const [loadingRisk, setLoadingRisk] = useState(true)
+  const [loadingStress, setLoadingStress] = useState(false)
+  const [stressAnalysed, setStressAnalysed] = useState(false)
   const [customShock, setCustomShock] = useState('')
   const [runningCustom, setRunningCustom] = useState(false)
+  const [customResult, setCustomResult] = useState(null)
+  const [riskData, setRiskData] = useState(null)
+  const [loadingRisk, setLoadingRisk] = useState(true)
   const [error, setError] = useState(null)
   const [adviceText, setAdviceText] = useState('')
   const [adviceLoading, setAdviceLoading] = useState(false)
@@ -138,15 +140,32 @@ const AnalyticsPage = () => {
     }
   }
 
-  const onRunCustomStress = async () => {
-    const shock = parseFloat(customShock)
-    if (!shock || shock >= 0 || shock < -100) return
-    setRunningCustom(true)
+  const onAnalyseStress = async () => {
+    setLoadingStress(true)
+    setStressAnalysed(false)
+    setCustomResult(null)
     try {
-      const res = await api.get(`/api/analytics/stress-test?custom_shock=${shock / 100}`)
+      const res = await api.get('/api/analytics/stress-test')
       setStressData(res.data)
+      setStressAnalysed(true)
     } catch {
-      // keep existing data
+      setStressData(null)
+    } finally {
+      setLoadingStress(false)
+    }
+  }
+
+  const onRunCustomStress = async () => {
+    const raw = parseFloat(customShock)
+    if (!raw || raw >= 0 || raw < -99) return
+    setRunningCustom(true)
+    setCustomResult(null)
+    try {
+      const res = await api.get(`/api/analytics/stress-test?custom_shock=${raw / 100}`)
+      const customScenario = (res.data?.scenarios || []).find((s) => s.id === 'custom')
+      setCustomResult(customScenario || null)
+    } catch {
+      // silent fail
     } finally {
       setRunningCustom(false)
     }
@@ -158,12 +177,11 @@ const AnalyticsPage = () => {
 
     const fetchAll = async () => {
       try {
-        const [sectorsRes, betaRes, divRes, benchRes, stressRes, riskRes] = await Promise.allSettled([
+        const [sectorsRes, betaRes, divRes, benchRes, riskRes] = await Promise.allSettled([
           api.get('/api/analytics/sectors').finally(() => setLoadingSectors(false)),
           api.get('/api/analytics/beta').finally(() => setLoadingBeta(false)),
           api.get('/api/analytics/diversification').finally(() => setLoadingDiv(false)),
           api.get('/api/analytics/benchmark').finally(() => setLoadingBench(false)),
-          api.get('/api/analytics/stress-test').finally(() => setLoadingStress(false)),
           api.get('/api/analytics/risk-decomposition').finally(() => setLoadingRisk(false)),
         ])
 
@@ -179,7 +197,6 @@ const AnalyticsPage = () => {
         if (benchRes.status === 'fulfilled') {
           setBenchmark(benchRes.value.data)
         }
-        if (stressRes.status === 'fulfilled') setStressData(stressRes.value.data)
         if (riskRes.status === 'fulfilled') setRiskData(riskRes.value.data)
       } catch (e) {
         setError('Failed to load analytics')
@@ -469,12 +486,37 @@ const AnalyticsPage = () => {
             Stress Test
           </h2>
           <p style={{ margin: '0 0 1rem', color: '#94a3b8', fontSize: '0.85rem' }}>
-            Estimated portfolio impact under market scenarios
+            See your estimated portfolio impact under market crash scenarios
           </p>
 
-          {loadingStress ? (
+          {!stressAnalysed && !loadingStress && (
+            <button
+              type="button"
+              onClick={onAnalyseStress}
+              style={{
+                width: '100%',
+                border: 'none',
+                borderRadius: '0.85rem',
+                backgroundColor: '#f97316',
+                color: '#ffffff',
+                padding: '0.85rem 1rem',
+                fontWeight: 900,
+                letterSpacing: '0.12em',
+                textTransform: 'uppercase',
+                cursor: 'pointer',
+                fontFamily: "'DM Sans', sans-serif",
+                fontSize: '0.9rem',
+              }}
+            >
+              Analyse Scenarios
+            </button>
+          )}
+
+          {loadingStress && (
             <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.88rem' }}>Running scenarios...</p>
-          ) : (
+          )}
+
+          {stressAnalysed && stressData && (
             <>
               <div style={{ display: 'grid', gap: '0.75rem' }}>
                 {(stressData?.scenarios || []).filter((s) => s.id !== 'custom').map((scenario) => {
@@ -504,7 +546,7 @@ const AnalyticsPage = () => {
                             {scenario.total_portfolio_loss_pct > 0 ? '+' : ''}{scenario.total_portfolio_loss_pct}%
                           </p>
                           <p style={{ margin: '0.2rem 0 0', fontSize: '0.82rem', color: '#cbd5e1' }}>
-                            {isLoss ? '−' : '+'}₹{Math.abs(scenario.total_portfolio_loss).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                            ₹{Math.abs(scenario.total_portfolio_loss).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                           </p>
                         </div>
                       </div>
@@ -513,38 +555,111 @@ const AnalyticsPage = () => {
                 })}
               </div>
 
-              <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
-                <input
-                  type="number"
-                  placeholder="Custom shock (e.g., -12)"
-                  value={customShock}
-                  onChange={(e) => setCustomShock(e.target.value)}
-                  style={{
-                    flex: 1,
-                    backgroundColor: '#0f172a',
-                    border: '1px solid rgba(255,255,255,0.15)',
-                    borderRadius: '0.75rem',
-                    padding: '0.6rem 0.85rem',
-                    color: '#e5e7eb',
-                    fontSize: '0.9rem',
-                  }}
-                />
+              <div
+                style={{
+                  marginTop: '1rem',
+                  borderRadius: '0.85rem',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  backgroundColor: 'rgba(15,23,42,0.45)',
+                  padding: '0.85rem',
+                  display: 'grid',
+                  gap: '0.75rem',
+                }}
+              >
+                <p style={{ margin: 0, fontSize: '0.75rem', color: '#94a3b8', letterSpacing: '0.1em', fontWeight: 700 }}>
+                  CUSTOM SCENARIO
+                </p>
+
+                <p style={{ margin: 0, fontSize: '0.82rem', color: '#cbd5e1' }}>
+                  Enter a negative number (e.g. -25 means market falls 25%)
+                </p>
+
+                <div style={{ display: 'grid', gap: '0.6rem' }}>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.1"
+                    min="-99"
+                    max="-0.1"
+                    placeholder="-25"
+                    value={customShock}
+                    onChange={(e) => setCustomShock(e.target.value)}
+                    style={{
+                      width: '100%',
+                      backgroundColor: '#0f172a',
+                      border: '1px solid rgba(255,255,255,0.15)',
+                      borderRadius: '0.75rem',
+                      padding: '0.7rem 0.85rem',
+                      color: '#e5e7eb',
+                      fontSize: '1rem',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={onRunCustomStress}
+                    disabled={runningCustom || !customShock || parseFloat(customShock) >= 0}
+                    style={{
+                      width: '100%',
+                      border: 'none',
+                      borderRadius: '0.75rem',
+                      backgroundColor: runningCustom ? '#ea580c' : '#f97316',
+                      color: '#fff',
+                      padding: '0.7rem 1rem',
+                      fontWeight: 700,
+                      cursor: (runningCustom || !customShock || parseFloat(customShock) >= 0) ? 'not-allowed' : 'pointer',
+                      opacity: (runningCustom || !customShock || parseFloat(customShock) >= 0) ? 0.6 : 1,
+                      fontSize: '0.9rem',
+                    }}
+                  >
+                    {runningCustom ? 'Calculating...' : 'Run Custom Scenario'}
+                  </button>
+                </div>
+
+                {customResult && (
+                  <div
+                    style={{
+                      borderRadius: '0.75rem',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      backgroundColor: 'rgba(30,41,59,0.3)',
+                      padding: '0.75rem',
+                      display: 'grid',
+                      gap: '0.25rem',
+                    }}
+                  >
+                    <p style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#f8fafc' }}>
+                      {customResult.name}
+                    </p>
+                    <p style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#f87171' }}>
+                      {customResult.total_portfolio_loss_pct}%
+                    </p>
+                    <p style={{ margin: 0, fontSize: '0.82rem', color: '#cbd5e1' }}>
+                      Estimated loss: ₹{Math.abs(customResult.total_portfolio_loss).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div style={{ marginTop: '1rem' }}>
                 <button
                   type="button"
-                  onClick={onRunCustomStress}
-                  disabled={runningCustom}
+                  onClick={onAnalyseStress}
                   style={{
+                    width: '100%',
                     border: 'none',
-                    borderRadius: '0.75rem',
+                    borderRadius: '0.85rem',
                     backgroundColor: '#f97316',
-                    color: '#fff',
-                    padding: '0.6rem 0.9rem',
-                    fontWeight: 700,
-                    cursor: runningCustom ? 'not-allowed' : 'pointer',
-                    opacity: runningCustom ? 0.85 : 1,
+                    color: '#ffffff',
+                    padding: '0.85rem 1rem',
+                    fontWeight: 900,
+                    letterSpacing: '0.12em',
+                    textTransform: 'uppercase',
+                    cursor: 'pointer',
+                    fontFamily: "'DM Sans', sans-serif",
+                    fontSize: '0.9rem',
                   }}
                 >
-                  {runningCustom ? 'Running...' : 'Run Custom'}
+                  Refresh
                 </button>
               </div>
             </>

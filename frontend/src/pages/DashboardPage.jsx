@@ -67,6 +67,7 @@ const EMPTY_SUMMARY = {
   totalInvested: 0,
   totalCurrentValue: 0,
   totalPnl: 0,
+  totalPnlPercent: 0,
 };
 
 const NSE_TICKERS = [
@@ -138,6 +139,7 @@ const DashboardPage = () => {
   const [holdings, setHoldings] = useState([]);
   const [summary, setSummary] = useState(EMPTY_SUMMARY);
   const [loading, setLoading] = useState(true);
+  const [silentRefreshing, setSilentRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
@@ -160,6 +162,8 @@ const DashboardPage = () => {
     buyPrice: "",
     quantity: "",
   });
+  const [livePriceFetching, setLivePriceFetching] = useState(false);
+  const [livePrice, setLivePrice] = useState(null);
 
   const tickerSuggestions =
     tickerQuery.length < 1
@@ -170,26 +174,24 @@ const DashboardPage = () => {
             t.full.toLowerCase().includes(tickerQuery.toLowerCase()),
         ).slice(0, 6);
 
-  const fetchPortfolioData = async () => {
-    setLoading(true);
+  const fetchPortfolioData = async (silent = false) => {
+    if (!silent) setLoading(true);
+    else setSilentRefreshing(true);
     setError("");
 
     try {
-      const [holdingsResponse, summaryResponse] = await Promise.all([
-        api.get("/api/holdings/"),
-        api.get("/api/holdings/summary"),
-      ]);
-
-      setHoldings(Array.isArray(holdingsResponse.data) ? holdingsResponse.data : []);
-      setSummary({
-        ...EMPTY_SUMMARY,
-        ...(summaryResponse.data || {}),
-      });
+      const response = await api.get("/api/holdings/dashboard");
+      const data = response.data;
+      setHoldings(Array.isArray(data.holdings) ? data.holdings : []);
+      setSummary({ ...EMPTY_SUMMARY, ...(data.summary || {}) });
     } catch {
-      setError("Unable to load holdings. Please try again.");
-      setSummary(EMPTY_SUMMARY);
+      if (!silent) {
+        setError("Unable to load holdings. Please try again.");
+        setSummary(EMPTY_SUMMARY);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
+      else setSilentRefreshing(false);
     }
   };
 
@@ -201,8 +203,18 @@ const DashboardPage = () => {
     fetchPortfolioData();
   }, []);
 
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      fetchPortfolioData(true);
+    }, 60000);
+    return () => clearInterval(intervalId);
+  }, []);
+
   const onChangeForm = (event) => {
     const { name, value } = event.target;
+    if (name === "ticker") {
+      setLivePrice(null);
+    }
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -226,6 +238,7 @@ const DashboardPage = () => {
         quantity: "",
       });
       setTickerQuery("");
+      setLivePrice(null);
       setShowAddForm(false);
       await fetchPortfolioData();
     } catch (requestError) {
@@ -248,6 +261,28 @@ const DashboardPage = () => {
       setError("Unable to delete holding. Please try again.");
     }
   };
+
+  const fetchLivePrice = async (ticker) => {
+    if (!ticker) {
+      setLivePrice(null);
+      return;
+    }
+
+    setLivePriceFetching(true);
+    setLivePrice(null);
+
+    try {
+      const res = await api.get(`/api/market/price/${ticker}`);
+      setLivePrice(res.data?.currentPrice || null);
+    } catch {
+      setLivePrice(null);
+    } finally {
+      setLivePriceFetching(false);
+    }
+  };
+
+  const totalDayChange = holdings.reduce((sum, h) => sum + (Number(h.dayChange) || 0), 0);
+  const isDayPositive = totalDayChange >= 0;
 
   return (
     <div style={shellStyle}>
@@ -300,7 +335,13 @@ const DashboardPage = () => {
 
         @media (min-width: 768px) {
           .summary-grid {
-            grid-template-columns: repeat(3, minmax(0, 1fr));
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+        }
+
+        @media (min-width: 900px) {
+          .summary-grid {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
           }
 
           .add-holding-form {
@@ -334,6 +375,17 @@ const DashboardPage = () => {
               >
                 {formatCurrency(summary.totalInvested)}
               </p>
+              {summary.totalInvested > 0 && (
+                <p
+                  style={{
+                    margin: "0.25rem 0 0",
+                    fontSize: "0.85rem",
+                    color: Number(summary.totalPnlPercent) >= 0 ? '#22c55e' : '#ef4444',
+                  }}
+                >
+                  {Number(summary.totalPnlPercent) >= 0 ? '+' : ''}{Number(summary.totalPnlPercent || 0).toFixed(2)}%
+                </p>
+              )}
             </div>
 
             <div>
@@ -350,6 +402,17 @@ const DashboardPage = () => {
               >
                 {formatCurrency(summary.totalCurrentValue)}
               </p>
+              {summary.totalInvested > 0 && (
+                <p
+                  style={{
+                    margin: "0.25rem 0 0",
+                    fontSize: "0.85rem",
+                    color: Number(summary.totalPnlPercent) >= 0 ? '#22c55e' : '#ef4444',
+                  }}
+                >
+                  {Number(summary.totalPnlPercent) >= 0 ? '+' : ''}{Number(summary.totalPnlPercent || 0).toFixed(2)}% overall
+                </p>
+              )}
             </div>
 
             <div>
@@ -365,6 +428,43 @@ const DashboardPage = () => {
                 }}
               >
                 {formatCurrency(summary.totalPnl)}
+              </p>
+              <p
+                style={{
+                  margin: "0.25rem 0 0",
+                  fontSize: "0.85rem",
+                  color: Number(summary.totalPnlPercent) >= 0 ? '#22c55e' : '#ef4444',
+                }}
+              >
+                {Number(summary.totalPnlPercent) >= 0 ? '+' : ''}{Number(summary.totalPnlPercent || 0).toFixed(2)}%
+              </p>
+            </div>
+
+            <div>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  minHeight: "1.3rem",
+                }}
+              >
+                <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.85rem" }}>
+                  Today's P&L
+                </p>
+                {silentRefreshing && (
+                  <span style={{ color: "#94a3b8", fontSize: "0.7rem" }}>updating...</span>
+                )}
+              </div>
+              <p
+                style={{
+                  ...numberStyle,
+                  margin: "0.25rem 0 0",
+                  fontSize: "1.6rem",
+                  color: isDayPositive ? "#22c55e" : "#ef4444",
+                }}
+              >
+                {isDayPositive ? "+" : ""}{formatCurrency(totalDayChange)}
               </p>
             </div>
           </div>
@@ -386,7 +486,10 @@ const DashboardPage = () => {
             </h2>
             <button
               type="button"
-              onClick={() => setShowAddForm((prev) => !prev)}
+              onClick={() => {
+                setShowAddForm((prev) => !prev);
+                setLivePrice(null);
+              }}
               style={{
                 ...buttonBaseStyle,
                 backgroundColor: "#f97316",
@@ -460,12 +563,14 @@ const DashboardPage = () => {
                       <div
                         key={t.symbol}
                         onMouseDown={() => {
+                          const fullTicker = `${t.symbol}.NS`;
                           setFormData((p) => ({
                             ...p,
-                            ticker: `${t.symbol}.NS`,
+                            ticker: fullTicker,
                           }));
                           setTickerQuery(t.symbol);
                           setShowTickerDrop(false);
+                          fetchLivePrice(fullTicker);
                         }}
                         style={{
                           padding: "0.7rem 1rem",
@@ -522,6 +627,38 @@ const DashboardPage = () => {
                   style={inputStyle}
                 />
               </div>
+
+              {(livePriceFetching || livePrice !== null) && (
+                <div
+                  style={{
+                    padding: "0.75rem 0.9rem",
+                    borderRadius: "0.75rem",
+                    border: "1px solid rgba(249, 115, 22, 0.2)",
+                    backgroundColor: "rgba(249, 115, 22, 0.08)",
+                  }}
+                >
+                  <p
+                    style={{
+                      margin: 0,
+                      color: "#f8fafc",
+                      fontSize: "0.8rem",
+                      fontWeight: 700,
+                    }}
+                  >
+                    Current market price:
+                  </p>
+                  <p
+                    style={{
+                      margin: "0.25rem 0 0",
+                      color: "#fdba74",
+                      fontSize: "1rem",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {livePriceFetching ? "Fetching..." : formatCurrency(livePrice)}
+                  </p>
+                </div>
+              )}
 
               <div>
                 <p
