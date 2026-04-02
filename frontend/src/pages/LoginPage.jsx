@@ -60,6 +60,7 @@ const getTokenFromResponse = (data) => data?.token || data?.access_token || data
 const LoginPage = () => {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
@@ -111,15 +112,37 @@ const LoginPage = () => {
             style={fieldStyle}
           />
 
-          <input
-            className='border border-white/20 bg-slate-900 text-white rounded-xl p-3'
-            type='password'
-            placeholder='Password'
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            required
-            style={fieldStyle}
-          />
+          <div style={{ position: 'relative' }}>
+            <input
+              type={showPassword ? 'text' : 'password'}
+              placeholder='Password'
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              required
+              style={{ ...fieldStyle, paddingRight: '3rem' }}
+            />
+            <button
+              type='button'
+              onClick={() => setShowPassword((prev) => !prev)}
+              style={{
+                position: 'absolute',
+                right: '0.75rem',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                color: '#94a3b8',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                padding: '0.25rem',
+                userSelect: 'none',
+              }}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+            >
+              {showPassword ? 'Hide' : 'Show'}
+            </button>
+          </div>
 
           {error && <p style={{ margin: 0, color: '#ef4444' }}>{error}</p>}
 
