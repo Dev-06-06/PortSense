@@ -375,17 +375,6 @@ const DashboardPage = () => {
               >
                 {formatCurrency(summary.totalInvested)}
               </p>
-              {summary.totalInvested > 0 && (
-                <p
-                  style={{
-                    margin: "0.25rem 0 0",
-                    fontSize: "0.85rem",
-                    color: Number(summary.totalPnlPercent) >= 0 ? '#22c55e' : '#ef4444',
-                  }}
-                >
-                  {Number(summary.totalPnlPercent) >= 0 ? '+' : ''}{Number(summary.totalPnlPercent || 0).toFixed(2)}%
-                </p>
-              )}
             </div>
 
             <div>
@@ -397,22 +386,14 @@ const DashboardPage = () => {
                   ...numberStyle,
                   margin: "0.25rem 0 0",
                   fontSize: "1.6rem",
-                  color: "#f8fafc",
+                  color:
+                    Number(summary.totalCurrentValue) >= Number(summary.totalInvested)
+                      ? "#22c55e"
+                      : "#ef4444",
                 }}
               >
                 {formatCurrency(summary.totalCurrentValue)}
               </p>
-              {summary.totalInvested > 0 && (
-                <p
-                  style={{
-                    margin: "0.25rem 0 0",
-                    fontSize: "0.85rem",
-                    color: Number(summary.totalPnlPercent) >= 0 ? '#22c55e' : '#ef4444',
-                  }}
-                >
-                  {Number(summary.totalPnlPercent) >= 0 ? '+' : ''}{Number(summary.totalPnlPercent || 0).toFixed(2)}% overall
-                </p>
-              )}
             </div>
 
             <div>
@@ -428,15 +409,18 @@ const DashboardPage = () => {
                 }}
               >
                 {formatCurrency(summary.totalPnl)}
-              </p>
-              <p
-                style={{
-                  margin: "0.25rem 0 0",
-                  fontSize: "0.85rem",
-                  color: Number(summary.totalPnlPercent) >= 0 ? '#22c55e' : '#ef4444',
-                }}
-              >
-                {Number(summary.totalPnlPercent) >= 0 ? '+' : ''}{Number(summary.totalPnlPercent || 0).toFixed(2)}%
+                {Number(summary.totalInvested) > 0 && (
+                  <span
+                    style={{
+                      marginLeft: "0.5rem",
+                      fontSize: "0.85rem",
+                      color: summary.totalPnl >= 0 ? "#22c55e" : "#ef4444",
+                    }}
+                  >
+                    {summary.totalPnl >= 0 ? "+" : ""}
+                    {Number(summary.totalPnlPercent || 0).toFixed(2)}%
+                  </span>
+                )}
               </p>
             </div>
 
