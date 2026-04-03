@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import threading
 from datetime import date, timedelta
 from datetime import datetime, timezone
 from itertools import combinations
@@ -8,13 +7,49 @@ from itertools import combinations
 import numpy as np
 import pandas as pd
 import yfinance as yf
-from cachetools import TTLCache, cached as cachetools_cached
+from scipy.optimize import brentq
+from cachetools import TTLCache
 from motor.motor_asyncio import AsyncIOMotorClient
-
-from app.config.db import get_database_from_client, get_mongo_client
+from app.config.db import get_database_from_client
 from app.services.gemini import get_gemini_response
 
 logger = logging.getLogger(__name__)
+
+
+def calculate_xirr(cash_flows: list[tuple[datetime, float]]) -> float:
+    """
+    Calculate XIRR (money-weighted internal rate of return).
+
+    Args:
+        cash_flows: list of (date, amount) tuples where:
+                   - negative = outflow (cash spent)
+                   - positive = inflow (cash received)
+
+    Returns:
+        Annualized rate as a decimal (e.g., 0.12 for 12%), or 0.0 if calculation fails
+    """
+    if len(cash_flows) < 2:
+        return 0.0
+
+    dates = [cf[0] for cf in cash_flows]
+    amounts = [cf[1] for cf in cash_flows]
+
+    # Use the earliest date as the time reference (t=0)
+    t0 = dates[0]
+    years = [(d - t0).days / 365.0 for d in dates]
+
+    def npv(rate: float) -> float:
+        """Net present value at a given discount rate."""
+        return sum(a / (1 + rate) ** t for a, t in zip(amounts, years))
+
+    try:
+        # Find the rate where NPV = 0 using Brent's method
+        # Try the range [-0.999, 100.0] which covers most real-world returns
+        return float(brentq(npv, -0.999, 100.0, maxiter=1000))
+    except (ValueError, RuntimeError):
+        # If brentq fails (no sign change or other error), return 0.0
+        return 0.0
+
 
 SECTOR_MAP = {
     "RELIANCE.NS": "Energy",
@@ -54,7 +89,7 @@ async def get_sector(ticker: str, db_client=None) -> str:
             return cached["sector"]
 
     try:
-        info = yf.Ticker(ticker).info
+        info = await asyncio.to_thread(lambda: yf.Ticker(ticker).info)
         sector = info.get("sector") or info.get("industryDisp")
         if sector and isinstance(sector, str) and len(sector) > 1:
             if db_client:
@@ -98,12 +133,15 @@ async def get_sector_breakdown(
 ) -> list[dict]:
     active_db_client = db_client or mongo_client
     total_portfolio_value = sum(float(holding.get("currentValue", 0.0)) for holding in holdings)
+    tickers = [str(holding.get("ticker", "")).strip().upper() for holding in holdings]
+    sectors = await asyncio.gather(
+        *[get_sector(ticker, db_client=active_db_client) for ticker in tickers]
+    )
 
     sector_groups = {}
-    for holding in holdings:
+    for holding, sector in zip(holdings, sectors):
         ticker = str(holding.get("ticker", "")).strip().upper()
         current_value = float(holding.get("currentValue", 0.0))
-        sector = await get_sector(ticker, db_client=active_db_client)
 
         if sector not in sector_groups:
             sector_groups[sector] = {
@@ -137,60 +175,97 @@ async def get_sector_breakdown(
     return breakdown
 
 
-_beta_cache: TTLCache = TTLCache(maxsize=100, ttl=600)
-_beta_cache_lock = threading.Lock()
+_beta_cache: TTLCache = TTLCache(maxsize=100, ttl=1800)
 
 
-@cachetools_cached(cache=_beta_cache, lock=_beta_cache_lock)
-def get_stock_beta(ticker: str) -> float:
-    normalized_ticker = ticker.strip().upper()
-
-    if not normalized_ticker:
+def get_stock_beta(ticker: str, close_data: pd.DataFrame) -> float:
+    """
+    Compute beta via OLS regression of 6-month daily returns against Nifty 50.
+    This is reliable for Indian stocks where yfinance .info["beta"] is often None.
+    """
+    normalized = ticker.strip().upper()
+    if not normalized:
         return 1.0
 
-    # Removed yfinance JSON cache clearing for compatibility with newer yfinance versions.
-
     try:
-        stock = yf.Ticker(normalized_ticker)
-        stock_info = stock.info if isinstance(stock.info, dict) else {}
-        beta = stock_info.get("beta")
-        if beta is not None:
-            return float(beta)
-    except Exception as exc:
-        error_text = str(exc).lower()
-        is_401_error = (
-            "401" in error_text
-            or "unauthorized" in error_text
-            or "forbidden" in error_text
-            or "crumb" in error_text
-        )
-        if not is_401_error:
-            logger.exception("Failed to fetch beta for %s: %s", normalized_ticker, exc)
+        if normalized not in close_data.columns or "^NSEI" not in close_data.columns:
             return 1.0
 
-    try:
-        # Retry with a fresh ticker and use fast_info as a resilient fallback source.
-        stock = yf.Ticker(normalized_ticker)
-        return float(stock.fast_info.get("beta", 1.0) or 1.0)
-    except Exception as exc:
-        logger.exception("Failed to fetch beta from fast_info for %s: %s", normalized_ticker, exc)
+        combined = close_data[[normalized, "^NSEI"]].dropna()
+
+        if len(combined) < 20:
+            return 1.0
+
+        returns = combined.pct_change().dropna()
+        stock_ret = returns[normalized].values
+        nifty_ret = returns["^NSEI"].values
+        nifty_var = float(np.var(nifty_ret))
+        if nifty_var == 0:
+            return 1.0
+
+        cov = float(np.cov(stock_ret, nifty_ret)[0][1])
+        beta = round(cov / nifty_var, 2)
+        beta = max(-3.0, min(5.0, beta))
+
+        _beta_cache[normalized] = beta
+
+        logger.debug(f"[BETA] SUCCESS {normalized}: beta={beta}")
+        return beta
+
+    except Exception as e:
+        logger.error(f"[BETA] EXCEPTION {normalized}: {type(e).__name__}: {e}")
         return 1.0
+
+
+def invalidate_beta_cache(ticker: str = None):
+    if ticker:
+        _beta_cache.pop(ticker.strip().upper(), None)
+    else:
+        _beta_cache.clear()
 
 
 async def get_portfolio_beta(holdings: list) -> dict:
     total_value = sum(float(holding.get("currentValue", 0.0)) for holding in holdings)
+    valid_holdings = [
+        {
+            "ticker": str(holding.get("ticker", "")).strip().upper(),
+            "currentValue": float(holding.get("currentValue", 0.0)),
+        }
+        for holding in holdings
+        if str(holding.get("ticker", "")).strip().upper()
+    ]
 
-    tickers = [str(holding.get("ticker", "")).strip().upper() for holding in holdings]
-    betas = await asyncio.gather(
-        *[asyncio.to_thread(get_stock_beta, ticker) for ticker in tickers]
+    all_tickers = [holding["ticker"] for holding in valid_holdings] + ["^NSEI"]
+
+    raw = await asyncio.to_thread(
+        yf.download,
+        all_tickers,
+        period="6mo",
+        progress=False,
+        auto_adjust=True,
     )
+
+    # Flatten MultiIndex
+    if isinstance(raw.columns, pd.MultiIndex):
+        close_data = raw["Close"]
+    else:
+        close_data = raw
+
+    beta_results = []
+    for holding in valid_holdings:
+        ticker = holding["ticker"]
+        if ticker in _beta_cache:
+            beta = _beta_cache[ticker]
+        else:
+            beta = get_stock_beta(ticker, close_data)
+        beta_results.append(beta)
 
     per_stock = []
     portfolio_beta = 0.0
 
-    for holding, beta in zip(holdings, betas):
-        ticker = str(holding.get("ticker", "")).strip().upper()
-        current_value = float(holding.get("currentValue", 0.0))
+    for holding, beta in zip(valid_holdings, beta_results):
+        ticker = holding["ticker"]
+        current_value = holding["currentValue"]
         weight = (current_value / total_value) if total_value > 0 else 0.0
         weight_pct = round(weight * 100.0, 1)
 
@@ -232,32 +307,11 @@ async def compute_diversification(holdings: list, db_client=None) -> dict:
     """
     sector_breakdown = await get_sector_breakdown(holdings, db_client=db_client)
     diversification = get_diversification_score(holdings, sector_breakdown)
-    
-    # Extract tickers for correlation analysis
-    tickers = [
-        str(holding.get("ticker", "")).strip().upper()
-        for holding in holdings
-        if str(holding.get("ticker", "")).strip()
-    ]
-    correlation_result = await asyncio.to_thread(get_correlation_matrix, tickers)
-    
-    # Calculate correlation score from pair correlations
-    pair_correlations = []
-    matrix = correlation_result.get("matrix", [])
-    for row_index, row in enumerate(matrix):
-        for col_index in range(row_index + 1, len(row)):
-            pair_correlations.append(float(row[col_index]))
-    
-    average_abs_correlation = (
-        sum(abs(correlation) for correlation in pair_correlations) / len(pair_correlations)
-        if pair_correlations
-        else 0.0
-    )
-    correlation_score = round(10 - (average_abs_correlation * 10), 1)
-    
-    # Recalculate final score with correlation
     sector_score = float(diversification.get("sectorScore", 0.0))
     size_score = float(diversification.get("sizeScore", 0.0))
+    correlation_score = await asyncio.to_thread(compute_correlation_score, holdings)
+
+    # Recalculate final score with correlation
     diversification_score = round((sector_score + size_score + correlation_score) / 3.0, 1)
     
     if diversification_score >= 7.0:
@@ -276,12 +330,97 @@ async def compute_diversification(holdings: list, db_client=None) -> dict:
     }
 
 
+def compute_correlation_score(holdings: list, close_data: pd.DataFrame = None) -> float:
+    normalized_tickers = [
+        str(holding.get("ticker", "")).strip().upper()
+        for holding in holdings
+        if str(holding.get("ticker", "")).strip()
+    ]
+    unique_tickers = list(dict.fromkeys(normalized_tickers))
+
+    # Neutral score when there is no meaningful pairwise correlation to compute.
+    if len(unique_tickers) < 2:
+        return 5.0
+
+    try:
+        active_close_data = close_data
+        if active_close_data is None:
+            raw = yf.download(
+                unique_tickers,
+                period="6mo",
+                interval="1d",
+                progress=False,
+                auto_adjust=True,
+            )
+            if raw is None or raw.empty:
+                return 5.0
+
+            if isinstance(raw.columns, pd.MultiIndex):
+                if "Close" not in raw.columns.get_level_values(0):
+                    return 5.0
+                active_close_data = raw["Close"]
+            else:
+                active_close_data = raw
+
+        if active_close_data is None or active_close_data.empty:
+            return 5.0
+
+        close_by_ticker = {}
+        if isinstance(active_close_data.columns, pd.MultiIndex):
+            if "Close" in active_close_data.columns.get_level_values(0):
+                close_level = active_close_data["Close"]
+                for ticker in unique_tickers:
+                    if ticker in close_level.columns:
+                        close_by_ticker[ticker] = close_level[ticker]
+            elif "Close" in active_close_data.columns.get_level_values(1):
+                for ticker in unique_tickers:
+                    key = (ticker, "Close")
+                    if key in active_close_data.columns:
+                        close_by_ticker[ticker] = active_close_data[key]
+        else:
+            if "Close" in active_close_data.columns and len(unique_tickers) == 1:
+                close_by_ticker[unique_tickers[0]] = active_close_data["Close"]
+            else:
+                for ticker in unique_tickers:
+                    if ticker in active_close_data.columns:
+                        close_by_ticker[ticker] = active_close_data[ticker]
+
+        ordered_tickers = [ticker for ticker in unique_tickers if ticker in close_by_ticker]
+        if len(ordered_tickers) < 2:
+            return 5.0
+
+        close_df = pd.DataFrame({ticker: close_by_ticker[ticker] for ticker in ordered_tickers})
+        returns_df = close_df.pct_change().dropna(how="all")
+        if returns_df.empty:
+            return 5.0
+
+        pair_abs_correlations = []
+        for ticker1, ticker2 in combinations(ordered_tickers, 2):
+            pair_returns = returns_df[[ticker1, ticker2]].dropna()
+            if len(pair_returns) < 2:
+                continue
+
+            correlation_value = pair_returns[ticker1].corr(pair_returns[ticker2])
+            if pd.isna(correlation_value):
+                continue
+
+            pair_abs_correlations.append(abs(float(correlation_value)))
+
+        if not pair_abs_correlations:
+            return 5.0
+
+        average_abs_correlation = sum(pair_abs_correlations) / len(pair_abs_correlations)
+        correlation_score = round(10 - (average_abs_correlation * 10), 1)
+        return float(max(0.0, min(10.0, correlation_score)))
+    except Exception as exc:
+        logger.exception("Failed to compute correlation score for holdings: %s", exc)
+        return 5.0
+
+
 def get_diversification_score(holdings: list, sector_breakdown: list) -> dict:
     overweight_sector_count = 0
-    max_sector_percentage = 0.0
     for sector in sector_breakdown:
         percentage = float(sector.get("percentage", 0.0))
-        max_sector_percentage = max(max_sector_percentage, percentage)
         if percentage > 25.0:
             overweight_sector_count += 1
 
@@ -303,28 +442,9 @@ def get_diversification_score(holdings: list, sector_breakdown: list) -> dict:
     else:
         size_score = 10.0
 
-    if overweight_sector_count >= 2 or max_sector_percentage >= 40.0:
-        correlation_score = 4.0
-    elif overweight_sector_count == 1:
-        correlation_score = 5.0
-    else:
-        correlation_score = 7.0
-
-    diversification_score = round((sector_score + size_score + correlation_score) / 3.0, 1)
-
-    if diversification_score >= 7.0:
-        verdict = "Well Diversified"
-    elif diversification_score >= 4.0:
-        verdict = "Moderate"
-    else:
-        verdict = "Concentrated"
-
     return {
-        "score": diversification_score,
         "sectorScore": sector_score,
         "sizeScore": size_score,
-        "correlationScore": correlation_score,
-        "verdict": verdict,
     }
 
 
@@ -425,7 +545,7 @@ def get_correlation_matrix(tickers: list) -> dict:
         return empty_result
 
 
-def get_benchmark_comparison(holdings: list) -> dict:
+async def get_benchmark_comparison(holdings: list) -> dict:
     try:
         if not holdings:
             return {}
@@ -488,22 +608,33 @@ def get_benchmark_comparison(holdings: list) -> dict:
         end_date = today + timedelta(days=1)
         tickers = list(dict.fromkeys(item["ticker"] for item in dated_holdings))
 
-        portfolio_data = yf.download(
-            tickers,
+        all_tickers = tickers + ["^NSEI"]
+        all_data = yf.download(
+            all_tickers,
             start=start_date.isoformat(),
             end=end_date.isoformat(),
             interval="1d",
             auto_adjust=True,
             progress=False,
         )
-        nifty_data = yf.download(
-            "^NSEI",
-            start=start_date.isoformat(),
-            end=end_date.isoformat(),
-            interval="1d",
-            auto_adjust=True,
-            progress=False,
-        )
+
+        if all_data is None or all_data.empty:
+            return {}
+
+        portfolio_data = all_data
+        nifty_data = all_data
+
+        if isinstance(all_data.columns, pd.MultiIndex):
+            if "^NSEI" in all_data.columns.get_level_values(-1):
+                portfolio_data = all_data.loc[:, pd.IndexSlice[:, tickers]]
+                nifty_data = all_data.loc[:, pd.IndexSlice[:, ["^NSEI"]]]
+            elif "^NSEI" in all_data.columns.get_level_values(0):
+                portfolio_data = all_data.loc[:, pd.IndexSlice[tickers, :]]
+                nifty_data = all_data.loc[:, pd.IndexSlice[["^NSEI"], :]]
+        else:
+            if all(ticker in all_data.columns for ticker in all_tickers):
+                portfolio_data = all_data[tickers]
+                nifty_data = all_data[["^NSEI"]]
 
         if portfolio_data is None or portfolio_data.empty or nifty_data is None or nifty_data.empty:
             return {}
@@ -514,7 +645,12 @@ def get_benchmark_comparison(holdings: list) -> dict:
             except KeyError:
                 return {}
         else:
-            nifty_close = nifty_data.get("Close")
+            if "Close" in nifty_data.columns:
+                nifty_close = nifty_data.get("Close")
+            elif "^NSEI" in nifty_data.columns:
+                nifty_close = nifty_data["^NSEI"]
+            else:
+                nifty_close = None
 
         if nifty_close is None:
             return {}
@@ -549,15 +685,26 @@ def get_benchmark_comparison(holdings: list) -> dict:
         if portfolio_close.empty or nifty_close.empty:
             return {}
 
-        quantities = {ticker: 0.0 for ticker in tickers}
-        for item in dated_holdings:
-            quantities[item["ticker"]] += float(item["quantity"])
+        # Build portfolio value time series with staggered entry per buy date.
+        # Each stock only contributes value from the day it was actually purchased.
+        portfolio_value_series = pd.Series(0.0, index=portfolio_close.index)
 
-        portfolio_values = sum(
-            portfolio_close[ticker].fillna(0.0) * quantities.get(ticker, 0.0)
-            for ticker in tickers
-        )
-        portfolio_values = portfolio_values.dropna()
+        for item in dated_holdings:
+            ticker = item["ticker"]
+            qty = float(item["quantity"])
+            buy_date = item["buyDate"]
+
+            if ticker not in portfolio_close.columns:
+                continue
+
+            buy_ts = pd.Timestamp(buy_date)
+            stock_prices = portfolio_close[ticker].reindex(portfolio_close.index).ffill()
+            entry_mask = portfolio_close.index >= buy_ts
+            portfolio_value_series.loc[entry_mask] += stock_prices.loc[entry_mask] * qty
+
+        # Drop dates before any stock was purchased.
+        portfolio_value_series = portfolio_value_series[portfolio_value_series > 0]
+        portfolio_values = portfolio_value_series
         if portfolio_values.empty:
             return {}
 
@@ -575,43 +722,123 @@ def get_benchmark_comparison(holdings: list) -> dict:
         if initial_portfolio <= 0 or initial_nifty <= 0:
             return {}
 
-        years = (today - start_date).days / 365.0
+        days_held = (today - start_date).days
+        years = days_held / 365.0
         if years <= 0:
             return {}
 
-        user_cagr = (final_portfolio / initial_portfolio) ** (1 / years) - 1
-        nifty_cagr = (final_nifty / initial_nifty) ** (1 / years) - 1
+        is_short_period = days_held < 90
 
-        portfolio_returns = portfolio_values.pct_change().dropna()
-        nifty_returns = nifty_close.pct_change().dropna()
-        returns_index = portfolio_returns.index.intersection(nifty_returns.index)
-        if len(returns_index) < 2:
+        # Pass 1: filter to holdings that are actually present in downloaded close data.
+        available_holdings = [
+            item for item in dated_holdings if item["ticker"] in portfolio_close.columns
+        ]
+        if not available_holdings:
             return {}
 
-        portfolio_returns = portfolio_returns.loc[returns_index]
-        nifty_returns = nifty_returns.loc[returns_index]
+        # Calculate user XIRR (money-weighted internal rate of return)
+        # Build cash flows: outflows for each buy, inflow for current value
+        xirr_flows = []
+        for item in available_holdings:
+            ticker = item["ticker"]
+            qty = float(item["quantity"])
+            buy_date = item["buyDate"]
 
-        covariance = float(np.cov(portfolio_returns.values, nifty_returns.values)[0][1])
-        nifty_variance = float(np.var(nifty_returns.values))
-        portfolio_beta = covariance / nifty_variance if nifty_variance != 0 else 0.0
+            buy_ts = pd.Timestamp(buy_date)
+            stock_series = portfolio_close[ticker]
+            
+            # Get the closing price on or after the buy date (using ffill)
+            if buy_ts in stock_series.index:
+                buy_price = float(stock_series.loc[buy_ts])
+            else:
+                # Find the first date >= buy_ts
+                mask = stock_series.index >= buy_ts
+                if mask.any():
+                    buy_price = float(stock_series[mask].iloc[0])
+                else:
+                    buy_price = float(stock_series.iloc[-1])  # Fallback to last available
+            
+            # Outflow: negative cash flow for purchase
+            xirr_flows.append((buy_date, -qty * buy_price))
 
-        outperforming = user_cagr > nifty_cagr
-        if user_cagr > nifty_cagr and portfolio_beta <= 1.0:
+        # Inflow: current portfolio value (as of today)
+        xirr_flows.append((today, final_portfolio))
+        xirr_flows.sort(key=lambda x: x[0])
+
+        user_xirr = calculate_xirr(xirr_flows)
+
+        # Nifty CAGR: anchored to the earliest buy date (standard retail benchmark)
+        if is_short_period:
+            nifty_cagr = (final_nifty / initial_nifty) - 1
+        else:
+            nifty_cagr = (final_nifty / initial_nifty) ** (1 / years) - 1
+
+
+        # Pass 2: sum invested amount using only available holdings.
+        total_invested = 0.0
+        for item in available_holdings:
+            qty = float(item["quantity"])
+            ticker = item["ticker"]
+
+            stock_series = portfolio_close[ticker]
+            buy_ts = pd.Timestamp(item["buyDate"])
+            if buy_ts in stock_series.index:
+                buy_price = float(stock_series.loc[buy_ts])
+            else:
+                mask = stock_series.index >= buy_ts
+                if mask.any():
+                    buy_price = float(stock_series[mask].iloc[0])
+                else:
+                    buy_price = float(stock_series.iloc[-1])
+
+            total_invested += qty * buy_price
+
+        if total_invested <= 0:
+            return {}
+
+        portfolio_beta_data = await get_portfolio_beta(holdings)
+        portfolio_beta = float(portfolio_beta_data.get("portfolioBeta", 0.0))
+
+        # Updated verdict logic with >= for proper edge case handling
+        if user_xirr >= nifty_cagr and portfolio_beta <= 1.0:
             verdict = "You beat the index with lower risk — great job"
-        elif user_cagr > nifty_cagr and portfolio_beta > 1.0:
+        elif user_xirr >= nifty_cagr and portfolio_beta > 1.0:
             verdict = "You beat the index but took higher risk to do it"
-        elif user_cagr < nifty_cagr and portfolio_beta <= 1.0:
+        elif user_xirr < nifty_cagr and portfolio_beta <= 1.0:
             verdict = "You underperformed the index with lower risk — consider index funds"
         else:
             verdict = "You took more risk for less return than the index"
 
+        outperforming = user_xirr >= nifty_cagr
+
+        # Build normalized time series (base = 100 on first date)
+        portfolio_series = (portfolio_values / portfolio_values.iloc[0]) * 100
+        nifty_series = (nifty_close / nifty_close.iloc[0]) * 100
+
+        # Sample to max 60 points for performance and display
+        step = max(1, len(common_index) // 60)
+        sampled_index = common_index[::step]
+
+        time_series = [
+            {
+                "date": d.strftime("%Y-%m-%d"),
+                "portfolio": round(float(portfolio_series.loc[d]), 2),
+                "nifty": round(float(nifty_series.loc[d]), 2),
+            }
+            for d in sampled_index
+        ]
+
         return {
-            "userCAGR": round(user_cagr * 100, 2),
+            "userCAGR": round(user_xirr * 100, 2),
             "niftyCAGR": round(nifty_cagr * 100, 2),
-            "portfolioBeta": portfolio_beta,
+            "portfolioBeta": portfolio_beta_data.get("portfolioBeta", round(portfolio_beta, 2)),
             "startDate": start_date.isoformat(),
+            "daysHeld": days_held,
+            "isShortPeriod": is_short_period,
+            "returnLabel": "Total Return" if is_short_period else "MWRR",
             "verdict": verdict,
             "outperforming": outperforming,
+            "timeSeries": time_series,
         }
     except Exception as exc:
         logger.exception("Failed to compute benchmark comparison: %s", exc)

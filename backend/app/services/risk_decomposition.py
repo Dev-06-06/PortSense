@@ -99,9 +99,27 @@ def compute_risk_decomposition(holdings: list[dict]) -> dict:
     if portfolio_total_var <= 0:
         return _empty_result("Could not compute portfolio variance")
 
-    systematic_share = portfolio_systematic_var / portfolio_total_var * 100
-    idio_share = portfolio_idio_var / portfolio_total_var * 100
-    sector_share = max(0.0, 100.0 - systematic_share - idio_share)
+    systematic_share = min(100.0, portfolio_systematic_var / portfolio_total_var * 100)
+    idio_share = min(100.0, portfolio_idio_var / portfolio_total_var * 100)
+
+    total_value_for_sector = sum(float(h.get("currentValue", 0)) for h in holdings)
+    sector_weights: dict[str, float] = {}
+    for h in holdings:
+        sector_key = str(h.get("ticker", ""))
+        val = float(h.get("currentValue", 0))
+        sector_weights[sector_key] = sector_weights.get(sector_key, 0) + val / total_value_for_sector if total_value_for_sector > 0 else 0
+
+    hhi = sum(w ** 2 for w in sector_weights.values())
+    min_hhi = 1 / len(sector_weights) if sector_weights else 1
+    sector_concentration_raw = max(0.0, (hhi - min_hhi) / (1 - min_hhi)) * 100 if (1 - min_hhi) > 0 else 0.0
+    sector_share = round(min(sector_concentration_raw, max(0.0, 100.0 - systematic_share - idio_share)), 1)
+
+    total = systematic_share + idio_share + sector_share
+    if total > 100:
+        scale = 100.0 / total
+        systematic_share *= scale
+        idio_share *= scale
+        sector_share *= scale
 
     portfolio_vol = float(np.sqrt(portfolio_total_var) * np.sqrt(252) * 100)
 

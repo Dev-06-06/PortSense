@@ -9,6 +9,7 @@ from app.deps import get_holdings_collection
 from app.middleware.auth import get_current_user
 from app.services.analytics import (
     get_benchmark_comparison,
+    compute_correlation_score,
     get_correlation_matrix,
     get_diversification_score,
     get_portfolio_beta,
@@ -82,9 +83,28 @@ async def rebalance_portfolio(
         get_sector_breakdown(enriched_holdings, mongo_client=mongo_client),
         get_portfolio_beta(enriched_holdings),
         asyncio.to_thread(get_correlation_matrix, tickers),
-        asyncio.to_thread(get_benchmark_comparison, raw_holdings),
+        get_benchmark_comparison(raw_holdings),
     )
-    diversification_data = get_diversification_score(enriched_holdings, sector_breakdown)
+    diversification_subscores = get_diversification_score(enriched_holdings, sector_breakdown)
+    sector_score = float(diversification_subscores.get("sectorScore", 0.0))
+    size_score = float(diversification_subscores.get("sizeScore", 0.0))
+    correlation_score = await asyncio.to_thread(compute_correlation_score, enriched_holdings)
+    diversification_score = round((sector_score + size_score + correlation_score) / 3.0, 1)
+
+    if diversification_score >= 7.0:
+        verdict = "Well Diversified"
+    elif diversification_score >= 4.0:
+        verdict = "Moderate"
+    else:
+        verdict = "Concentrated"
+
+    diversification_data = {
+        "score": diversification_score,
+        "sectorScore": sector_score,
+        "sizeScore": size_score,
+        "correlationScore": correlation_score,
+        "verdict": verdict,
+    }
 
     portfolio_data = {
         "holdings": enriched_holdings,
@@ -102,7 +122,7 @@ async def rebalance_portfolio(
         "correlation_pairs": correlation_data.get("pairs", []),
     }
 
-    advice = get_rebalancing_advice(portfolio_data)
+    advice = await asyncio.to_thread(get_rebalancing_advice, portfolio_data)
     return {"advice": advice}
 
 
@@ -113,7 +133,8 @@ async def explain_correlation(
 ):
     _ = current_user
 
-    explanation = get_correlation_explanation(
+    explanation = await asyncio.to_thread(
+        get_correlation_explanation,
         payload.ticker1,
         payload.ticker2,
         payload.correlation,

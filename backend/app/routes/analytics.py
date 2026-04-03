@@ -100,10 +100,14 @@ async def sectors_breakdown(
         if mongo_client is None:
             raise HTTPException(status_code=500, detail="Database unavailable")
 
-        for h in holdings:
+        tickers = [str(h.get("ticker", "")).strip().upper() for h in holdings]
+        sectors = await asyncio.gather(
+            *[get_sector(ticker, db_client=mongo_client) for ticker in tickers]
+        )
+
+        for h, sector in zip(holdings, sectors):
             ticker = h.get("ticker", "")
             value = h.get("quantity", 0) * h.get("buyPrice", 0)
-            sector = await get_sector(ticker, db_client=mongo_client)
             sector_weights[sector] = sector_weights.get(sector, 0) + value
             total_value += value
 
@@ -230,7 +234,8 @@ async def get_benchmark_analytics(
     holdings_collection: AsyncIOMotorCollection = Depends(get_holdings_collection),
 ):
     user_id = str(current_user.get("_id"))
-    cached = get_cached(user_id, "benchmark")
+    cache_key = f"benchmark_v2_{user_id}"
+    cached = get_cached(user_id, cache_key)
     if cached is not None:
         return cached
 
@@ -239,8 +244,8 @@ async def get_benchmark_analytics(
         async for holding in holdings_collection.find({"userId": current_user.get("_id")}):
             holdings.append(holding)
 
-        result = await asyncio.to_thread(get_benchmark_comparison, holdings)
-        set_cached(user_id, "benchmark", result)
+        result = await get_benchmark_comparison(holdings)
+        set_cached(user_id, cache_key, result)
         return result
     except Exception as e:
         traceback.print_exc()
@@ -263,9 +268,7 @@ async def get_stress_test(
             return {"scenarios": []}
 
         tickers = [str(h.get("ticker", "")) for h in holdings_with_values]
-        beta_list = await asyncio.gather(
-            *[asyncio.to_thread(get_stock_beta, t) for t in tickers]
-        )
+        beta_list = await gather_in_threads_bounded(tickers, get_stock_beta, limit=5)
         betas = dict(zip(tickers, beta_list))
 
         mongo_client = get_mongo_client()
@@ -287,12 +290,18 @@ async def get_risk_decomposition(
     current_user: dict = Depends(get_current_user),
     holdings_collection: AsyncIOMotorCollection = Depends(get_holdings_collection),
 ):
+    user_id = str(current_user.get("_id"))
+    cached = get_cached(user_id, "risk-decomposition")
+    if cached is not None:
+        return cached
+
     try:
         holdings_with_values = await _get_holdings_with_current_values(
             current_user.get("_id"),
             holdings_collection,
         )
         result = await asyncio.to_thread(compute_risk_decomposition, holdings_with_values)
+        set_cached(user_id, "risk-decomposition", result)
         return result
     except Exception as e:
         traceback.print_exc()

@@ -1,10 +1,13 @@
 import asyncio
 import json
+import logging
 import re
+import threading
 from collections import Counter
 from datetime import date, datetime
 from typing import Any
 
+from cachetools import TTLCache
 import yfinance as yf
 from fastapi import APIRouter, Depends
 from motor.motor_asyncio import AsyncIOMotorCollection
@@ -17,12 +20,17 @@ from app.services.sentiment import (
     fetch_news_articles,
     _prepare_finbert_inputs,
     _truncate,
-    run_finbert,
+    run_finbert_scored,
 )
 from app.services.technical import get_technical_indicators
 
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+
+_stock_intel_news_cache: TTLCache = TTLCache(maxsize=50, ttl=600)
+_stock_intel_news_lock = threading.Lock()
 
 
 NEWS_REASONING_FALLBACK = (
@@ -187,33 +195,20 @@ def _collect_fast_data(ticker: str) -> dict:
 
     pe_ratio = round(ticker_info.get("trailingPE") or 0, 2)
 
-    debt_equity = ticker_info.get("debtToEquity")
-    if debt_equity is not None:
-        debt_equity = round(float(debt_equity) / 100, 2)
+    raw = ticker_info.get("debtToEquity")
+    if raw is not None:
+        debt_equity = round(raw / 100, 2)
     else:
         debt_equity = "N/A"
 
-    # Fallback chain for revenue_growth: handles both US and Indian stock key variations
-    # yfinance limitation for Indian banks
-    revenue_growth = (
-        ticker_info.get("revenueGrowth") or
-        ticker_info.get("quarterlyRevenueGrowth") or
-        ticker_info.get("revenueQuarterlyGrowth") or
-        None
-    )
-    if revenue_growth:
+    revenue_growth = ticker_info.get("revenueGrowth")
+    if revenue_growth is not None:
         revenue_growth = f"{round(float(revenue_growth) * 100, 1)}%"
     else:
         revenue_growth = "N/A"
 
-    # Fallback chain for profit_margins: handles both US and Indian stock key variations
-    # yfinance limitation for Indian banks
-    profit_margins = (
-        ticker_info.get("profitMargins") or
-        ticker_info.get("netProfitMargin") or
-        None
-    )
-    if profit_margins:
+    profit_margins = ticker_info.get("profitMargins")
+    if profit_margins is not None:
         profit_margins = f"{round(float(profit_margins) * 100, 1)}%"
     else:
         profit_margins = "N/A"
@@ -260,25 +255,25 @@ def _build_sentiment(scored_headlines: list[dict]) -> tuple[str, float, list[str
     if not scored_headlines:
         return "Neutral", 0.0, []
 
-    labels = [str(item.get("label", "neutral")).lower() for item in scored_headlines]
-    counts = Counter(labels)
-    majority_label, _ = counts.most_common(1)[0]
-
-    majority_scores = [
-        _to_float(item.get("score"))
+    label_counts = Counter(
+        str(item.get("label", "neutral")).strip().lower()
         for item in scored_headlines
-        if str(item.get("label", "")).lower() == majority_label
-    ]
-    valid_scores = [score for score in majority_scores if score is not None]
+    )
 
-    confidence = round(sum(valid_scores) / len(valid_scores), 2) if valid_scores else 0.0
+    positive = label_counts.get("positive", 0)
+    negative = label_counts.get("negative", 0)
+    neutral = label_counts.get("neutral", 0)
+    total = len(scored_headlines)
 
-    if majority_label == "positive":
-        badge = "Bullish"
-    elif majority_label == "negative":
-        badge = "Bearish"
+    if positive > negative and positive > neutral:
+        badge = "Positive"
+    elif negative > positive and negative > neutral:
+        badge = "Negative"
     else:
         badge = "Neutral"
+
+    winning_count = max(positive, negative, neutral)
+    confidence = round(winning_count / total, 2) if total > 0 else 0.0
 
     top_headlines = [
         str(item.get("headline", "")).strip()
@@ -442,14 +437,20 @@ async def get_stock_intel(
 ):
     normalized_ticker = str(ticker).strip().upper()
 
+    with _stock_intel_news_lock:
+        articles = _stock_intel_news_cache.get(normalized_ticker)
+
+    if articles is None:
+        articles = await asyncio.to_thread(fetch_news_articles, normalized_ticker)
+        with _stock_intel_news_lock:
+            _stock_intel_news_cache[normalized_ticker] = articles
+
     fast_data_task = asyncio.to_thread(_collect_fast_data, normalized_ticker)
     technicals_task = asyncio.to_thread(get_technical_indicators, normalized_ticker)
-    articles_task = asyncio.to_thread(fetch_news_articles, normalized_ticker)
 
-    fast_data, technicals, articles = await asyncio.gather(
+    fast_data, technicals = await asyncio.gather(
         fast_data_task,
         technicals_task,
-        articles_task,
     )
 
     user_holdings = await holdings_collection.find(
@@ -524,19 +525,27 @@ async def get_stock_intel(
             }
 
     finbert_inputs = _prepare_finbert_inputs(articles)
-    scored_headlines = await asyncio.to_thread(
-        run_finbert, finbert_inputs
-    ) if finbert_inputs else []
+    scored_headlines = await run_finbert_scored(finbert_inputs) if finbert_inputs else []
 
-    # Map scores back to articles for _build_sentiment
+    # Build a lookup by headline text instead of positional index
+    score_lookup = {
+        item["headline"]: item
+        for item in scored_headlines
+    }
+
     sentiment_input = []
-    for i, art in enumerate(articles):
-        sc = scored_headlines[i] if i < len(scored_headlines) else {}
+    for art in articles:
+        title = art.get("title", "").strip()
+        sc = score_lookup.get(title, {})
         sentiment_input.append({
-            "headline": art["title"],
+            "headline": title,
             "label": sc.get("label", "neutral"),
             "score": sc.get("score", 0.0),
         })
+
+    logger.debug(f"[SENTIMENT] score_lookup keys: {list(score_lookup.keys())}")
+    logger.debug(f"[SENTIMENT] sentiment_input labels: {[s['label'] for s in sentiment_input]}")
+    logger.debug(f"[SENTIMENT] sentiment_input count: {len(sentiment_input)}")
     sentiment_badge, sentiment_confidence, top_headlines = _build_sentiment(
         sentiment_input
     )
@@ -612,7 +621,7 @@ async def get_stock_intel(
                     ),
                     "label": item.get("label", "neutral"),
                 }
-                for item in sentiment_input[:3]
+                for item in sentiment_input
             ],
         },
         "events": {

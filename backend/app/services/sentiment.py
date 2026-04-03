@@ -1,9 +1,9 @@
 import asyncio
+import html
 import logging
 import os
 import re
 import threading
-import time
 from collections import Counter
 
 import feedparser
@@ -11,12 +11,20 @@ from cachetools import TTLCache, cached as cachetools_cached
 import requests
 import yfinance as yf
 from dotenv import load_dotenv
+import time as _time
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
 
 HF_API_KEY = os.getenv("HF_API_KEY")
+_finbert_debug_logged = False
+
+
+class HFColdModelError(RuntimeError):
+    pass
+
+
 COMPANY_SEARCH_NAMES = {
     "RELIANCE.NS": "Reliance Industries stock NSE",
     "INFY.NS": "Infosys stock NSE",
@@ -58,16 +66,23 @@ COMPANY_SEARCH_NAMES = {
 
 def _truncate(text: str, max_chars: int) -> str:
     text = str(text or "").strip()
-    return text[:max_chars] if len(text) > max_chars else text
+    if len(text) <= max_chars:
+        return text
+    truncated = text[:max_chars].rsplit(" ", 1)[0]
+    return truncated or text[:max_chars]
 
 
 def _fetch_yfinance_news(ticker: str) -> list[dict]:
-    """Primary source. Returns {title, summary} list."""
+    """Primary source. Returns {title, summary} list — last 7 days only."""
     try:
         stock = yf.Ticker(ticker)
         raw = stock.news or []
+        cutoff = _time.time() - (7 * 24 * 3600)
         results = []
-        for item in raw[:7]:
+        for item in raw[:15]:
+            publish_time = item.get("providerPublishTime") or 0
+            if publish_time and publish_time < cutoff:
+                continue
             content = (
                 item.get("content", {})
                 if isinstance(item.get("content"), dict)
@@ -101,16 +116,26 @@ def _fetch_google_news_rss(ticker: str) -> list[dict]:
         "https://news.google.com/rss/search"
         f"?q={query.replace(' ', '+')}"
         "&hl=en-IN&gl=IN&ceid=IN:en"
+        "&tbs=qdr:w"
     )
     try:
         feed = feedparser.parse(url)
         results = []
-        for entry in feed.entries[:7]:
+        for entry in feed.entries[:10]:
             title = str(entry.get("title", "")).strip()
+            title = title.encode("utf-8", errors="replace").decode("utf-8")
+            # Remove replacement characters
+            title = title.replace("\ufffd", "'")
+            title = html.unescape(title)
+            if "\xa0\xa0" in title:
+                title = title.split("\xa0\xa0")[0].strip()
             title = re.sub(r"\s*-\s*[^-]+$", "", title).strip()
             summary = re.sub(
                 r"<[^>]+>", "", str(entry.get("summary", ""))
             ).strip()
+            summary = html.unescape(summary)
+            if "\xa0\xa0" in summary:
+                summary = summary.split("\xa0\xa0")[0].strip()
             if title:
                 results.append({"title": title, "summary": summary})
         return results
@@ -121,37 +146,37 @@ def _fetch_google_news_rss(ticker: str) -> list[dict]:
 
 def fetch_news_articles(ticker: str) -> list[dict]:
     """
-    Returns up to 5 articles as {title, summary}.
+    Returns up to 8 articles as {title, summary}.
     Primary: Google News RSS (more relevant for Indian stocks).
-    Supplement with yfinance if RSS returns fewer than 3 results.
+    Supplement with yfinance if RSS returns fewer than 4 results.
     """
     articles = _fetch_google_news_rss(ticker)
 
-    if len(articles) < 3:
+    if len(articles) < 4:
         existing = {a["title"][:40].lower() for a in articles}
         for item in _fetch_yfinance_news(ticker):
             if item["title"][:40].lower() not in existing:
                 articles.append(item)
                 existing.add(item["title"][:40].lower())
-            if len(articles) >= 5:
+            if len(articles) >= 8:
                 break
 
-    return articles[:5]
+    return articles[:8]
 
 
 def _prepare_finbert_inputs(articles: list[dict]) -> list[str]:
     """
-    FinBERT input: titles only, max 80 chars.
+    FinBERT input: titles only, max 500 chars.
     Never pass summaries or price context to FinBERT.
     """
     return [
-        _truncate(a.get("title", ""), 80)
+        _truncate(a.get("title", ""), 500)
         for a in articles
         if a.get("title")
     ]
 
 
-def run_finbert(headlines: list) -> list:
+async def run_finbert_scored(headlines: list[str]) -> list[dict]:
     if not headlines:
         return []
 
@@ -159,64 +184,85 @@ def run_finbert(headlines: list) -> list:
         logger.error("Missing HF_API_KEY environment variable")
         return []
 
-    enriched_inputs = list(headlines)
-
-    try:
-        response = requests.post(
-            "https://router.huggingface.co/hf-inference/models/ProsusAI/finbert",
-            headers={"Authorization": f"Bearer {HF_API_KEY}"},
-            json={"inputs": enriched_inputs},
-            timeout=10,
-        )
-
-        if response.status_code == 503:
-            logger.info("HuggingFace model loading, retrying...")
-            time.sleep(3)
-            response = requests.post(
+    results: list[dict] = []
+    for headline in headlines:
+        logger.debug(f"[FINBERT] scored headline key: '{headline}'")
+        try:
+            response = await asyncio.to_thread(
+                requests.post,
                 "https://router.huggingface.co/hf-inference/models/ProsusAI/finbert",
                 headers={"Authorization": f"Bearer {HF_API_KEY}"},
-                json={"inputs": enriched_inputs},
+                json={"inputs": headline},
                 timeout=10,
             )
 
-        response.raise_for_status()
-        payload = response.json()
+            if response.status_code == 503:
+                raise HFColdModelError("HuggingFace model is loading")
 
-        if not isinstance(payload, list):
-            logger.error("Unexpected FinBERT response shape: %s", payload)
-            return []
+            response.raise_for_status()
+            payload = response.json()
+            logger.debug(f"[FINBERT] payload for '{str(headline)[:40]}': {payload}")
 
-        results = []
-        for headline, item_scores in zip(headlines, payload):
-            if not isinstance(item_scores, list) or not item_scores:
-                continue
-
-            valid_scores = [
-                score_item
-                for score_item in item_scores
-                if isinstance(score_item, dict)
-                and score_item.get("label") is not None
-                and score_item.get("score") is not None
-            ]
-            if not valid_scores:
-                continue
-
-            top = max(valid_scores, key=lambda x: float(x.get("score", 0.0)))
-            label = str(top.get("label", "neutral")).lower()
-            score = float(top.get("score", 0.0))
+            if isinstance(payload, list) and len(payload) > 0:
+                label_scores = payload[0] if isinstance(payload[0], list) else payload
+                if isinstance(label_scores, list) and label_scores:
+                    best = max(label_scores, key=lambda x: x.get("score", 0))
+                    results.append(
+                        {
+                            "headline": headline,
+                            "label": str(best.get("label", "neutral")).lower(),
+                            "score": round(float(best.get("score", 0.0)), 4),
+                        }
+                    )
+                    continue
 
             results.append(
                 {
                     "headline": headline,
-                    "label": label,
-                    "score": score,
+                    "label": "neutral",
+                    "score": 0.0,
+                }
+            )
+        except Exception as exc:
+            logger.error(
+                "[FINBERT] failed for headline: %s: %s",
+                type(exc).__name__,
+                exc,
+            )
+            results.append(
+                {
+                    "headline": headline,
+                    "label": "neutral",
+                    "score": 0.0,
                 }
             )
 
-        return results
-    except Exception as exc:
-        logger.exception("Failed to run FinBERT sentiment: %s", exc)
+    global _finbert_debug_logged
+    if not _finbert_debug_logged:
+        logger.debug(f"[FINBERT] {len(results)} headlines scored: {results}")
+        _finbert_debug_logged = True
+
+    return results
+
+
+def _run_finbert_scored_sync(headlines: list[str], retries: int = 2, delay_seconds: float = 3.0) -> list[dict]:
+    if not headlines:
         return []
+
+    attempts = max(1, int(retries) + 1)
+    for attempt in range(attempts):
+        try:
+            return asyncio.run(run_finbert_scored(headlines))
+        except (HFColdModelError, requests.Timeout):
+            if attempt >= attempts - 1:
+                return []
+            logger.info("FinBERT is temporarily unavailable, retrying...")
+            _time.sleep(delay_seconds)
+        except Exception as exc:
+            logger.warning("Failed to run FinBERT sentiment: %s", exc)
+            return []
+
+    return []
 
 
 def _to_badge(label: str) -> str:
@@ -228,88 +274,121 @@ def _to_badge(label: str) -> str:
     return "Neutral"
 
 
+def _aggregate_headline_sentiment(scored_headlines: list[dict]) -> tuple[str, float, list[dict]]:
+    from collections import Counter
+    
+    if not scored_headlines:
+        return "Neutral", 0.0, []
+    
+    label_counts = Counter(h["label"] for h in scored_headlines)
+    
+    positive = label_counts.get("positive", 0)
+    negative = label_counts.get("negative", 0)
+    neutral  = label_counts.get("neutral", 0)
+    total    = len(scored_headlines)
+    
+    if positive > negative and positive > neutral:
+        badge = "Positive"
+        winning_count = positive
+    elif negative > positive and negative > neutral:
+        badge = "Negative"
+        winning_count = negative
+    else:
+        badge = "Neutral"
+        winning_count = neutral
+    
+    confidence = round(winning_count / total, 2)
+    
+    return badge, confidence, scored_headlines
+
+
 _sentiment_cache: TTLCache = TTLCache(maxsize=100, ttl=900)
 _sentiment_cache_lock = threading.Lock()
+_hf_semaphore = asyncio.Semaphore(3)
+
+
+def get_stock_sentiment(ticker: str) -> dict:
+    normalized_ticker = str(ticker).strip().upper()
+    try:
+        return _get_stock_sentiment_cached(normalized_ticker)
+    except HFColdModelError:
+        logger.info("HuggingFace model loading, retrying...")
+        _time.sleep(3)
+        return _get_stock_sentiment_cached(normalized_ticker)
 
 
 @cachetools_cached(cache=_sentiment_cache, lock=_sentiment_cache_lock)
-def get_stock_sentiment(ticker: str) -> dict:
-    normalized_ticker = str(ticker).strip().upper()
-    articles = fetch_news_articles(normalized_ticker)
+def _get_stock_sentiment_cached(ticker: str) -> dict:
+    articles = fetch_news_articles(ticker)
 
     if not articles:
         return {
-            "ticker": normalized_ticker,
+            "ticker": ticker,
             "badge": "Neutral",
             "confidence": 0,
+            "reason": "no_articles",
             "headlines": [],
         }
 
-    finbert_inputs = _prepare_finbert_inputs(articles)
-    scored = run_finbert(finbert_inputs) if finbert_inputs else []
+    valid = [(i, a) for i, a in enumerate(articles) if a.get("title")]
+    finbert_inputs = _prepare_finbert_inputs([a for _, a in valid])
+    scored = _run_finbert_scored_sync(finbert_inputs) if finbert_inputs else []
+    score_map = {
+        orig_idx: scored[j]
+        for j, (orig_idx, _) in enumerate(valid)
+        if j < len(scored)
+    }
 
     headlines_out = []
     for i, article in enumerate(articles):
-        sentiment = scored[i] if i < len(scored) else None
-        headlines_out.append({
+        sentiment = score_map.get(i)
+        headline_entry = {
             "headline": article["title"],
-            "summary": _truncate(article.get("summary", ""), 200),
             "label": sentiment["label"] if sentiment else "neutral",
             "score": sentiment["score"] if sentiment else 0.0,
-        })
+        }
+        summary_text = str(article.get("summary", "") or "").strip()
+        if summary_text:
+            headline_entry["summary"] = _truncate(summary_text, 200)
+        headlines_out.append(headline_entry)
 
     if not scored:
         return {
-            "ticker": normalized_ticker,
+            "ticker": ticker,
             "badge": "Neutral",
             "confidence": 0,
+            "reason": "api_error",
             "headlines": headlines_out,
         }
 
-    CONFIDENCE_THRESHOLD = 0.65
+    badge, confidence, _ = _aggregate_headline_sentiment(scored)
 
-    confident_scored = [
-        s for s in scored
-        if float(s.get("score", 0.0)) >= CONFIDENCE_THRESHOLD
-    ]
-
-    if not confident_scored:
+    if badge == "Neutral":
         return {
-            "ticker": normalized_ticker,
+            "ticker": ticker,
             "badge": "Neutral",
-            "confidence": 0,
+            "confidence": confidence,
+            "reason": "neutral",
             "headlines": headlines_out,
         }
-
-    weighted_scores: dict[str, float] = {}
-    for s in confident_scored:
-        label = str(s.get("label", "neutral")).lower()
-        score = float(s.get("score", 0.0))
-        weighted_scores[label] = weighted_scores.get(label, 0.0) + score
-
-    majority_label = max(weighted_scores, key=lambda lbl: weighted_scores[lbl])
-    majority_scores = [
-        float(s.get("score", 0.0))
-        for s in confident_scored
-        if str(s.get("label", "")).lower() == majority_label
-    ]
-    confidence = (
-        round(sum(majority_scores) / len(majority_scores), 2)
-        if majority_scores
-        else 0
-    )
 
     return {
-        "ticker": normalized_ticker,
-        "badge": _to_badge(majority_label),
+        "ticker": ticker,
+        "badge": badge,
         "confidence": confidence,
+        "reason": "scored",
         "headlines": headlines_out,
     }
 
 
+async def _get_sentiment_bounded(ticker: str) -> dict:
+    async with _hf_semaphore:
+        return await asyncio.to_thread(get_stock_sentiment, ticker)
+
+
 async def get_portfolio_sentiment(tickers: list) -> dict:
     stock_results = await asyncio.gather(
-        *[asyncio.to_thread(get_stock_sentiment, str(ticker)) for ticker in tickers]
+        *[_get_sentiment_bounded(str(ticker)) for ticker in tickers]
     )
     stock_results = list(stock_results)
     badge_counts = Counter(str(item.get("badge", "Neutral")) for item in stock_results)
