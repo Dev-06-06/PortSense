@@ -1,92 +1,114 @@
-import { createContext, useContext, useMemo, useState } from 'react'
+import { createContext, useContext, useMemo, useState } from "react";
 
-const AuthContext = createContext(null)
+const AuthContext = createContext(null);
 
 const decodeUserFromToken = (token) => {
   try {
-    const payload = token.split('.')[1]
+    const payload = token.split(".")[1];
     if (!payload) {
-      return null
+      return null;
     }
 
-    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/')
-    const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), '=')
-    const json = atob(padded)
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(
+      normalized.length + ((4 - (normalized.length % 4)) % 4),
+      "=",
+    );
+    const json = atob(padded);
 
-    return JSON.parse(json)
+    return JSON.parse(json);
   } catch {
-    return null
+    return null;
   }
-}
+};
 
 export const AuthProvider = ({ children }) => {
-  const [token, setToken] = useState(() => localStorage.getItem("token") || null)
+  const [token, setToken] = useState(
+    () => localStorage.getItem("token") || null,
+  );
   const [user, setUser] = useState(() => {
-    const storedToken = localStorage.getItem("token")
+    const storedToken = localStorage.getItem("token");
 
     try {
-      const u = localStorage.getItem("user")
+      const u = localStorage.getItem("user");
       if (u) {
-        return JSON.parse(u)
+        return JSON.parse(u);
       }
 
-      return storedToken ? decodeUserFromToken(storedToken) : null
+      return storedToken ? decodeUserFromToken(storedToken) : null;
     } catch {
-      return storedToken ? decodeUserFromToken(storedToken) : null
+      return storedToken ? decodeUserFromToken(storedToken) : null;
     }
-  })
+  });
 
-  const login = (receivedToken, userData = decodeUserFromToken(receivedToken)) => {
-    localStorage.setItem("token", receivedToken)
-    localStorage.setItem("user", JSON.stringify(userData))
-    setToken(receivedToken)
-    setUser(userData)
-  }
+  const login = (
+    receivedToken,
+    userData = decodeUserFromToken(receivedToken),
+  ) => {
+    localStorage.setItem("token", receivedToken);
+    localStorage.setItem("user", JSON.stringify(userData));
+    setToken(receivedToken);
+    setUser(userData);
+  };
 
   const logout = () => {
-    localStorage.removeItem("token")
-    localStorage.removeItem("user")
-    setToken(null)
-    setUser(null)
-  }
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    setToken(null);
+    setUser(null);
+  };
 
-  const decodedToken = useMemo(() => user || decodeUserFromToken(token), [user, token])
+  const decodedToken = useMemo(
+    () => user || decodeUserFromToken(token),
+    [user, token],
+  );
 
   const tokenExpiryMs = useMemo(() => {
-    const exp = Number(decodedToken?.exp)
+    const exp = Number(decodedToken?.exp);
     if (!Number.isFinite(exp)) {
-      return null
+      return null;
     }
 
-    return exp * 1000
-  }, [decodedToken])
+    return exp * 1000;
+  }, [decodedToken]);
 
   const isTokenExpired = useMemo(() => {
     if (!token) {
-      return true
+      return true;
     }
 
     if (tokenExpiryMs === null) {
-      return false
+      return false;
     }
 
-    return Date.now() >= tokenExpiryMs
-  }, [token, tokenExpiryMs])
+    return Date.now() >= tokenExpiryMs;
+  }, [token, tokenExpiryMs]);
+
+  const isDemo = useMemo(() => Boolean(decodedToken?.is_demo), [decodedToken]);
 
   const value = useMemo(
-    () => ({ user, token, login, logout, decodedToken, tokenExpiryMs, isTokenExpired }),
-    [user, token, decodedToken, tokenExpiryMs, isTokenExpired],
-  )
+    () => ({
+      user,
+      token,
+      login,
+      logout,
+      decodedToken,
+      tokenExpiryMs,
+      isTokenExpired,
+      isDemo,
+    }),
+    [user, token, decodedToken, tokenExpiryMs, isTokenExpired, isDemo],
+  );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
-}
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+};
 
 export const useAuth = () => {
-  const context = useContext(AuthContext)
+  const context = useContext(AuthContext);
 
   if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider')
+    throw new Error("useAuth must be used within an AuthProvider");
   }
 
-  return context
-}
+  return context;
+};

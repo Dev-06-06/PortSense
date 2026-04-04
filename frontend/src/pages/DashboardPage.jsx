@@ -98,7 +98,7 @@ const NSE_TICKERS = [
   { symbol: "BAJFINANCE", full: "Bajaj Finance" },
   { symbol: "BAJAJFINSV", full: "Bajaj Finserv" },
   { symbol: "MARUTI", full: "Maruti Suzuki" },
-  { symbol: "TATAMOTORS", full: "Tata Motors" },
+  { symbol: "BAJFINANCE", full: "Bajaj Finance" },
   { symbol: "M&M", full: "Mahindra & Mahindra" },
   { symbol: "HEROMOTOCO", full: "Hero MotoCorp" },
   { symbol: "BAJAJ-AUTO", full: "Bajaj Auto" },
@@ -164,6 +164,14 @@ const DashboardPage = () => {
   });
   const [livePriceFetching, setLivePriceFetching] = useState(false);
   const [livePrice, setLivePrice] = useState(null);
+  const [watchlist, setWatchlist] = useState([]);
+  const [watchlistLoading, setWatchlistLoading] = useState(true);
+  const [watchlistError, setWatchlistError] = useState("");
+  const [showWatchlistInput, setShowWatchlistInput] = useState(false);
+  const [watchInputTicker, setWatchInputTicker] = useState("");
+  const [showWatchTickerDrop, setShowWatchTickerDrop] = useState(false);
+  const [watchInputError, setWatchInputError] = useState("");
+  const [watchInputLoading, setWatchInputLoading] = useState(false);
 
   const tickerSuggestions =
     tickerQuery.length < 1
@@ -172,6 +180,15 @@ const DashboardPage = () => {
           (t) =>
             t.symbol.startsWith(tickerQuery.toUpperCase()) ||
             t.full.toLowerCase().includes(tickerQuery.toLowerCase()),
+        ).slice(0, 6);
+
+  const watchTickerSuggestions =
+    watchInputTicker.length < 1
+      ? []
+      : NSE_TICKERS.filter(
+          (t) =>
+            t.symbol.startsWith(watchInputTicker.toUpperCase()) ||
+            t.full.toLowerCase().includes(watchInputTicker.toLowerCase()),
         ).slice(0, 6);
 
   const fetchPortfolioData = async (silent = false) => {
@@ -195,12 +212,29 @@ const DashboardPage = () => {
     }
   };
 
+  const fetchWatchlist = async () => {
+    setWatchlistLoading(true);
+    setWatchlistError("");
+    try {
+      const res = await api.get("/api/watchlist/");
+      setWatchlist(Array.isArray(res.data) ? res.data : []);
+    } catch {
+      setWatchlistError("Failed to load watchlist.");
+    } finally {
+      setWatchlistLoading(false);
+    }
+  };
+
   useEffect(() => {
     document.title = "Dashboard | PortSense";
   }, []);
 
   useEffect(() => {
     fetchPortfolioData();
+  }, []);
+
+  useEffect(() => {
+    fetchWatchlist();
   }, []);
 
   useEffect(() => {
@@ -281,7 +315,40 @@ const DashboardPage = () => {
     }
   };
 
-  const totalDayChange = holdings.reduce((sum, h) => sum + (Number(h.dayChange) || 0), 0);
+  const handleWatchlistAdd = async () => {
+    if (!watchInputTicker.trim()) return;
+    setWatchInputLoading(true);
+    setWatchInputError("");
+    try {
+      const tickerWithSuffix = watchInputTicker.endsWith(".NS")
+        ? watchInputTicker
+        : `${watchInputTicker}.NS`;
+      await api.post("/api/watchlist/", { ticker: tickerWithSuffix });
+      setWatchInputTicker("");
+      setShowWatchTickerDrop(false);
+      setShowWatchlistInput(false);
+      await fetchWatchlist();
+    } catch (err) {
+      const msg = err?.response?.data?.detail || "Failed to add ticker.";
+      setWatchInputError(msg);
+    } finally {
+      setWatchInputLoading(false);
+    }
+  };
+
+  const handleWatchlistRemove = async (ticker) => {
+    try {
+      await api.delete(`/api/watchlist/${ticker}`);
+      setWatchlist((prev) => prev.filter((item) => item.ticker !== ticker));
+    } catch {
+      setWatchlistError("Failed to remove ticker.");
+    }
+  };
+
+  const totalDayChange = holdings.reduce(
+    (sum, h) => sum + (Number(h.dayChange) || 0),
+    0,
+  );
   const isDayPositive = totalDayChange >= 0;
 
   return (
@@ -293,16 +360,7 @@ const DashboardPage = () => {
 
         .summary-grid {
           display: grid;
-          grid-template-columns: 1fr;
-          gap: 0.75rem;
-        }
-
-        .add-holding-form {
-          grid-template-columns: 1fr;
-          width: 100%;
-        }
-
-        .mobile-hide-col {
+                  color: summary.totalPnl >= 0 ? "#22c55e" : "#ef4444",
           display: none;
         }
 
@@ -387,7 +445,8 @@ const DashboardPage = () => {
                   margin: "0.25rem 0 0",
                   fontSize: "1.6rem",
                   color:
-                    Number(summary.totalCurrentValue) >= Number(summary.totalInvested)
+                    Number(summary.totalCurrentValue) >=
+                    Number(summary.totalInvested)
                       ? "#22c55e"
                       : "#ef4444",
                 }}
@@ -437,7 +496,9 @@ const DashboardPage = () => {
                   Today's P&L
                 </p>
                 {silentRefreshing && (
-                  <span style={{ color: "#94a3b8", fontSize: "0.7rem" }}>updating...</span>
+                  <span style={{ color: "#94a3b8", fontSize: "0.7rem" }}>
+                    updating...
+                  </span>
                 )}
               </div>
               <p
@@ -448,7 +509,8 @@ const DashboardPage = () => {
                   color: isDayPositive ? "#22c55e" : "#ef4444",
                 }}
               >
-                {isDayPositive ? "+" : ""}{formatCurrency(totalDayChange)}
+                {isDayPositive ? "+" : ""}
+                {formatCurrency(totalDayChange)}
               </p>
             </div>
           </div>
@@ -475,8 +537,16 @@ const DashboardPage = () => {
                 setLivePrice(null);
               }}
               style={{
-                ...buttonBaseStyle,
-                backgroundColor: "#f97316",
+                background: "#f97316",
+                color: "white",
+                borderRadius: "20px",
+                padding: "6px 18px",
+                fontSize: "13px",
+                fontWeight: 600,
+                border: "none",
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                letterSpacing: "0.3px",
               }}
             >
               + Add Holding
@@ -639,7 +709,9 @@ const DashboardPage = () => {
                       fontWeight: 700,
                     }}
                   >
-                    {livePriceFetching ? "Fetching..." : formatCurrency(livePrice)}
+                    {livePriceFetching
+                      ? "Fetching..."
+                      : formatCurrency(livePrice)}
                   </p>
                 </div>
               )}
@@ -858,8 +930,16 @@ const DashboardPage = () => {
                   type="button"
                   onClick={() => setShowAddForm(true)}
                   style={{
-                    ...buttonBaseStyle,
-                    backgroundColor: "#f97316",
+                    background: "#f97316",
+                    color: "white",
+                    borderRadius: "20px",
+                    padding: "6px 18px",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    border: "none",
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                    letterSpacing: "0.3px",
                     marginTop: "0.2rem",
                   }}
                 >
@@ -1054,6 +1134,394 @@ const DashboardPage = () => {
             </div>
           )}
         </div>
+
+        <div style={{ ...cardStyle, padding: "1rem" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "0.8rem",
+              flexWrap: "wrap",
+              gap: "0.7rem",
+            }}
+          >
+            <div>
+              <h2 style={{ margin: 0, fontSize: "1.1rem", color: "#f8fafc" }}>
+                Watchlist
+              </h2>
+              <p
+                style={{
+                  margin: "2px 0 0",
+                  fontSize: "0.78rem",
+                  color: "#64748b",
+                }}
+              >
+                Track stocks without buying them
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setShowWatchlistInput((p) => !p);
+                setWatchInputError("");
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "#f97316";
+                e.currentTarget.style.color = "white";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "#1e293b";
+                e.currentTarget.style.color = "#94a3b8";
+              }}
+              style={{
+                background: "#1e293b",
+                color: "#94a3b8",
+                borderRadius: "20px",
+                padding: "6px 18px",
+                fontSize: "13px",
+                fontWeight: 600,
+                border: "none",
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                letterSpacing: "0.3px",
+              }}
+            >
+              + Add
+            </button>
+          </div>
+
+          {showWatchlistInput && (
+            <div
+              style={{
+                marginBottom: "0.9rem",
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.5rem",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  gap: "0.5rem",
+                  alignItems: "flex-start",
+                }}
+              >
+                {/* Typeahead input - mirrors the Add Holding ticker search */}
+                <div style={{ position: "relative", flex: 1 }}>
+                  <input
+                    type="text"
+                    placeholder="Search e.g. ZOMATO, Bajaj Finance..."
+                    value={watchInputTicker}
+                    autoComplete="off"
+                    onChange={(e) => {
+                      setWatchInputTicker(e.target.value.toUpperCase());
+                      setShowWatchTickerDrop(true);
+                      setWatchInputError("");
+                    }}
+                    onBlur={() =>
+                      setTimeout(() => setShowWatchTickerDrop(false), 150)
+                    }
+                    onFocus={() => {
+                      if (watchInputTicker.length > 0)
+                        setShowWatchTickerDrop(true);
+                    }}
+                    onKeyDown={(e) => e.key === "Enter" && handleWatchlistAdd()}
+                    style={{
+                      ...inputStyle,
+                      fontSize: "0.9rem",
+                      width: "100%",
+                      boxSizing: "border-box",
+                    }}
+                  />
+
+                  {/* Dropdown suggestions - same NSE_TICKERS source */}
+                  {showWatchTickerDrop && watchTickerSuggestions.length > 0 && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "calc(100% + 4px)",
+                        left: 0,
+                        right: 0,
+                        backgroundColor: "#0f172a",
+                        border: "1px solid rgba(255,255,255,0.15)",
+                        borderRadius: "0.75rem",
+                        overflow: "hidden",
+                        zIndex: 200,
+                        boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+                      }}
+                    >
+                      {watchTickerSuggestions.map((t) => (
+                        <div
+                          key={t.symbol}
+                          onMouseDown={() => {
+                            setWatchInputTicker(t.symbol);
+                            setShowWatchTickerDrop(false);
+                          }}
+                          style={{
+                            padding: "0.7rem 1rem",
+                            cursor: "pointer",
+                            borderBottom: "1px solid rgba(255,255,255,0.06)",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                          }}
+                          onMouseEnter={(e) =>
+                            (e.currentTarget.style.backgroundColor =
+                              "rgba(249,115,22,0.1)")
+                          }
+                          onMouseLeave={(e) =>
+                            (e.currentTarget.style.backgroundColor =
+                              "transparent")
+                          }
+                        >
+                          <span
+                            style={{
+                              color: "#f97316",
+                              fontWeight: 700,
+                              fontSize: "0.9rem",
+                            }}
+                          >
+                            {t.symbol}
+                          </span>
+                          <span
+                            style={{ color: "#94a3b8", fontSize: "0.8rem" }}
+                          >
+                            {t.full}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Add button */}
+                <button
+                  type="button"
+                  onClick={handleWatchlistAdd}
+                  disabled={watchInputLoading || !watchInputTicker.trim()}
+                  style={{
+                    ...buttonBaseStyle,
+                    backgroundColor: "#f97316",
+                    padding: "0.7rem 1.1rem",
+                    fontSize: "0.85rem",
+                    opacity:
+                      watchInputLoading || !watchInputTicker.trim() ? 0.6 : 1,
+                    cursor:
+                      watchInputLoading || !watchInputTicker.trim()
+                        ? "not-allowed"
+                        : "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {watchInputLoading ? "Adding..." : "Add"}
+                </button>
+
+                {/* Cancel button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowWatchlistInput(false);
+                    setWatchInputError("");
+                    setWatchInputTicker("");
+                    setShowWatchTickerDrop(false);
+                  }}
+                  style={{
+                    ...buttonBaseStyle,
+                    backgroundColor: "transparent",
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    color: "#94a3b8",
+                    padding: "0.7rem 0.8rem",
+                    fontSize: "0.85rem",
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              {watchInputError && (
+                <p style={{ margin: 0, color: "#ef4444", fontSize: "0.78rem" }}>
+                  {watchInputError}
+                </p>
+              )}
+            </div>
+          )}
+
+          {watchlistLoading ? (
+            <div style={{ display: "grid", gap: "0.6rem" }}>
+              {[1, 2].map((i) => (
+                <div
+                  key={i}
+                  className="animate-pulse"
+                  style={{
+                    height: "3.2rem",
+                    borderRadius: "0.75rem",
+                    backgroundColor: "rgba(51,65,85,0.35)",
+                    border: "1px solid rgba(148,163,184,0.15)",
+                  }}
+                />
+              ))}
+            </div>
+          ) : watchlistError ? (
+            <p style={{ color: "#ef4444", fontSize: "0.85rem", margin: 0 }}>
+              {watchlistError}{" "}
+              <span
+                onClick={fetchWatchlist}
+                style={{
+                  color: "#f97316",
+                  cursor: "pointer",
+                  textDecoration: "underline",
+                }}
+              >
+                Retry
+              </span>
+            </p>
+          ) : watchlist.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "1.5rem 1rem" }}>
+              <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.9rem" }}>
+                No stocks in watchlist
+              </p>
+              <p
+                style={{
+                  margin: "0.3rem 0 0",
+                  color: "#475569",
+                  fontSize: "0.8rem",
+                }}
+              >
+                Add tickers you want to monitor
+              </p>
+            </div>
+          ) : (
+            <div style={{ display: "grid", gap: "0.5rem" }}>
+              {watchlist.map((item) => {
+                const isPos = Number(item.changePct) >= 0;
+                const badgeColor =
+                  item.sentimentBadge === "Bullish"
+                    ? { bg: "rgba(34,197,94,0.15)", color: "#22c55e" }
+                    : item.sentimentBadge === "Bearish"
+                      ? { bg: "rgba(239,68,68,0.15)", color: "#ef4444" }
+                      : { bg: "rgba(100,116,139,0.2)", color: "#94a3b8" };
+
+                return (
+                  <div
+                    key={item.ticker}
+                    onClick={() => {
+                      setSelectedTicker(item.ticker);
+                      setDrawerOpen(true);
+                    }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "0.7rem 0.85rem",
+                      borderRadius: "0.75rem",
+                      border: "1px solid rgba(255,255,255,0.07)",
+                      backgroundColor: "rgba(15,23,42,0.5)",
+                      cursor: "pointer",
+                      gap: "0.5rem",
+                    }}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.borderColor =
+                        "rgba(249,115,22,0.35)")
+                    }
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.borderColor =
+                        "rgba(255,255,255,0.07)")
+                    }
+                  >
+                    <div style={{ minWidth: "5rem" }}>
+                      <p
+                        style={{
+                          margin: 0,
+                          color: "#f8fafc",
+                          fontWeight: 700,
+                          fontSize: "0.9rem",
+                        }}
+                      >
+                        {item.ticker.replace(/\.NS$/i, "")}
+                      </p>
+                    </div>
+
+                    <div style={{ flex: 1, textAlign: "center" }}>
+                      <p
+                        style={{
+                          ...numberStyle,
+                          margin: 0,
+                          color: "#f8fafc",
+                          fontSize: "0.95rem",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {item.currentPrice
+                          ? formatCurrency(item.currentPrice)
+                          : "—"}
+                      </p>
+                      {item.changePct != null && (
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: "0.75rem",
+                            color: isPos ? "#22c55e" : "#ef4444",
+                          }}
+                        >
+                          {isPos ? "▲" : "▼"}{" "}
+                          {Math.abs(Number(item.changePct)).toFixed(2)}%
+                        </p>
+                      )}
+                    </div>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "0.7rem",
+                          fontWeight: 700,
+                          padding: "3px 8px",
+                          borderRadius: "20px",
+                          background: badgeColor.bg,
+                          color: badgeColor.color,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {item.sentimentBadge || "Neutral"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleWatchlistRemove(item.ticker);
+                        }}
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          cursor: "pointer",
+                          color: "#475569",
+                          fontSize: "0.9rem",
+                          padding: "2px 4px",
+                          borderRadius: "4px",
+                          lineHeight: 1,
+                        }}
+                        onMouseEnter={(e) =>
+                          (e.currentTarget.style.color = "#ef4444")
+                        }
+                        onMouseLeave={(e) =>
+                          (e.currentTarget.style.color = "#475569")
+                        }
+                      >
+                        🗑
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
       {deleteTarget && (
@@ -1104,7 +1572,13 @@ const DashboardPage = () => {
               </span>{" "}
               from your portfolio.
             </p>
-            <div style={{ display: "flex", gap: "0.7rem", justifyContent: "center" }}>
+            <div
+              style={{
+                display: "flex",
+                gap: "0.7rem",
+                justifyContent: "center",
+              }}
+            >
               <button
                 onClick={() => setDeleteTarget(null)}
                 style={{

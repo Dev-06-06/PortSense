@@ -24,5 +24,9 @@ def get_holdings_collection() -> AsyncIOMotorCollection:
     return get_database_dependency()["holdings"]
 
 
+def get_watchlist_collection() -> AsyncIOMotorCollection:
+    return get_database_dependency()["watchlist"]
+
+
 def get_users_collection() -> AsyncIOMotorCollection:
     return get_database_dependency()["users"]

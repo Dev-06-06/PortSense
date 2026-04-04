@@ -73,6 +73,7 @@ async def ensure_indexes(client: AsyncIOMotorClient) -> None:
 
     users_collection = db["users"]
     holdings_collection = db["holdings"]
+    watchlist_collection = db["watchlist"]
     sector_cache_collection = db["sector_cache"]
 
     await users_collection.create_index(
@@ -87,6 +88,12 @@ async def ensure_indexes(client: AsyncIOMotorClient) -> None:
     )
 
     await holdings_collection.create_index(
+        [("userId", ASCENDING), ("ticker", ASCENDING)],
+        unique=True,
+        background=True,
+    )
+
+    await watchlist_collection.create_index(
         [("userId", ASCENDING), ("ticker", ASCENDING)],
         unique=True,
         background=True,

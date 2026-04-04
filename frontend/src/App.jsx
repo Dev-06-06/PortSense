@@ -1,7 +1,9 @@
 import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import BottomNav from "./components/BottomNav";
+import DemoBanner from "./components/DemoBanner";
 import ProtectedRoute from "./components/ProtectedRoute";
+import { useAuth } from "./context/AuthContext";
 
 const LandingPage = lazy(() => import("./pages/LandingPage"));
 const LoginPage = lazy(() => import("./pages/LoginPage"));
@@ -32,14 +34,19 @@ const routeFallbackStyle = {
 
 const RouteFallback = () => <div style={routeFallbackStyle}>Loading...</div>;
 
-const ProtectedLayout = ({ children }) => (
-  <ProtectedRoute>
-    <div style={{ minHeight: "100vh", paddingBottom: "60px" }}>
-      {children}
-      <BottomNav />
-    </div>
-  </ProtectedRoute>
-);
+const ProtectedLayout = ({ children }) => {
+  const { isDemo } = useAuth();
+
+  return (
+    <ProtectedRoute>
+      <div style={{ minHeight: "100vh", paddingBottom: "60px" }}>
+        <DemoBanner />
+        <div style={{ paddingTop: isDemo ? "32px" : "0px" }}>{children}</div>
+        <BottomNav />
+      </div>
+    </ProtectedRoute>
+  );
+};
 
 function App() {
   return (

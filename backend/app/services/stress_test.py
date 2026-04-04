@@ -119,6 +119,8 @@ async def run_stress_test(
         for holding, sector in zip(holdings, sectors):
             ticker = str(holding.get("ticker", ""))
             current_value = float(holding.get("currentValue", 0))
+            if current_value <= 0:
+                continue
             beta = betas.get(ticker, 1.0)
 
             shock = _get_stock_shock(sector, beta, scenario)
@@ -133,6 +135,9 @@ async def run_stress_test(
                 "estimated_loss": round(loss, 2),
             })
             total_loss += loss
+
+        if not per_stock:
+            continue
 
         results.append({
             "id": scenario["id"],

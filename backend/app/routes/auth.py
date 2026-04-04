@@ -11,6 +11,7 @@ from passlib.context import CryptContext
 from motor.motor_asyncio import AsyncIOMotorCollection
 from pydantic import BaseModel, Field
 
+from app.config.db import get_database
 from app.deps import get_users_collection
 from app.middleware.auth import get_current_user
 from app.models.user import UserLogin, UserRegister, UserResponse
@@ -46,9 +47,9 @@ def _get_jwt_secret() -> str:
     return jwt_secret
 
 
-def _create_access_token(user_id: str) -> str:
+def _create_access_token(user_id: str, is_demo: bool = False) -> str:
     expire = datetime.now(timezone.utc) + timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS)
-    payload = {"sub": user_id, "exp": expire}
+    payload = {"sub": user_id, "exp": expire, "is_demo": is_demo}
     return jwt.encode(payload, _get_jwt_secret(), algorithm=ALGORITHM)
 
 
@@ -114,7 +115,32 @@ async def login(
             detail="Invalid email or password",
         )
 
-    token = _create_access_token(str(user.get("_id")))
+    is_demo_user = bool(user.get("is_demo"))
+    if user.get("is_demo"):
+        db = get_database()
+        holdings_collection = db["holdings"]
+
+        # Import DEMO_HOLDINGS inline to avoid circular imports
+        from seed import DEMO_HOLDINGS
+        from datetime import datetime, timezone
+
+        await holdings_collection.delete_many({"userId": user["_id"]})
+
+        now = datetime.now(timezone.utc)
+        documents = [
+            {
+                "userId": user["_id"],
+                "ticker": item["ticker"],
+                "buyDate": datetime.strptime(item["buyDate"], "%Y-%m-%d").replace(tzinfo=timezone.utc),
+                "buyPrice": item["buyPrice"],
+                "quantity": item["quantity"],
+                "createdAt": now,
+            }
+            for item in DEMO_HOLDINGS
+        ]
+        await holdings_collection.insert_many(documents)
+
+    token = _create_access_token(str(user.get("_id")), is_demo=is_demo_user)
     return {"access_token": token, "token_type": "bearer"}
 
 

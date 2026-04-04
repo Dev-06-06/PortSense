@@ -5,6 +5,7 @@ import os
 import re
 import threading
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 
 import feedparser
 from cachetools import TTLCache, cached as cachetools_cached
@@ -12,6 +13,8 @@ import httpx
 import yfinance as yf
 from dotenv import load_dotenv
 import time as _time
+
+_hf_executor = ThreadPoolExecutor(max_workers=3)
 
 load_dotenv()
 
@@ -285,12 +288,11 @@ async def _score_single_headline(
     for attempt in range(3):
         logger.debug(f"[FINBERT] scored headline key: '{headline}'")
         try:
-            async with _hf_semaphore:
-                response = await session.post(
-                    "https://router.huggingface.co/hf-inference/models/ProsusAI/finbert",
-                    headers={"Authorization": f"Bearer {hf_api_key}"},
-                    json={"inputs": headline},
-                )
+            response = await session.post(
+                "https://router.huggingface.co/hf-inference/models/ProsusAI/finbert",
+                headers={"Authorization": f"Bearer {hf_api_key}"},
+                json={"inputs": headline},
+            )
 
             if response.status_code == 503:
                 raise HFColdModelError("HuggingFace model is loading")
@@ -332,24 +334,49 @@ async def _score_single_headline(
     return default_result
 
 
-def _run_finbert_scored_sync(headlines: list[str], retries: int = 2, delay_seconds: float = 3.0) -> list[dict]:
+def _run_finbert_scored_sync(headlines: list[str]) -> list[dict]:
     if not headlines:
         return []
+    if not HF_API_KEY:
+        logger.error("Missing HF_API_KEY")
+        return []
 
-    attempts = max(1, int(retries) + 1)
-    for attempt in range(attempts):
-        try:
-            return asyncio.run(run_finbert_scored(headlines))
-        except HFColdModelError:
-            if attempt >= attempts - 1:
-                return []
-            logger.info("FinBERT is temporarily unavailable, retrying...")
-            _time.sleep(delay_seconds)
-        except Exception as exc:
-            logger.warning("Failed to run FinBERT sentiment: %s", exc)
-            return []
+    import requests as _requests
 
-    return []
+    def _score_one(headline: str) -> dict:
+        default = {"headline": headline, "label": "neutral", "score": 0.0}
+        for attempt in range(3):
+            try:
+                resp = _requests.post(
+                    "https://router.huggingface.co/hf-inference/models/ProsusAI/finbert",
+                    headers={"Authorization": f"Bearer {HF_API_KEY}"},
+                    json={"inputs": headline},
+                    timeout=10,
+                )
+                if resp.status_code == 503:
+                    if attempt < 2:
+                        _time.sleep(3)
+                        continue
+                    return default
+                resp.raise_for_status()
+                payload = resp.json()
+                if isinstance(payload, list) and payload:
+                    label_scores = payload[0] if isinstance(payload[0], list) else payload
+                    if isinstance(label_scores, list) and label_scores:
+                        best = max(label_scores, key=lambda x: x.get("score", 0))
+                        return {
+                            "headline": headline,
+                            "label": str(best.get("label", "neutral")).lower(),
+                            "score": round(float(best.get("score", 0.0)), 4),
+                        }
+                return default
+            except Exception as exc:
+                logger.error("[FINBERT] failed for headline: %s: %s", type(exc).__name__, exc)
+                return default
+        return default
+
+    futures = [_hf_executor.submit(_score_one, h) for h in headlines]
+    return [f.result() for f in futures]
 
 
 def _to_badge(label: str) -> str:
@@ -391,7 +418,6 @@ def _aggregate_headline_sentiment(scored_headlines: list[dict]) -> tuple[str, fl
 
 _sentiment_cache: TTLCache = TTLCache(maxsize=100, ttl=900)
 _sentiment_cache_lock = threading.Lock()
-_hf_semaphore = asyncio.Semaphore(3)
 
 
 def get_stock_sentiment(ticker: str) -> dict:
@@ -478,8 +504,7 @@ def _get_stock_sentiment_cached(ticker: str) -> dict:
 
 
 async def _get_sentiment_bounded(ticker: str) -> dict:
-    async with _hf_semaphore:
-        return await asyncio.to_thread(get_stock_sentiment, ticker)
+    return await asyncio.to_thread(get_stock_sentiment, ticker)
 
 
 async def get_portfolio_sentiment(tickers: list) -> dict:

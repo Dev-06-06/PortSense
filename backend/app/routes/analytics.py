@@ -3,6 +3,8 @@ import traceback
 
 from fastapi import APIRouter, Depends, HTTPException
 from motor.motor_asyncio import AsyncIOMotorCollection
+import pandas as pd
+import yfinance as yf
 
 from app.config.db import get_mongo_client
 from app.deps import get_holdings_collection
@@ -267,8 +269,30 @@ async def get_stress_test(
         if not holdings_with_values:
             return {"scenarios": []}
 
-        tickers = [str(h.get("ticker", "")) for h in holdings_with_values]
-        beta_list = await gather_in_threads_bounded(tickers, get_stock_beta, limit=5)
+        tickers = [str(h.get("ticker", "")).strip().upper() for h in holdings_with_values]
+
+        all_tickers = tickers + ["^NSEI"]
+        raw = await asyncio.to_thread(
+            yf.download,
+            all_tickers,
+            period="6mo",
+            progress=False,
+            auto_adjust=True,
+        )
+
+        # yfinance may return MultiIndex columns when multiple tickers are requested.
+        close_data = raw["Close"] if isinstance(raw.columns, pd.MultiIndex) else raw
+
+        beta_list = await gather_in_threads_bounded(
+            tickers,
+            lambda ticker: get_stock_beta(ticker, close_data),
+            limit=5,
+        )
+        # Replace None/failed betas with default 1.0
+        beta_list = [
+            b if isinstance(b, (int, float)) and b > 0 else 1.0
+            for b in beta_list
+        ]
         betas = dict(zip(tickers, beta_list))
 
         mongo_client = get_mongo_client()
