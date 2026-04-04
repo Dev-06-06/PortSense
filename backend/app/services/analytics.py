@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from datetime import date, timedelta
-from datetime import datetime, timezone
+from datetime import datetime
 from itertools import combinations
 
 import numpy as np
@@ -14,6 +14,36 @@ from app.config.db import get_database_from_client
 from app.services.gemini import get_gemini_response
 
 logger = logging.getLogger(__name__)
+
+
+CANONICAL_SECTORS = {
+    "information technology": "IT",
+    "software": "IT",
+    "technology": "IT",
+    "bank": "Banking",
+    "financial services": "NBFC",
+    "oil": "Energy",
+    "power": "Energy",
+    "utilities": "Energy",
+    "pharmaceutical": "Pharma",
+    "healthcare": "Pharma",
+    "consumer staples": "FMCG",
+    "consumer": "FMCG",
+    "steel": "Materials",
+    "metals": "Materials",
+    "automobile": "Auto",
+    "automotive": "Auto",
+    "construction": "Infrastructure",
+    "diversified": "Conglomerate",
+}
+
+
+def _normalize_sector(raw: str) -> str:
+    key = raw.strip().lower()
+    for pattern, canonical in CANONICAL_SECTORS.items():
+        if pattern in key:
+            return canonical
+    return raw.strip().title()
 
 
 def calculate_xirr(cash_flows: list[tuple[datetime, float]]) -> float:
@@ -51,78 +81,82 @@ def calculate_xirr(cash_flows: list[tuple[datetime, float]]) -> float:
         return 0.0
 
 
-SECTOR_MAP = {
-    "RELIANCE.NS": "Energy",
-    "INFY.NS": "IT",
-    "TCS.NS": "IT",
-    "WIPRO.NS": "IT",
-    "HDFCBANK.NS": "Banking",
-    "ICICIBANK.NS": "Banking",
-    "SBIN.NS": "Banking",
-    "AXISBANK.NS": "Banking",
-    "TATASTEEL.NS": "Materials",
-    "JSWSTEEL.NS": "Materials",
-    "ADANIPOWER.NS": "Energy",
-    "ADANIENT.NS": "Conglomerate",
-    "SUNPHARMA.NS": "Pharma",
-    "DRREDDY.NS": "Pharma",
-    "CIPLA.NS": "Pharma",
-    "HINDUNILVR.NS": "FMCG",
-    "ITC.NS": "FMCG",
-    "BAJFINANCE.NS": "NBFC",
-    "MARUTI.NS": "Auto",
-    "TATAMOTORS.NS": "Auto",
-    "ONGC.NS": "Energy",
-    "NTPC.NS": "Energy",
-    "POWERGRID.NS": "Energy",
-    "HCLTECH.NS": "IT",
-    "TECHM.NS": "IT",
-    "LT.NS": "Infrastructure",
-}
 async def get_sector(ticker: str, db_client=None) -> str:
-    if ticker in SECTOR_MAP:
-        return SECTOR_MAP[ticker]
+    db = get_database_from_client(db_client) if db_client else None
 
-    if db_client:
-        cached = await get_database_from_client(db_client).sector_cache.find_one({"ticker": ticker})
-        if cached:
+    if db is not None:
+        cached = await db.sector_cache.find_one({"ticker": ticker})
+        logger.debug(f"[SECTOR] {ticker} → DB hit: {cached}")
+        if cached and cached.get("sector"):
             return cached["sector"]
 
     try:
         info = await asyncio.to_thread(lambda: yf.Ticker(ticker).info)
-        sector = info.get("sector") or info.get("industryDisp")
-        if sector and isinstance(sector, str) and len(sector) > 1:
-            if db_client:
-                await get_database_from_client(db_client).sector_cache.update_one(
+        raw = (info.get("sector") or info.get("industryDisp") or "") if info else ""
+        logger.debug(f"[SECTOR] {ticker} → yfinance returned: {raw}")
+        if raw:
+            sector = _normalize_sector(str(raw))
+            if db is not None:
+                await db.sector_cache.update_one(
                     {"ticker": ticker},
-                    {"$setOnInsert": {"ticker": ticker, "sector": sector, "source": "yfinance", "cachedAt": datetime.now(timezone.utc)}},
-                    upsert=True
+                    {
+                        "$set": {
+                            "ticker": ticker,
+                            "sector": sector,
+                            "source": "yfinance",
+                            "updatedAt": datetime.utcnow(),
+                        }
+                    },
+                    upsert=True,
                 )
+            logger.debug(f"[SECTOR] {ticker} → final: {sector}")
             return sector
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"[SECTOR] yfinance failed for {ticker}: {e}")
 
+    valid = {
+        "IT",
+        "Banking",
+        "Energy",
+        "Pharma",
+        "FMCG",
+        "Auto",
+        "Materials",
+        "NBFC",
+        "Infrastructure",
+        "Conglomerate",
+    }
     try:
         prompt = (
-            f"What sector does {ticker.replace('.NS','').replace('.BO','')} "
+            f"What sector does {ticker.replace('.NS', '').replace('.BO', '')} "
             f"belong to in the Indian stock market? "
-            f"Reply with ONLY the sector name. "
-            f"Examples: IT, Banking, Energy, Pharma, FMCG, Auto, "
+            f"Reply with ONLY one of these exact words: "
+            f"IT, Banking, Energy, Pharma, FMCG, Auto, "
             f"Materials, NBFC, Infrastructure, Conglomerate"
         )
         raw = await asyncio.to_thread(get_gemini_response, prompt)
-        sector = raw.strip().splitlines()[0]
-        if sector and len(sector) < 30:
-            if db_client:
-                await get_database_from_client(db_client).sector_cache.update_one(
+        logger.debug(f"[SECTOR] {ticker} → Gemini returned: {raw}")
+        sector = _normalize_sector(raw.strip())
+        if sector in valid:
+            if db is not None:
+                await db.sector_cache.update_one(
                     {"ticker": ticker},
-                    {"$setOnInsert": {"ticker": ticker, "sector": sector, "source": "gemini", "cachedAt": datetime.now(timezone.utc)}},
-                    upsert=True
+                    {
+                        "$set": {
+                            "ticker": ticker,
+                            "sector": sector,
+                            "source": "gemini",
+                            "updatedAt": datetime.utcnow(),
+                        }
+                    },
+                    upsert=True,
                 )
+            logger.debug(f"[SECTOR] {ticker} → final: {sector}")
             return sector
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"[SECTOR] Gemini failed for {ticker}: {e}")
 
+    logger.debug(f"[SECTOR] {ticker} → final: Other")
     return "Other"
 
 

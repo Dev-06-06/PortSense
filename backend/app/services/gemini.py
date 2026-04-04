@@ -35,13 +35,10 @@ def get_gemini_response(prompt: str) -> str:
             )
             return response.text
         except Exception as e:
-            if "429" in str(e):
-                logging.warning("Gemini key quota exceeded, trying next key")
-                continue
-            logging.error(f"Gemini error: {e}")
-            return "Unable to generate response at this time."
+            logging.warning(f"Gemini key failed: {type(e).__name__}: {e}")
+            continue
 
-    return "All Gemini API keys exhausted. Please try again later."
+    return "Unable to generate rebalancing advice. Please try again."
 
 
 def _format_holdings(holdings: list[dict]) -> str:
@@ -54,15 +51,28 @@ def _format_holdings(holdings: list[dict]) -> str:
 
         quantity = holding.get("quantity")
         avg_price = holding.get("avgPrice")
+        current_price = holding.get("currentPrice")
         current_value = holding.get("currentValue")
+        pnl_pct_text = None
+
+        if avg_price not in (None, 0) and current_price is not None:
+            try:
+                pnl_pct = ((float(current_price) - float(avg_price)) / float(avg_price)) * 100
+                pnl_pct_text = f"{pnl_pct:+.1f}%"
+            except (TypeError, ValueError, ZeroDivisionError):
+                pnl_pct_text = None
 
         parts = [ticker]
         if quantity is not None:
             parts.append(f"qty {quantity}")
         if avg_price is not None:
             parts.append(f"avg ₹{avg_price}")
+        if current_price is not None:
+            parts.append(f"current ₹{current_price}")
         if current_value is not None:
             parts.append(f"value ₹{current_value}")
+        if pnl_pct_text is not None:
+            parts.append(f"P&L: {pnl_pct_text}")
 
         lines.append(f"- {', '.join(parts)}")
 
@@ -98,7 +108,21 @@ def _format_correlation_pairs(correlation_pairs: object) -> str:
 
 def build_rebalancing_prompt(portfolio_data: dict) -> str:
     holdings_text = _format_holdings(portfolio_data.get("holdings", []))
-    sector_concentration = portfolio_data.get("sector_concentration", "N/A")
+    sector_breakdown = portfolio_data.get("sector_breakdown", [])
+    if not sector_breakdown and isinstance(portfolio_data.get("sector_concentration"), list):
+        sector_breakdown = portfolio_data.get("sector_concentration", [])
+
+    if sector_breakdown:
+        sector_lines = "\n".join(
+            f"  - {s['sector']}: {s['percentage']:.1f}%"
+            for s in sector_breakdown
+            if isinstance(s, dict) and s.get("sector") is not None and s.get("percentage") is not None
+        )
+        if not sector_lines:
+            sector_lines = "  - N/A"
+    else:
+        sector_lines = "  - N/A"
+
     portfolio_beta = portfolio_data.get("portfolio_beta", "N/A")
     beta_label = portfolio_data.get("beta_label", "N/A")
     diversification_score = portfolio_data.get("diversification_score", "N/A")
@@ -113,7 +137,8 @@ Current Portfolio:
 {holdings_text}
 
 Risk Analysis:
-- Sector concentration: {sector_concentration}
+- Sector concentration:
+{sector_lines}
 - Portfolio Beta: {portfolio_beta} ({beta_label})
 - Diversification Score: {diversification_score}/10
 - Portfolio CAGR: {user_cagr}% vs Nifty 50: {nifty_cagr}%
@@ -123,7 +148,7 @@ Respond in exactly 3 sections:
 
 **What You Did Well:** (2-3 sentences, be specific)
 **Key Risks:** (2-3 sentences, name the actual stocks)
-**Rebalancing Steps:** (3-4 specific steps with approximate ₹ amounts, mention STCG/LTCG if holding period is near 1 year boundary)
+**Rebalancing Steps:** (3-4 specific steps with approximate ₹ amounts)
 
 Be direct and specific. Use actual stock names and rupee amounts.
 Do not give generic advice.

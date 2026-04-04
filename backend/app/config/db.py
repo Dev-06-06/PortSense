@@ -98,4 +98,9 @@ async def ensure_indexes(client: AsyncIOMotorClient) -> None:
         background=True,
     )
 
+    await sector_cache_collection.create_index(
+        "updatedAt",
+        expireAfterSeconds=2592000,
+    )
+
     logger.info("Indexes ensured ✓")
