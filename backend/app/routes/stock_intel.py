@@ -30,6 +30,8 @@ logger = logging.getLogger(__name__)
 
 
 _stock_intel_news_cache: TTLCache = TTLCache(maxsize=50, ttl=600)
+_stock_intel_sentiment_cache: TTLCache = TTLCache(maxsize=50, ttl=900)
+_stock_intel_gemini_cache: TTLCache = TTLCache(maxsize=50, ttl=600)
 _stock_intel_news_lock = threading.Lock()
 
 
@@ -348,6 +350,7 @@ Technical Signals:
 - MACD: {technicals.get("macd_signal", "N/A")}
 - Moving Averages: {technicals.get("ma_signal", "N/A")}
 - Pattern: {technicals.get("pattern", "N/A")}
+- RSI Zone: {'Overbought (>70) — watch for reversal' if technicals.get('rsi', 50) > 70 else 'Oversold (<30) — watch for bounce' if technicals.get('rsi', 50) < 30 else 'Neutral zone'}
 
 News & Sentiment (FinBERT: {sentiment_badge}):
 {news_context_str}
@@ -359,6 +362,8 @@ Mandatory Context For Reasoning:
 - Price change: {change_rs} ({change_pct}%)
 - RSI signal: {rsi_signal}
 - MACD signal: {macd_signal}
+- Analyst rating: {fast_data.get("recommendation", "N/A")}
+- Diversification impact: this stock is {portfolio_line if portfolio_line else "not in user portfolio"}
 - Top headlines and summaries are listed above (use headlines even if summary is unavailable)
 
 Second-Order Effects Task (for ripple_effect):
@@ -372,7 +377,10 @@ Fundamentals:
 - Revenue Growth: {fast_data.get("revenue_growth", "N/A")}
 - Profit Margin: {fast_data.get("profit_margins", "N/A")}
 - Analyst Rating: {fast_data.get("recommendation", "N/A")}
+- 52W Position: {'Near 52W High (top 10%)' if fast_data.get('change_pct') and w52_high and price > 0.9 * w52_high else 'Near 52W Low (bottom 10%)' if price < 1.1 * w52_low else 'Mid-range'}
 {portfolio_line}
+
+Base action_signal on confluence: if 2+ of (RSI signal, MACD signal, FinBERT sentiment, analyst rating) agree → signal that direction. If conflicting → HOLD.
 
 Respond ONLY in this exact JSON format with no markdown:
 {{
@@ -380,7 +388,8 @@ Respond ONLY in this exact JSON format with no markdown:
     "ripple_effect": "2-3 concise sentences on second-order effects covering sector peers, supply chain links, and index movement",
   "contradiction": "1 sentence if FinBERT sentiment contradicts price direction, empty string if they agree",
   "fundamental_verdict": "1 sentence on fundamental health based on P/E, margins, debt, analyst view",
-  "volume_reasoning": "1 sentence explaining unusual volume if present, empty string if normal volume"
+  "volume_reasoning": "1 sentence explaining unusual volume if present, empty string if normal volume",
+  "action_signal": "exactly one of: BUY / HOLD / SELL — based on technical + fundamental + sentiment confluence. Must be a single word."
 }}
 """.strip()
 
@@ -404,6 +413,7 @@ def _parse_gemini_json(raw_text: str) -> dict:
         "contradiction": "",
         "fundamental_verdict": "",
         "volume_reasoning": "",
+        "action_signal": "HOLD",
     }
 
     try:
@@ -424,6 +434,7 @@ def _parse_gemini_json(raw_text: str) -> dict:
             "contradiction": str(parsed.get("contradiction", "") or ""),
             "fundamental_verdict": str(parsed.get("fundamental_verdict", "") or ""),
             "volume_reasoning": str(parsed.get("volume_reasoning", "") or ""),
+            "action_signal": str(parsed.get("action_signal", "HOLD") or "HOLD"),
         }
     except Exception:
         return fallback
@@ -524,8 +535,58 @@ async def get_stock_intel(
                 "days_held": days_held,
             }
 
+    # Build enriched news context for Gemini with top 3 headlines and summaries (if available).
+    news_context_lines = []
+    top_articles = articles[:3]
+    for index, art in enumerate(top_articles, start=1):
+        title = _truncate(art.get("title", ""), 120).strip() or "No headline provided"
+        summary = _truncate(art.get("summary", ""), 220).strip()
+        if summary:
+            news_context_lines.append(f"{index}. Headline: {title} | Summary: {summary}")
+        else:
+            news_context_lines.append(f"{index}. Headline: {title} | Summary: Not available")
+
+    if len(top_articles) < 3:
+        for index in range(len(top_articles) + 1, 4):
+            news_context_lines.append(
+                f"{index}. Headline: No additional headline available | Summary: Not available"
+            )
+    news_context_str = (
+        "\n".join(news_context_lines)
+        if news_context_lines
+        else "No major headlines"
+    )
+
+    placeholder_top_headlines = [
+        _truncate(art.get("title", ""), 120).strip()
+        for art in top_articles
+        if _truncate(art.get("title", ""), 120).strip()
+    ]
+
+    prompt = _build_prompt(
+        normalized_ticker,
+        fast_data=fast_data,
+        technicals=technicals,
+        sentiment_badge="Analyzing...",
+        news_context_str=news_context_str,
+        top_headlines=placeholder_top_headlines,
+        portfolio_context=portfolio_context,
+    )
+
     finbert_inputs = _prepare_finbert_inputs(articles)
-    scored_headlines = await run_finbert_scored(finbert_inputs) if finbert_inputs else []
+    cache_key_sentiment = normalized_ticker
+    if cache_key_sentiment in _stock_intel_sentiment_cache:
+        scored_headlines = _stock_intel_sentiment_cache[cache_key_sentiment]
+    else:
+        scored_headlines = await run_finbert_scored(finbert_inputs) if finbert_inputs else []
+        _stock_intel_sentiment_cache[cache_key_sentiment] = scored_headlines
+
+    cache_key_gemini = f"{normalized_ticker}:{date.today().isoformat()}"
+    if cache_key_gemini in _stock_intel_gemini_cache:
+        gemini_raw = _stock_intel_gemini_cache[cache_key_gemini]
+    else:
+        gemini_raw = await asyncio.to_thread(get_gemini_response, prompt)
+        _stock_intel_gemini_cache[cache_key_gemini] = gemini_raw
 
     # Build a lookup by headline text instead of positional index
     score_lookup = {
@@ -549,39 +610,6 @@ async def get_stock_intel(
     sentiment_badge, sentiment_confidence, top_headlines = _build_sentiment(
         sentiment_input
     )
-
-    # Build enriched news context for Gemini with top 3 headlines and summaries (if available).
-    news_context_lines = []
-    top_articles = articles[:3]
-    for index, art in enumerate(top_articles, start=1):
-        title = _truncate(art.get("title", ""), 120).strip() or "No headline provided"
-        summary = _truncate(art.get("summary", ""), 220).strip()
-        if summary:
-            news_context_lines.append(f"{index}. Headline: {title} | Summary: {summary}")
-        else:
-            news_context_lines.append(f"{index}. Headline: {title} | Summary: Not available")
-
-    if len(top_articles) < 3:
-        for index in range(len(top_articles) + 1, 4):
-            news_context_lines.append(
-                f"{index}. Headline: No additional headline available | Summary: Not available"
-            )
-    news_context_str = (
-        "\n".join(news_context_lines)
-        if news_context_lines
-        else "No major headlines"
-    )
-
-    prompt = _build_prompt(
-        normalized_ticker,
-        fast_data=fast_data,
-        technicals=technicals,
-        sentiment_badge=sentiment_badge,
-        news_context_str=news_context_str,
-        top_headlines=top_headlines,
-        portfolio_context=portfolio_context,
-    )
-    gemini_raw = await asyncio.to_thread(get_gemini_response, prompt)
     gemini_data = _parse_gemini_json(gemini_raw)
 
     return {

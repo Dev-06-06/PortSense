@@ -8,7 +8,7 @@ from collections import Counter
 
 import feedparser
 from cachetools import TTLCache, cached as cachetools_cached
-import requests
+import httpx
 import yfinance as yf
 from dotenv import load_dotenv
 import time as _time
@@ -110,7 +110,7 @@ def _fetch_google_news_rss(ticker: str) -> list[dict]:
     normalized = str(ticker).upper()
     query = COMPANY_SEARCH_NAMES.get(
         normalized,
-        normalized.replace(".NS", "").replace(".BO", "") + " stock India NSE",
+        normalized.replace(".NS", "").replace(".BO", "") + " NSE share price earnings results",
     )
     url = (
         "https://news.google.com/rss/search"
@@ -176,6 +176,66 @@ def _prepare_finbert_inputs(articles: list[dict]) -> list[str]:
     ]
 
 
+def _filter_and_deduplicate_headlines(headlines: list[str], company_name: str) -> list[str]:
+    financial_keywords = {"results", "earnings", "profit", "revenue"}
+    generic_market_phrases = ("sensex", "nifty", "market rally")
+    company_words = {
+        w
+        for w in re.findall(r"[a-z0-9]+", str(company_name).lower())
+        if len(w) > 2
+    }
+
+    def _tokenize(text: str) -> set[str]:
+        return set(re.findall(r"[a-z0-9]+", text.lower()))
+
+    kept_headlines: list[str] = []
+    kept_word_sets: list[set[str]] = []
+
+    for raw_headline in headlines:
+        headline = str(raw_headline or "").strip()
+        if not headline:
+            continue
+
+        all_tokens = re.findall(r"[a-z0-9]+", headline.lower())
+        if len(all_tokens) < 8:
+            continue
+
+        words = _tokenize(headline)
+        has_ipo = "ipo" in words
+        has_financial_context = any(k in words for k in financial_keywords)
+        if has_ipo and not has_financial_context:
+            continue
+
+        lower_headline = headline.lower()
+        has_generic_market_phrase = any(
+            phrase in lower_headline for phrase in generic_market_phrases
+        )
+        mentions_company = bool(company_words.intersection(words))
+        if has_generic_market_phrase and not mentions_company:
+            continue
+
+        is_duplicate = False
+        for existing_words in kept_word_sets:
+            union = words | existing_words
+            if not union:
+                continue
+            similarity = len(words & existing_words) / len(union)
+            if similarity > 0.8:
+                is_duplicate = True
+                break
+
+        if is_duplicate:
+            continue
+
+        kept_headlines.append(headline)
+        kept_word_sets.append(words)
+
+        if len(kept_headlines) >= 10:
+            break
+
+    return kept_headlines
+
+
 async def run_finbert_scored(headlines: list[str]) -> list[dict]:
     if not headlines:
         return []
@@ -184,17 +244,53 @@ async def run_finbert_scored(headlines: list[str]) -> list[dict]:
         logger.error("Missing HF_API_KEY environment variable")
         return []
 
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        gathered = await asyncio.gather(
+            *[_score_single_headline(client, headline, HF_API_KEY) for headline in headlines],
+            return_exceptions=True,
+        )
+
     results: list[dict] = []
-    for headline in headlines:
+    for result in gathered:
+        if isinstance(result, Exception):
+            results.append(
+                {
+                    "headline": "unknown",
+                    "label": "neutral",
+                    "score": 0.0,
+                }
+            )
+            continue
+        results.append(result)
+
+    global _finbert_debug_logged
+    if not _finbert_debug_logged:
+        logger.debug(f"[FINBERT] {len(results)} headlines scored: {results}")
+        _finbert_debug_logged = True
+
+    return results
+
+
+async def _score_single_headline(
+    session: httpx.AsyncClient,
+    headline: str,
+    hf_api_key: str,
+) -> dict:
+    default_result = {
+        "headline": headline,
+        "label": "neutral",
+        "score": 0.0,
+    }
+
+    for attempt in range(3):
         logger.debug(f"[FINBERT] scored headline key: '{headline}'")
         try:
-            response = await asyncio.to_thread(
-                requests.post,
-                "https://router.huggingface.co/hf-inference/models/ProsusAI/finbert",
-                headers={"Authorization": f"Bearer {HF_API_KEY}"},
-                json={"inputs": headline},
-                timeout=10,
-            )
+            async with _hf_semaphore:
+                response = await session.post(
+                    "https://router.huggingface.co/hf-inference/models/ProsusAI/finbert",
+                    headers={"Authorization": f"Bearer {hf_api_key}"},
+                    json={"inputs": headline},
+                )
 
             if response.status_code == 503:
                 raise HFColdModelError("HuggingFace model is loading")
@@ -207,42 +303,33 @@ async def run_finbert_scored(headlines: list[str]) -> list[dict]:
                 label_scores = payload[0] if isinstance(payload[0], list) else payload
                 if isinstance(label_scores, list) and label_scores:
                     best = max(label_scores, key=lambda x: x.get("score", 0))
-                    results.append(
-                        {
-                            "headline": headline,
-                            "label": str(best.get("label", "neutral")).lower(),
-                            "score": round(float(best.get("score", 0.0)), 4),
-                        }
-                    )
-                    continue
+                    return {
+                        "headline": headline,
+                        "label": str(best.get("label", "neutral")).lower(),
+                        "score": round(float(best.get("score", 0.0)), 4),
+                    }
 
-            results.append(
-                {
-                    "headline": headline,
-                    "label": "neutral",
-                    "score": 0.0,
-                }
+            return default_result
+        except HFColdModelError as exc:
+            if attempt < 2:
+                logger.info("FinBERT is temporarily unavailable, retrying...")
+                await asyncio.sleep(3)
+                continue
+            logger.error(
+                "[FINBERT] failed for headline: %s: %s",
+                type(exc).__name__,
+                exc,
             )
+            return default_result
         except Exception as exc:
             logger.error(
                 "[FINBERT] failed for headline: %s: %s",
                 type(exc).__name__,
                 exc,
             )
-            results.append(
-                {
-                    "headline": headline,
-                    "label": "neutral",
-                    "score": 0.0,
-                }
-            )
+            return default_result
 
-    global _finbert_debug_logged
-    if not _finbert_debug_logged:
-        logger.debug(f"[FINBERT] {len(results)} headlines scored: {results}")
-        _finbert_debug_logged = True
-
-    return results
+    return default_result
 
 
 def _run_finbert_scored_sync(headlines: list[str], retries: int = 2, delay_seconds: float = 3.0) -> list[dict]:
@@ -253,7 +340,7 @@ def _run_finbert_scored_sync(headlines: list[str], retries: int = 2, delay_secon
     for attempt in range(attempts):
         try:
             return asyncio.run(run_finbert_scored(headlines))
-        except (HFColdModelError, requests.Timeout):
+        except HFColdModelError:
             if attempt >= attempts - 1:
                 return []
             logger.info("FinBERT is temporarily unavailable, retrying...")
@@ -288,10 +375,10 @@ def _aggregate_headline_sentiment(scored_headlines: list[dict]) -> tuple[str, fl
     total    = len(scored_headlines)
     
     if positive > negative and positive > neutral:
-        badge = "Positive"
+        badge = "Bullish"
         winning_count = positive
     elif negative > positive and negative > neutral:
-        badge = "Negative"
+        badge = "Bearish"
         winning_count = negative
     else:
         badge = "Neutral"
@@ -330,18 +417,27 @@ def _get_stock_sentiment_cached(ticker: str) -> dict:
             "headlines": [],
         }
 
-    valid = [(i, a) for i, a in enumerate(articles) if a.get("title")]
-    finbert_inputs = _prepare_finbert_inputs([a for _, a in valid])
+    valid_articles = [a for a in articles if a.get("title")]
+    prepared_headlines = _prepare_finbert_inputs(valid_articles)
+    inferred_company_name = COMPANY_SEARCH_NAMES.get(
+        ticker,
+        ticker.replace(".NS", "").replace(".BO", ""),
+    ).split(" stock", 1)[0].strip()
+    finbert_inputs = _filter_and_deduplicate_headlines(
+        prepared_headlines,
+        inferred_company_name,
+    )
     scored = _run_finbert_scored_sync(finbert_inputs) if finbert_inputs else []
     score_map = {
-        orig_idx: scored[j]
-        for j, (orig_idx, _) in enumerate(valid)
-        if j < len(scored)
+        str(item.get("headline", "")): item
+        for item in scored
+        if item.get("headline")
     }
 
     headlines_out = []
-    for i, article in enumerate(articles):
-        sentiment = score_map.get(i)
+    for article in articles:
+        prepared_title = _truncate(article.get("title", ""), 500)
+        sentiment = score_map.get(prepared_title)
         headline_entry = {
             "headline": article["title"],
             "label": sentiment["label"] if sentiment else "neutral",

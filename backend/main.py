@@ -15,6 +15,7 @@ from app.routes.auth import router as auth_router
 from app.routes.genai import router as genai_router
 from app.routes.holdings import router as holdings_router
 from app.routes.market import router as market_router
+from app.routes.news import router as news_router
 from app.routes.sentiment import router as sentiment_router
 from app.routes.stock_intel import router as stock_intel_router
 
@@ -61,6 +62,7 @@ app.include_router(sentiment_router, prefix="/api/sentiment", tags=["sentiment"]
 app.include_router(genai_router, prefix="/api/genai", tags=["genai"])
 app.include_router(stock_intel_router, prefix="/api/stock-intel", tags=["stock-intel"])
 app.include_router(market_router, prefix="/api/market")
+app.include_router(news_router, prefix="/api/news")
 
 
 @app.get("/ping")

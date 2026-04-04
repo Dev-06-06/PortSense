@@ -1,19 +1,39 @@
-import { Link, useLocation } from 'react-router-dom'
-import { LayoutDashboard, BarChart2, GitBranch, Radio, UserCircle } from 'lucide-react'
-import { prefetchRoute } from '../routes/prefetch'
+import { Link, useLocation } from "react-router-dom";
+import {
+  LayoutDashboard,
+  BarChart2,
+  GitBranch,
+  Radio,
+  UserCircle,
+} from "lucide-react";
+import { prefetchRoute } from "../routes/prefetch";
 
 const tabs = [
-  { label: "Dashboard", icon: <LayoutDashboard size={20} />, path: "/dashboard" },
+  {
+    label: "Dashboard",
+    icon: <LayoutDashboard size={20} />,
+    path: "/dashboard",
+  },
   { label: "Analytics", icon: <BarChart2 size={20} />, path: "/analytics" },
+  {
+    label: "News",
+    icon: (
+      <span role="img" aria-label="News">
+        📰
+      </span>
+    ),
+    path: "/news",
+  },
   { label: "Correlation", icon: <GitBranch size={20} />, path: "/correlation" },
   { label: "Sentiment", icon: <Radio size={20} />, path: "/sentiment" },
   { label: "Account", icon: <UserCircle size={20} />, path: "/account" },
-]
+];
 
 const BottomNav = () => {
-  const { pathname } = useLocation()
+  const { pathname } = useLocation();
 
-  const isActive = (path) => pathname === path || pathname.startsWith(`${path}/`)
+  const isActive = (path) =>
+    pathname === path || pathname.startsWith(`${path}/`);
 
   return (
     <>
@@ -28,7 +48,7 @@ const BottomNav = () => {
           background: #111827;
           border-top: 1px solid rgba(255, 255, 255, 0.1);
           display: grid;
-          grid-template-columns: repeat(5, minmax(0, 1fr));
+          grid-template-columns: repeat(6, minmax(0, 1fr));
           z-index: 1000;
         }
 
@@ -81,29 +101,29 @@ const BottomNav = () => {
         }
       `}</style>
 
-      <nav aria-label='Bottom navigation' className='bottom-nav'>
-      {tabs.map((tab) => {
-        const active = isActive(tab.path)
+      <nav aria-label="Bottom navigation" className="bottom-nav">
+        {tabs.map((tab) => {
+          const active = isActive(tab.path);
 
-        return (
-          <Link
-            key={tab.path}
-            to={tab.path}
-            className={`bottom-nav-link ${active ? 'active' : ''}`}
-            onMouseEnter={() => prefetchRoute(tab.path)}
-            onFocus={() => prefetchRoute(tab.path)}
-            onTouchStart={() => prefetchRoute(tab.path)}
-          >
-            <span className='bottom-nav-icon' aria-hidden='true'>
-              {tab.icon}
-            </span>
-            <span className='bottom-nav-label'>{tab.label}</span>
-          </Link>
-        )
-      })}
+          return (
+            <Link
+              key={tab.path}
+              to={tab.path}
+              className={`bottom-nav-link ${active ? "active" : ""}`}
+              onMouseEnter={() => prefetchRoute(tab.path)}
+              onFocus={() => prefetchRoute(tab.path)}
+              onTouchStart={() => prefetchRoute(tab.path)}
+            >
+              <span className="bottom-nav-icon" aria-hidden="true">
+                {tab.icon}
+              </span>
+              <span className="bottom-nav-label">{tab.label}</span>
+            </Link>
+          );
+        })}
       </nav>
     </>
-  )
-}
+  );
+};
 
-export default BottomNav
+export default BottomNav;

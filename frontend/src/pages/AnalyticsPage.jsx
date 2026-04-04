@@ -95,6 +95,8 @@ const tdStyle = {
   borderBottom: "1px solid rgba(255,255,255,0.05)",
 };
 
+const tabs = ["Overview", "Beta / Diversification", "Benchmark", "Risk"];
+
 const formatCurrency = (value) =>
   new Intl.NumberFormat("en-IN", {
     minimumFractionDigits: 2,
@@ -146,6 +148,7 @@ const AnalyticsPage = () => {
   const [adviceText, setAdviceText] = useState("");
   const [adviceLoading, setAdviceLoading] = useState(false);
   const [adviceError, setAdviceError] = useState("");
+  const [activeTab, setActiveTab] = useState("Overview");
 
   // Parse advice text
   const parsedAdvice = useMemo(() => parseAdvice(adviceText), [adviceText]);
@@ -282,361 +285,460 @@ const AnalyticsPage = () => {
       `}</style>
 
       <div style={containerStyle}>
-        {/* ========== 1. SECTOR BREAKDOWN ========== */}
-        {sectors && (
-          <div style={cardStyle}>
-            <h2 style={sectionTitleStyle}>Sector Breakdown</h2>
+        <div>
+          <h1
+            style={{
+              margin: "0 0 0.3rem",
+              fontSize: "1.55rem",
+              fontWeight: 800,
+              color: "#f8fafc",
+            }}
+          >
+            Portfolio Analytics
+          </h1>
+          <p
+            style={{
+              margin: 0,
+              color: "#94a3b8",
+              fontSize: "0.9rem",
+            }}
+          >
+            Track allocation, benchmark performance, and portfolio risk.
+          </p>
+        </div>
 
-            {loadingSectors ? (
-              <div
+        <div
+          style={{
+            position: "sticky",
+            top: 0,
+            zIndex: 10,
+            background: "#0d1117",
+            borderBottom: "1px solid #1e293b",
+            display: "flex",
+            gap: "8px",
+            padding: "10px 16px",
+            overflowX: "auto",
+          }}
+        >
+          {tabs.map((tab) => {
+            const isActive = activeTab === tab;
+            return (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setActiveTab(tab)}
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  justifyContent: "center",
-                  padding: "2rem 0",
+                  background: isActive ? "#f97316" : "#1e293b",
+                  color: isActive ? "white" : "#94a3b8",
+                  borderRadius: "20px",
+                  padding: "6px 18px",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  border: "none",
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
                 }}
               >
-                <div
-                  className="analytics-spin"
-                  style={{
-                    width: "1.5rem",
-                    height: "1.5rem",
-                    borderRadius: "999px",
-                    border: "3px solid #475569",
-                    borderTopColor: "#f97316",
-                  }}
-                />
-                <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.88rem" }}>
-                  Loading sectors...
-                </p>
-              </div>
-            ) : error ? (
-              <p style={{ margin: 0, color: "#f87171", fontSize: "0.88rem" }}>
-                {error}
-              </p>
-            ) : sectors.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "2rem 0" }}>
-                <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.88rem" }}>
-                  Add stocks from the Dashboard to see sector breakdown.
-                </p>
-              </div>
-            ) : (
-              <>
-                {/* Pie Chart */}
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "center",
-                    marginBottom: "1rem",
-                  }}
-                >
-                  <PieChart width={300} height={300}>
-                    <Pie
-                      data={sectors.map((s) => ({
-                        name: s.name || s.sector,
-                        value: s.weight || s.percentage,
-                      }))}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={100}
-                      labelLine={false}
-                      label={({ name, percent }) =>
-                        `${name} ${(percent * 100).toFixed(1)}%`
-                      }
-                    >
-                      {sectors.map((_, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={SLICE_COLORS[index % SLICE_COLORS.length]}
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(value) => [
-                        `${Number(value).toFixed(2)}%`,
-                        "Weight",
-                      ]}
-                      contentStyle={{
-                        border: "1px solid rgba(255,255,255,0.12)",
-                        borderRadius: "0.65rem",
-                        backgroundColor: "#111827",
-                        color: "#f8fafc",
-                      }}
-                    />
-                  </PieChart>
-                </div>
+                {tab}
+              </button>
+            );
+          })}
+        </div>
 
-                {/* Concentration Warnings */}
-                {sectors.filter((s) => s.isOverweight).length > 0 && (
+        {activeTab === "Overview" && (
+          <>
+            {/* ========== 1. SECTOR BREAKDOWN ========== */}
+            {sectors && (
+              <div style={cardStyle}>
+                <h2 style={sectionTitleStyle}>Sector Breakdown</h2>
+
+                {loadingSectors ? (
                   <div
                     style={{
-                      marginTop: "1rem",
-                      display: "grid",
+                      display: "flex",
+                      alignItems: "center",
                       gap: "0.5rem",
+                      justifyContent: "center",
+                      padding: "2rem 0",
                     }}
                   >
+                    <div
+                      className="analytics-spin"
+                      style={{
+                        width: "1.5rem",
+                        height: "1.5rem",
+                        borderRadius: "999px",
+                        border: "3px solid #475569",
+                        borderTopColor: "#f97316",
+                      }}
+                    />
                     <p
                       style={{
                         margin: 0,
-                        fontSize: "0.75rem",
                         color: "#94a3b8",
-                        fontWeight: 700,
+                        fontSize: "0.88rem",
                       }}
                     >
-                      CONCENTRATION WARNING
+                      Loading sectors...
                     </p>
-                    {sectors
-                      .filter((s) => s.isOverweight)
-                      .map((s, idx) => (
-                        <div
-                          key={idx}
+                  </div>
+                ) : error ? (
+                  <p
+                    style={{ margin: 0, color: "#f87171", fontSize: "0.88rem" }}
+                  >
+                    {error}
+                  </p>
+                ) : sectors.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: "2rem 0" }}>
+                    <p
+                      style={{
+                        margin: 0,
+                        color: "#94a3b8",
+                        fontSize: "0.88rem",
+                      }}
+                    >
+                      Add stocks from the Dashboard to see sector breakdown.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    {/* Pie Chart */}
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "center",
+                        marginBottom: "1rem",
+                      }}
+                    >
+                      <PieChart width={300} height={300}>
+                        <Pie
+                          data={sectors.map((s) => ({
+                            name: s.name || s.sector,
+                            value: s.weight || s.percentage,
+                          }))}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={100}
+                          labelLine={false}
+                          label={({ name, percent }) =>
+                            `${name} ${(percent * 100).toFixed(1)}%`
+                          }
+                        >
+                          {sectors.map((_, index) => (
+                            <Cell
+                              key={`cell-${index}`}
+                              fill={SLICE_COLORS[index % SLICE_COLORS.length]}
+                            />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          formatter={(value) => [
+                            `${Number(value).toFixed(2)}%`,
+                            "Weight",
+                          ]}
+                          contentStyle={{
+                            border: "1px solid rgba(255,255,255,0.12)",
+                            borderRadius: "0.65rem",
+                            backgroundColor: "#111827",
+                            color: "#f8fafc",
+                          }}
+                        />
+                      </PieChart>
+                    </div>
+
+                    {/* Concentration Warnings */}
+                    {sectors.filter((s) => s.isOverweight).length > 0 && (
+                      <div
+                        style={{
+                          marginTop: "1rem",
+                          display: "grid",
+                          gap: "0.5rem",
+                        }}
+                      >
+                        <p
                           style={{
-                            borderRadius: "0.75rem",
-                            border: "1px solid rgba(249,115,22,0.4)",
-                            backgroundColor: "rgba(249,115,22,0.1)",
-                            padding: "0.75rem",
+                            margin: 0,
+                            fontSize: "0.75rem",
+                            color: "#94a3b8",
+                            fontWeight: 700,
                           }}
                         >
-                          <p
-                            style={{
-                              margin: 0,
-                              fontSize: "0.75rem",
-                              color: "#fdba74",
-                            }}
-                          >
-                            ⚠️ {s.name || s.sector} is{" "}
-                            {Number(s.weight || s.percentage).toFixed(2)}% of
-                            portfolio
-                          </p>
-                        </div>
-                      ))}
-                  </div>
+                          CONCENTRATION WARNING
+                        </p>
+                        {sectors
+                          .filter((s) => s.isOverweight)
+                          .map((s, idx) => (
+                            <div
+                              key={idx}
+                              style={{
+                                borderRadius: "0.75rem",
+                                border: "1px solid rgba(249,115,22,0.4)",
+                                backgroundColor: "rgba(249,115,22,0.1)",
+                                padding: "0.75rem",
+                              }}
+                            >
+                              <p
+                                style={{
+                                  margin: 0,
+                                  fontSize: "0.75rem",
+                                  color: "#fdba74",
+                                }}
+                              >
+                                ⚠️ {s.name || s.sector} is{" "}
+                                {Number(s.weight || s.percentage).toFixed(2)}%
+                                of portfolio
+                              </p>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+
+                    {/* Sector Table */}
+                    <div style={{ overflowX: "auto", marginTop: "1rem" }}>
+                      <table style={tableStyle}>
+                        <thead>
+                          <tr>
+                            <th style={thStyle}>Sector</th>
+                            <th style={{ ...thStyle, textAlign: "right" }}>
+                              Weight %
+                            </th>
+                            <th style={{ ...thStyle, textAlign: "right" }}>
+                              Value ₹
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sectors.map((s, idx) => (
+                            <tr key={idx}>
+                              <td style={{ ...tdStyle, color: "#f8fafc" }}>
+                                {s.name || s.sector}
+                              </td>
+                              <td style={{ ...tdStyle, textAlign: "right" }}>
+                                {Number(s.weight || s.percentage).toFixed(2)}
+                              </td>
+                              <td style={{ ...tdStyle, textAlign: "right" }}>
+                                {formatCurrency(s.value || 0)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
                 )}
-
-                {/* Sector Table */}
-                <div style={{ overflowX: "auto", marginTop: "1rem" }}>
-                  <table style={tableStyle}>
-                    <thead>
-                      <tr>
-                        <th style={thStyle}>Sector</th>
-                        <th style={{ ...thStyle, textAlign: "right" }}>
-                          Weight %
-                        </th>
-                        <th style={{ ...thStyle, textAlign: "right" }}>
-                          Value ₹
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sectors.map((s, idx) => (
-                        <tr key={idx}>
-                          <td style={{ ...tdStyle, color: "#f8fafc" }}>
-                            {s.name || s.sector}
-                          </td>
-                          <td style={{ ...tdStyle, textAlign: "right" }}>
-                            {Number(s.weight || s.percentage).toFixed(2)}
-                          </td>
-                          <td style={{ ...tdStyle, textAlign: "right" }}>
-                            {formatCurrency(s.value || 0)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
+              </div>
             )}
-          </div>
+          </>
         )}
 
-        {/* ========== 2. BETA ANALYSIS ========== */}
-        {beta && (
-          <div style={cardStyle}>
-            <h2 style={sectionTitleStyle}>Beta Analysis</h2>
+        {activeTab === "Beta / Diversification" && (
+          <>
+            {/* ========== 2. BETA ANALYSIS ========== */}
+            {beta && (
+              <div style={cardStyle}>
+                <h2 style={sectionTitleStyle}>Beta Analysis</h2>
 
-            {loadingBeta ? (
-              <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.88rem" }}>
-                Loading beta...
-              </p>
-            ) : (
-              <>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "baseline",
-                    gap: "0.5rem",
-                    marginBottom: "1rem",
-                  }}
-                >
-                  <p style={{ ...bigNumberStyle, color: "#f8fafc" }}>
-                    {Number(beta.portfolioBeta || 0).toFixed(2)}
-                  </p>
+                {loadingBeta ? (
                   <p
-                    style={{ margin: 0, fontSize: "0.88rem", color: "#f97316" }}
+                    style={{ margin: 0, color: "#94a3b8", fontSize: "0.88rem" }}
                   >
-                    Portfolio Beta
+                    Loading beta...
                   </p>
-                </div>
+                ) : (
+                  <>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "baseline",
+                        gap: "0.5rem",
+                        marginBottom: "1rem",
+                      }}
+                    >
+                      <p style={{ ...bigNumberStyle, color: "#f8fafc" }}>
+                        {Number(beta.portfolioBeta || 0).toFixed(2)}
+                      </p>
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: "0.88rem",
+                          color: "#f97316",
+                        }}
+                      >
+                        Portfolio Beta
+                      </p>
+                    </div>
 
-                <div style={{ overflowX: "auto" }}>
-                  <table style={tableStyle}>
-                    <thead>
-                      <tr>
-                        <th style={thStyle}>Ticker</th>
-                        <th style={{ ...thStyle, textAlign: "right" }}>Beta</th>
-                        <th style={{ ...thStyle, textAlign: "right" }}>
-                          Weight %
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(beta.perStock || []).map((stock, idx) => (
-                        <tr key={idx}>
-                          <td style={{ ...tdStyle, color: "#f8fafc" }}>
-                            {stock.ticker}
-                          </td>
-                          <td style={{ ...tdStyle, textAlign: "right" }}>
-                            {Number(stock.beta || 0).toFixed(2)}
-                          </td>
-                          <td style={{ ...tdStyle, textAlign: "right" }}>
-                            {Number(stock.weight || 0).toFixed(2)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
+                    <div style={{ overflowX: "auto" }}>
+                      <table style={tableStyle}>
+                        <thead>
+                          <tr>
+                            <th style={thStyle}>Ticker</th>
+                            <th style={{ ...thStyle, textAlign: "right" }}>
+                              Beta
+                            </th>
+                            <th style={{ ...thStyle, textAlign: "right" }}>
+                              Weight %
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(beta.perStock || []).map((stock, idx) => (
+                            <tr key={idx}>
+                              <td style={{ ...tdStyle, color: "#f8fafc" }}>
+                                {stock.ticker}
+                              </td>
+                              <td style={{ ...tdStyle, textAlign: "right" }}>
+                                {Number(stock.beta || 0).toFixed(2)}
+                              </td>
+                              <td style={{ ...tdStyle, textAlign: "right" }}>
+                                {Number(stock.weight || 0).toFixed(2)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+              </div>
             )}
-          </div>
-        )}
 
-        {/* ========== 3. DIVERSIFICATION SCORE ========== */}
-        {diversification && (
-          <div style={cardStyle}>
-            <h2 style={sectionTitleStyle}>Diversification Score</h2>
+            {/* ========== 3. DIVERSIFICATION SCORE ========== */}
+            {diversification && (
+              <div style={cardStyle}>
+                <h2 style={sectionTitleStyle}>Diversification Score</h2>
 
-            {loadingDiv ? (
-              <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.88rem" }}>
-                Loading diversification...
-              </p>
-            ) : (
-              <>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "baseline",
-                    gap: "0.5rem",
-                    marginBottom: "1rem",
-                  }}
-                >
-                  <p style={bigNumberStyle}>
-                    {Number(diversification.score || 0).toFixed(1)}
-                  </p>
+                {loadingDiv ? (
                   <p
-                    style={{ margin: 0, fontSize: "0.88rem", color: "#94a3b8" }}
+                    style={{ margin: 0, color: "#94a3b8", fontSize: "0.88rem" }}
                   >
-                    /10
+                    Loading diversification...
                   </p>
-                </div>
-                <p
-                  style={{
-                    margin: "0 0 1rem",
-                    fontSize: "0.88rem",
-                    color: "#cbd5e1",
-                  }}
-                >
-                  {diversification.verdict || "Moderate"}
-                </p>
-
-                {/* Sub-score progress bars */}
-                <div style={{ display: "grid", gap: "0.75rem" }}>
-                  {/* Sector Score */}
-                  <div>
-                    <p style={labelStyle}>
-                      Sector Score:{" "}
-                      {Number(diversification.sectorScore || 0).toFixed(1)}/10
-                    </p>
+                ) : (
+                  <>
                     <div
                       style={{
-                        height: "6px",
-                        backgroundColor: "#1e293b",
-                        borderRadius: "999px",
-                        overflow: "hidden",
+                        display: "flex",
+                        alignItems: "baseline",
+                        gap: "0.5rem",
+                        marginBottom: "1rem",
                       }}
                     >
-                      <div
+                      <p style={bigNumberStyle}>
+                        {Number(diversification.score || 0).toFixed(1)}
+                      </p>
+                      <p
                         style={{
-                          height: "100%",
-                          borderRadius: "999px",
-                          width: `${Math.min(100, ((Number(diversification.sectorScore) || 0) / 10) * 100)}%`,
-                          backgroundColor: "#f97316",
+                          margin: 0,
+                          fontSize: "0.88rem",
+                          color: "#94a3b8",
                         }}
-                      />
+                      >
+                        /10
+                      </p>
                     </div>
-                  </div>
-
-                  {/* Size Score */}
-                  <div>
-                    <p style={labelStyle}>
-                      Size Score:{" "}
-                      {Number(diversification.sizeScore || 0).toFixed(1)}/10
-                    </p>
-                    <div
+                    <p
                       style={{
-                        height: "6px",
-                        backgroundColor: "#1e293b",
-                        borderRadius: "999px",
-                        overflow: "hidden",
+                        margin: "0 0 1rem",
+                        fontSize: "0.88rem",
+                        color: "#cbd5e1",
                       }}
                     >
-                      <div
-                        style={{
-                          height: "100%",
-                          borderRadius: "999px",
-                          width: `${Math.min(100, ((Number(diversification.sizeScore) || 0) / 10) * 100)}%`,
-                          backgroundColor: "#f97316",
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Correlation Score */}
-                  <div>
-                    <p style={labelStyle}>
-                      Correlation Score:{" "}
-                      {Number(diversification.correlationScore || 0).toFixed(1)}
-                      /10
+                      {diversification.verdict || "Moderate"}
                     </p>
-                    <div
-                      style={{
-                        height: "6px",
-                        backgroundColor: "#1e293b",
-                        borderRadius: "999px",
-                        overflow: "hidden",
-                      }}
-                    >
-                      <div
-                        style={{
-                          height: "100%",
-                          borderRadius: "999px",
-                          width: `${Math.min(100, ((Number(diversification.correlationScore) || 0) / 10) * 100)}%`,
-                          backgroundColor: "#f97316",
-                        }}
-                      />
+
+                    {/* Sub-score progress bars */}
+                    <div style={{ display: "grid", gap: "0.75rem" }}>
+                      {/* Sector Score */}
+                      <div>
+                        <p style={labelStyle}>
+                          Sector Score:{" "}
+                          {Number(diversification.sectorScore || 0).toFixed(1)}
+                          /10
+                        </p>
+                        <div
+                          style={{
+                            height: "6px",
+                            backgroundColor: "#1e293b",
+                            borderRadius: "999px",
+                            overflow: "hidden",
+                          }}
+                        >
+                          <div
+                            style={{
+                              height: "100%",
+                              borderRadius: "999px",
+                              width: `${Math.min(100, ((Number(diversification.sectorScore) || 0) / 10) * 100)}%`,
+                              backgroundColor: "#f97316",
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Size Score */}
+                      <div>
+                        <p style={labelStyle}>
+                          Size Score:{" "}
+                          {Number(diversification.sizeScore || 0).toFixed(1)}/10
+                        </p>
+                        <div
+                          style={{
+                            height: "6px",
+                            backgroundColor: "#1e293b",
+                            borderRadius: "999px",
+                            overflow: "hidden",
+                          }}
+                        >
+                          <div
+                            style={{
+                              height: "100%",
+                              borderRadius: "999px",
+                              width: `${Math.min(100, ((Number(diversification.sizeScore) || 0) / 10) * 100)}%`,
+                              backgroundColor: "#f97316",
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Correlation Score */}
+                      <div>
+                        <p style={labelStyle}>
+                          Correlation Score:{" "}
+                          {Number(
+                            diversification.correlationScore || 0,
+                          ).toFixed(1)}
+                          /10
+                        </p>
+                        <div
+                          style={{
+                            height: "6px",
+                            backgroundColor: "#1e293b",
+                            borderRadius: "999px",
+                            overflow: "hidden",
+                          }}
+                        >
+                          <div
+                            style={{
+                              height: "100%",
+                              borderRadius: "999px",
+                              width: `${Math.min(100, ((Number(diversification.correlationScore) || 0) / 10) * 100)}%`,
+                              backgroundColor: "#f97316",
+                            }}
+                          />
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              </>
+                  </>
+                )}
+              </div>
             )}
-          </div>
+          </>
         )}
 
         {/* ========== 4. BENCHMARK VS NIFTY 50 ========== */}
-        {benchmark && (
+        {activeTab === "Benchmark" && benchmark && (
           <div style={cardStyle}>
             <h2 style={sectionTitleStyle}>Benchmark vs Nifty 50</h2>
 
@@ -644,458 +746,91 @@ const AnalyticsPage = () => {
               <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.88rem" }}>
                 Loading benchmark...
               </p>
+            ) : benchmark.timeSeries && benchmark.timeSeries.length > 0 ? (
+              <div>
+                <ResponsiveContainer width="100%" height={260}>
+                  <LineChart data={benchmark.timeSeries}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fontSize: 11, fill: "#94a3b8" }}
+                      stroke="#475569"
+                    />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: "#94a3b8" }}
+                      stroke="#475569"
+                      domain={["auto", "auto"]}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "#1e293b",
+                        border: "1px solid #475569",
+                        borderRadius: "0.5rem",
+                        padding: "0.75rem",
+                      }}
+                      labelStyle={{ color: "#cbd5e1", fontSize: "0.85rem" }}
+                      formatter={(v) => `${v.toFixed(1)}`}
+                      itemStyle={{ color: "#e2e8f0", fontSize: "0.85rem" }}
+                    />
+                    <Legend
+                      wrapperStyle={{ paddingTop: "1rem" }}
+                      iconType="line"
+                      textStyle={{ color: "#94a3b8", fontSize: "0.85rem" }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="portfolio"
+                      stroke="#f97316"
+                      dot={false}
+                      name="Your Portfolio"
+                      strokeWidth={2}
+                      isAnimationActive={false}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="nifty"
+                      stroke="#60a5fa"
+                      dot={false}
+                      name="Nifty 50"
+                      strokeWidth={2}
+                      isAnimationActive={false}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
             ) : (
-              <>
-                {/* Verdict */}
-                <div
-                  style={{
-                    borderRadius: "0.75rem",
-                    padding: "0.75rem",
-                    marginBottom: "1rem",
-                    border: benchmark.outperforming
-                      ? "1px solid rgba(34,197,94,0.4)"
-                      : "1px solid rgba(239,68,68,0.4)",
-                    backgroundColor: benchmark.outperforming
-                      ? "rgba(34,197,94,0.1)"
-                      : "rgba(239,68,68,0.1)",
-                  }}
-                >
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: "0.88rem",
-                      fontWeight: 600,
-                      color: benchmark.outperforming ? "#4ade80" : "#f87171",
-                    }}
-                  >
-                    {benchmark.verdict || "Benchmark comparison unavailable"}
-                  </p>
-                </div>
-
-                {benchmark.startDate && (
-                  <p
-                    style={{
-                      margin: "-0.5rem 0 1rem",
-                      fontSize: "0.75rem",
-                      color: "#94a3b8",
-                    }}
-                  >
-                    Measuring from{" "}
-                    {new Date(benchmark.startDate).toLocaleDateString("en-IN", {
-                      day: "numeric",
-                      month: "short",
-                      year: "numeric",
-                    })}
-                    {benchmark.daysHeld
-                      ? ` · ${benchmark.daysHeld} days held`
-                      : ""}
-                    {benchmark.isShortPeriod
-                      ? " · Showing total return (holding period < 90 days)"
-                      : ""}
-                  </p>
-                )}
-
-                {/* CAGR Comparison */}
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: "0.75rem",
-                  }}
-                >
-                  <div
-                    style={{
-                      borderRadius: "0.75rem",
-                      border: "1px solid rgba(255,255,255,0.1)",
-                      backgroundColor: "rgba(30,41,59,0.3)",
-                      padding: "0.75rem",
-                    }}
-                  >
-                    <p style={labelStyle}>Your Portfolio</p>
-                    <p
-                      style={{
-                        ...numberStyle,
-                        margin: "0 0 0.15rem",
-                        fontSize: "1.75rem",
-                        fontWeight: 700,
-                        color: "#f97316",
-                      }}
-                    >
-                      {formatPercent(benchmark.userCAGR || 0)}
-                    </p>
-                    <p
-                      style={{
-                        margin: "0.25rem 0 0",
-                        fontSize: "0.75rem",
-                        color: "#64748b",
-                      }}
-                    >
-                      {benchmark.returnLabel || "CAGR"}
-                    </p>
-                  </div>
-                  <div
-                    style={{
-                      borderRadius: "0.75rem",
-                      border: "1px solid rgba(255,255,255,0.1)",
-                      backgroundColor: "rgba(30,41,59,0.3)",
-                      padding: "0.75rem",
-                    }}
-                  >
-                    <p style={labelStyle}>Nifty 50</p>
-                    <p
-                      style={{
-                        ...numberStyle,
-                        margin: "0 0 0.15rem",
-                        fontSize: "1.75rem",
-                        fontWeight: 700,
-                        color: "#60a5fa",
-                      }}
-                    >
-                      {formatPercent(benchmark.niftyCAGR || 0)}
-                    </p>
-                    <p
-                      style={{
-                        margin: "0.25rem 0 0",
-                        fontSize: "0.75rem",
-                        color: "#64748b",
-                      }}
-                    >
-                      {benchmark.returnLabel || "CAGR"}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Time Series Chart */}
-                {benchmark.timeSeries && benchmark.timeSeries.length > 0 && (
-                  <div style={{ marginTop: "1.5rem" }}>
-                    <h3
-                      style={{
-                        margin: "0 0 1rem",
-                        fontSize: "0.95rem",
-                        fontWeight: 600,
-                        color: "#cbd5e1",
-                      }}
-                    >
-                      Performance Over Time (Normalized to 100)
-                    </h3>
-                    <ResponsiveContainer width="100%" height={240}>
-                      <LineChart data={benchmark.timeSeries}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                        <XAxis
-                          dataKey="date"
-                          tick={{ fontSize: 11, fill: "#94a3b8" }}
-                          stroke="#475569"
-                        />
-                        <YAxis
-                          tick={{ fontSize: 11, fill: "#94a3b8" }}
-                          stroke="#475569"
-                          domain={["auto", "auto"]}
-                        />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: "#1e293b",
-                            border: "1px solid #475569",
-                            borderRadius: "0.5rem",
-                            padding: "0.75rem",
-                          }}
-                          labelStyle={{ color: "#cbd5e1", fontSize: "0.85rem" }}
-                          formatter={(v) => `${v.toFixed(1)}`}
-                          itemStyle={{ color: "#e2e8f0", fontSize: "0.85rem" }}
-                        />
-                        <Legend
-                          wrapperStyle={{ paddingTop: "1rem" }}
-                          iconType="line"
-                          textStyle={{ color: "#94a3b8", fontSize: "0.85rem" }}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="portfolio"
-                          stroke="#f97316"
-                          dot={false}
-                          name="Your Portfolio"
-                          strokeWidth={2}
-                          isAnimationActive={false}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="nifty"
-                          stroke="#60a5fa"
-                          dot={false}
-                          name="Nifty 50"
-                          strokeWidth={2}
-                          isAnimationActive={false}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
-              </>
+              <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.88rem" }}>
+                Benchmark comparison unavailable
+              </p>
             )}
           </div>
         )}
 
         {/* ========== 5. STRESS TEST ========== */}
-        <div style={cardStyle}>
-          <h2
-            style={{
-              margin: "0 0 0.25rem",
-              fontSize: "1.1rem",
-              fontWeight: 700,
-              color: "#f8fafc",
-            }}
-          >
-            Stress Test
-          </h2>
-          <p
-            style={{
-              margin: "0 0 1rem",
-              color: "#94a3b8",
-              fontSize: "0.85rem",
-            }}
-          >
-            See your estimated portfolio impact under market crash scenarios
-          </p>
-
-          {!stressAnalysed && !loadingStress && (
-            <button
-              type="button"
-              onClick={onAnalyseStress}
-              style={{
-                width: "100%",
-                border: "none",
-                borderRadius: "0.85rem",
-                backgroundColor: "#f97316",
-                color: "#ffffff",
-                padding: "0.85rem 1rem",
-                fontWeight: 900,
-                letterSpacing: "0.12em",
-                textTransform: "uppercase",
-                cursor: "pointer",
-                fontFamily: "'DM Sans', sans-serif",
-                fontSize: "0.9rem",
-              }}
-            >
-              Analyse Scenarios
-            </button>
-          )}
-
-          {loadingStress && (
-            <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.88rem" }}>
-              Running scenarios...
-            </p>
-          )}
-
-          {stressAnalysed && stressData && (
-            <>
-              <div style={{ display: "grid", gap: "0.75rem" }}>
-                {(stressData?.scenarios || [])
-                  .filter((s) => s.id !== "custom")
-                  .map((scenario) => {
-                    const isLoss = scenario.total_portfolio_loss < 0;
-                    return (
-                      <div
-                        key={scenario.id}
-                        style={{
-                          borderRadius: "0.75rem",
-                          border: "1px solid rgba(255,255,255,0.1)",
-                          backgroundColor: "rgba(30,41,59,0.3)",
-                          padding: "0.75rem",
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            gap: "0.75rem",
-                          }}
-                        >
-                          <div>
-                            <p
-                              style={{
-                                margin: 0,
-                                fontSize: "0.95rem",
-                                fontWeight: 700,
-                                color: "#f8fafc",
-                              }}
-                            >
-                              {scenario.name}
-                            </p>
-                            <p
-                              style={{
-                                margin: "0.2rem 0 0",
-                                fontSize: "0.8rem",
-                                color: "#94a3b8",
-                              }}
-                            >
-                              {scenario.description}
-                            </p>
-                          </div>
-
-                          <div style={{ textAlign: "right" }}>
-                            <p
-                              style={{
-                                margin: 0,
-                                fontSize: "1rem",
-                                fontWeight: 700,
-                                color: isLoss ? "#f87171" : "#4ade80",
-                              }}
-                            >
-                              {scenario.total_portfolio_loss_pct > 0 ? "+" : ""}
-                              {scenario.total_portfolio_loss_pct}%
-                            </p>
-                            <p
-                              style={{
-                                margin: "0.2rem 0 0",
-                                fontSize: "0.82rem",
-                                color: "#cbd5e1",
-                              }}
-                            >
-                              ₹
-                              {Math.abs(
-                                scenario.total_portfolio_loss,
-                              ).toLocaleString("en-IN", {
-                                maximumFractionDigits: 0,
-                              })}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-              </div>
-
-              <div
+        {activeTab === "Risk" && (
+          <>
+            <div style={cardStyle}>
+              <h2
                 style={{
-                  marginTop: "1rem",
-                  borderRadius: "0.85rem",
-                  border: "1px solid rgba(255,255,255,0.12)",
-                  backgroundColor: "rgba(15,23,42,0.45)",
-                  padding: "0.85rem",
-                  display: "grid",
-                  gap: "0.75rem",
+                  margin: "0 0 0.25rem",
+                  fontSize: "1.1rem",
+                  fontWeight: 700,
+                  color: "#f8fafc",
                 }}
               >
-                <p
-                  style={{
-                    margin: 0,
-                    fontSize: "0.75rem",
-                    color: "#94a3b8",
-                    letterSpacing: "0.1em",
-                    fontWeight: 700,
-                  }}
-                >
-                  CUSTOM SCENARIO
-                </p>
+                Stress Test
+              </h2>
+              <p
+                style={{
+                  margin: "0 0 1rem",
+                  color: "#94a3b8",
+                  fontSize: "0.85rem",
+                }}
+              >
+                See your estimated portfolio impact under market crash scenarios
+              </p>
 
-                <p style={{ margin: 0, fontSize: "0.82rem", color: "#cbd5e1" }}>
-                  Enter a negative number (e.g. -25 means market falls 25%)
-                </p>
-
-                <div style={{ display: "grid", gap: "0.6rem" }}>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    step="0.1"
-                    min="-99"
-                    max="-0.1"
-                    placeholder="-25"
-                    value={customShock}
-                    onChange={(e) => setCustomShock(e.target.value)}
-                    style={{
-                      width: "100%",
-                      backgroundColor: "#0f172a",
-                      border: "1px solid rgba(255,255,255,0.15)",
-                      borderRadius: "0.75rem",
-                      padding: "0.7rem 0.85rem",
-                      color: "#e5e7eb",
-                      fontSize: "1rem",
-                      boxSizing: "border-box",
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={onRunCustomStress}
-                    disabled={
-                      runningCustom ||
-                      !customShock ||
-                      parseFloat(customShock) >= 0
-                    }
-                    style={{
-                      width: "100%",
-                      border: "none",
-                      borderRadius: "0.75rem",
-                      backgroundColor: runningCustom ? "#ea580c" : "#f97316",
-                      color: "#fff",
-                      padding: "0.7rem 1rem",
-                      fontWeight: 700,
-                      cursor:
-                        runningCustom ||
-                        !customShock ||
-                        parseFloat(customShock) >= 0
-                          ? "not-allowed"
-                          : "pointer",
-                      opacity:
-                        runningCustom ||
-                        !customShock ||
-                        parseFloat(customShock) >= 0
-                          ? 0.6
-                          : 1,
-                      fontSize: "0.9rem",
-                    }}
-                  >
-                    {runningCustom ? "Calculating..." : "Run Custom Scenario"}
-                  </button>
-                </div>
-
-                {customResult && (
-                  <div
-                    style={{
-                      borderRadius: "0.75rem",
-                      border: "1px solid rgba(255,255,255,0.1)",
-                      backgroundColor: "rgba(30,41,59,0.3)",
-                      padding: "0.75rem",
-                      display: "grid",
-                      gap: "0.25rem",
-                    }}
-                  >
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: "0.95rem",
-                        fontWeight: 700,
-                        color: "#f8fafc",
-                      }}
-                    >
-                      {customResult.name}
-                    </p>
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: "1rem",
-                        fontWeight: 700,
-                        color: "#f87171",
-                      }}
-                    >
-                      {customResult.total_portfolio_loss_pct}%
-                    </p>
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: "0.82rem",
-                        color: "#cbd5e1",
-                      }}
-                    >
-                      Estimated loss: ₹
-                      {Math.abs(
-                        customResult.total_portfolio_loss,
-                      ).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              <div style={{ marginTop: "1rem" }}>
+              {!stressAnalysed && !loadingStress && (
                 <button
                   type="button"
                   onClick={onAnalyseStress}
@@ -1114,359 +849,618 @@ const AnalyticsPage = () => {
                     fontSize: "0.9rem",
                   }}
                 >
-                  Refresh
+                  Analyse Scenarios
                 </button>
-              </div>
-            </>
-          )}
-        </div>
+              )}
 
-        {/* ========== 6. RISK DECOMPOSITION ========== */}
-        <div style={cardStyle}>
-          <h2
-            style={{
-              margin: "0 0 0.25rem",
-              fontSize: "1.1rem",
-              fontWeight: 700,
-              color: "#f8fafc",
-            }}
-          >
-            Portfolio Risk Decomposition
-          </h2>
-          <p
-            style={{
-              margin: "0 0 1rem",
-              color: "#94a3b8",
-              fontSize: "0.85rem",
-            }}
-          >
-            What is driving your portfolio's volatility?
-          </p>
+              {loadingStress && (
+                <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.88rem" }}>
+                  Running scenarios...
+                </p>
+              )}
 
-          {loadingRisk ? (
-            <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.88rem" }}>
-              Calculating risk components...
-            </p>
-          ) : !riskData || riskData.systematic_pct === null ? (
-            <div
-              style={{
-                borderRadius: "0.75rem",
-                border: "1px solid rgba(248,113,113,0.35)",
-                backgroundColor: "rgba(127,29,29,0.2)",
-                padding: "0.85rem",
-              }}
-            >
-              <p style={{ margin: 0, color: "#fca5a5", fontSize: "0.88rem" }}>
-                {riskData?.verdict ||
-                  "Risk decomposition is unavailable right now."}
-              </p>
+              {stressAnalysed && stressData && (
+                <>
+                  <div style={{ display: "grid", gap: "0.75rem" }}>
+                    {(stressData?.scenarios || [])
+                      .filter((s) => s.id !== "custom")
+                      .map((scenario) => {
+                        const isLoss = scenario.total_portfolio_loss < 0;
+                        return (
+                          <div
+                            key={scenario.id}
+                            style={{
+                              borderRadius: "0.75rem",
+                              border: "1px solid rgba(255,255,255,0.1)",
+                              backgroundColor: "rgba(30,41,59,0.3)",
+                              padding: "0.75rem",
+                            }}
+                          >
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                gap: "0.75rem",
+                              }}
+                            >
+                              <div>
+                                <p
+                                  style={{
+                                    margin: 0,
+                                    fontSize: "0.95rem",
+                                    fontWeight: 700,
+                                    color: "#f8fafc",
+                                  }}
+                                >
+                                  {scenario.name}
+                                </p>
+                                <p
+                                  style={{
+                                    margin: "0.2rem 0 0",
+                                    fontSize: "0.8rem",
+                                    color: "#94a3b8",
+                                  }}
+                                >
+                                  {scenario.description}
+                                </p>
+                              </div>
+
+                              <div style={{ textAlign: "right" }}>
+                                <p
+                                  style={{
+                                    margin: 0,
+                                    fontSize: "1rem",
+                                    fontWeight: 700,
+                                    color: isLoss ? "#f87171" : "#4ade80",
+                                  }}
+                                >
+                                  {scenario.total_portfolio_loss_pct > 0
+                                    ? "+"
+                                    : ""}
+                                  {scenario.total_portfolio_loss_pct}%
+                                </p>
+                                <p
+                                  style={{
+                                    margin: "0.2rem 0 0",
+                                    fontSize: "0.82rem",
+                                    color: "#cbd5e1",
+                                  }}
+                                >
+                                  ₹
+                                  {Math.abs(
+                                    scenario.total_portfolio_loss,
+                                  ).toLocaleString("en-IN", {
+                                    maximumFractionDigits: 0,
+                                  })}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: "1rem",
+                      borderRadius: "0.85rem",
+                      border: "1px solid rgba(255,255,255,0.12)",
+                      backgroundColor: "rgba(15,23,42,0.45)",
+                      padding: "0.85rem",
+                      display: "grid",
+                      gap: "0.75rem",
+                    }}
+                  >
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: "0.75rem",
+                        color: "#94a3b8",
+                        letterSpacing: "0.1em",
+                        fontWeight: 700,
+                      }}
+                    >
+                      CUSTOM SCENARIO
+                    </p>
+
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: "0.82rem",
+                        color: "#cbd5e1",
+                      }}
+                    >
+                      Enter a negative number (e.g. -25 means market falls 25%)
+                    </p>
+
+                    <div style={{ display: "grid", gap: "0.6rem" }}>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        step="0.1"
+                        min="-99"
+                        max="-0.1"
+                        placeholder="-25"
+                        value={customShock}
+                        onChange={(e) => setCustomShock(e.target.value)}
+                        style={{
+                          width: "100%",
+                          backgroundColor: "#0f172a",
+                          border: "1px solid rgba(255,255,255,0.15)",
+                          borderRadius: "0.75rem",
+                          padding: "0.7rem 0.85rem",
+                          color: "#e5e7eb",
+                          fontSize: "1rem",
+                          boxSizing: "border-box",
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={onRunCustomStress}
+                        disabled={
+                          runningCustom ||
+                          !customShock ||
+                          parseFloat(customShock) >= 0
+                        }
+                        style={{
+                          width: "100%",
+                          border: "none",
+                          borderRadius: "0.75rem",
+                          backgroundColor: runningCustom
+                            ? "#ea580c"
+                            : "#f97316",
+                          color: "#fff",
+                          padding: "0.7rem 1rem",
+                          fontWeight: 700,
+                          cursor:
+                            runningCustom ||
+                            !customShock ||
+                            parseFloat(customShock) >= 0
+                              ? "not-allowed"
+                              : "pointer",
+                          opacity:
+                            runningCustom ||
+                            !customShock ||
+                            parseFloat(customShock) >= 0
+                              ? 0.6
+                              : 1,
+                          fontSize: "0.9rem",
+                        }}
+                      >
+                        {runningCustom
+                          ? "Calculating..."
+                          : "Run Custom Scenario"}
+                      </button>
+                    </div>
+
+                    {customResult && (
+                      <div
+                        style={{
+                          borderRadius: "0.75rem",
+                          border: "1px solid rgba(255,255,255,0.1)",
+                          backgroundColor: "rgba(30,41,59,0.3)",
+                          padding: "0.75rem",
+                          display: "grid",
+                          gap: "0.25rem",
+                        }}
+                      >
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: "0.95rem",
+                            fontWeight: 700,
+                            color: "#f8fafc",
+                          }}
+                        >
+                          {customResult.name}
+                        </p>
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: "1rem",
+                            fontWeight: 700,
+                            color: "#f87171",
+                          }}
+                        >
+                          {customResult.total_portfolio_loss_pct}%
+                        </p>
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: "0.82rem",
+                            color: "#cbd5e1",
+                          }}
+                        >
+                          Estimated loss: ₹
+                          {Math.abs(
+                            customResult.total_portfolio_loss,
+                          ).toLocaleString("en-IN", {
+                            maximumFractionDigits: 0,
+                          })}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ marginTop: "1rem" }}>
+                    <button
+                      type="button"
+                      onClick={onAnalyseStress}
+                      style={{
+                        width: "100%",
+                        border: "none",
+                        borderRadius: "0.85rem",
+                        backgroundColor: "#f97316",
+                        color: "#ffffff",
+                        padding: "0.85rem 1rem",
+                        fontWeight: 900,
+                        letterSpacing: "0.12em",
+                        textTransform: "uppercase",
+                        cursor: "pointer",
+                        fontFamily: "'DM Sans', sans-serif",
+                        fontSize: "0.9rem",
+                      }}
+                    >
+                      Refresh
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
-          ) : (
-            <>
-              <div
+
+            {/* ========== 6. RISK DECOMPOSITION ========== */}
+            <div style={cardStyle}>
+              <h2
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: "0.75rem",
-                  marginBottom: "0.85rem",
+                  margin: "0 0 0.25rem",
+                  fontSize: "1.1rem",
+                  fontWeight: 700,
+                  color: "#f8fafc",
                 }}
               >
+                Portfolio Risk Decomposition
+              </h2>
+              <p
+                style={{
+                  margin: "0 0 1rem",
+                  color: "#94a3b8",
+                  fontSize: "0.85rem",
+                }}
+              >
+                What is driving your portfolio's volatility?
+              </p>
+
+              {loadingRisk ? (
+                <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.88rem" }}>
+                  Calculating risk components...
+                </p>
+              ) : !riskData || riskData.systematic_pct === null ? (
                 <div
                   style={{
                     borderRadius: "0.75rem",
-                    border: "1px solid rgba(255,255,255,0.1)",
-                    backgroundColor: "rgba(30,41,59,0.3)",
-                    padding: "0.75rem",
+                    border: "1px solid rgba(248,113,113,0.35)",
+                    backgroundColor: "rgba(127,29,29,0.2)",
+                    padding: "0.85rem",
                   }}
                 >
-                  <p style={labelStyle}>Portfolio Volatility</p>
+                  <p
+                    style={{ margin: 0, color: "#fca5a5", fontSize: "0.88rem" }}
+                  >
+                    {riskData?.verdict ||
+                      "Risk decomposition is unavailable right now."}
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "0.75rem",
+                      marginBottom: "0.85rem",
+                    }}
+                  >
+                    <div
+                      style={{
+                        borderRadius: "0.75rem",
+                        border: "1px solid rgba(255,255,255,0.1)",
+                        backgroundColor: "rgba(30,41,59,0.3)",
+                        padding: "0.75rem",
+                      }}
+                    >
+                      <p style={labelStyle}>Portfolio Volatility</p>
+                      <p
+                        style={{
+                          ...numberStyle,
+                          margin: 0,
+                          fontSize: "1.55rem",
+                          fontWeight: 700,
+                          color: "#f97316",
+                        }}
+                      >
+                        {formatPercent(riskData.portfolio_vol_pct || 0)}
+                      </p>
+                    </div>
+                    <div
+                      style={{
+                        borderRadius: "0.75rem",
+                        border: "1px solid rgba(255,255,255,0.1)",
+                        backgroundColor: "rgba(30,41,59,0.3)",
+                        padding: "0.75rem",
+                      }}
+                    >
+                      <p style={labelStyle}>Systematic Risk</p>
+                      <p
+                        style={{
+                          ...numberStyle,
+                          margin: 0,
+                          fontSize: "1.55rem",
+                          fontWeight: 700,
+                          color: "#60a5fa",
+                        }}
+                      >
+                        {formatPercent(riskData.systematic_pct || 0)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div style={{ display: "grid", gap: "0.75rem" }}>
+                    <div>
+                      <p style={labelStyle}>Systematic (Market)</p>
+                      <div
+                        style={{
+                          height: "7px",
+                          backgroundColor: "#1e293b",
+                          borderRadius: "999px",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <div
+                          style={{
+                            height: "100%",
+                            borderRadius: "999px",
+                            width: `${Math.min(100, Number(riskData.systematic_pct) || 0)}%`,
+                            backgroundColor: "#60a5fa",
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <p style={labelStyle}>Sector Concentration</p>
+                      <div
+                        style={{
+                          height: "7px",
+                          backgroundColor: "#1e293b",
+                          borderRadius: "999px",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <div
+                          style={{
+                            height: "100%",
+                            borderRadius: "999px",
+                            width: `${Math.min(100, Number(riskData.sector_concentration_pct) || 0)}%`,
+                            backgroundColor: "#f59e0b",
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <p style={labelStyle}>Idiosyncratic (Stock-Specific)</p>
+                      <div
+                        style={{
+                          height: "7px",
+                          backgroundColor: "#1e293b",
+                          borderRadius: "999px",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <div
+                          style={{
+                            height: "100%",
+                            borderRadius: "999px",
+                            width: `${Math.min(100, Number(riskData.idiosyncratic_pct) || 0)}%`,
+                            backgroundColor: "#34d399",
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: "0.85rem",
+                      borderRadius: "0.75rem",
+                      border: "1px solid rgba(56,189,248,0.35)",
+                      backgroundColor: "rgba(14,116,144,0.15)",
+                      padding: "0.8rem",
+                    }}
+                  >
+                    <p
+                      style={{
+                        margin: 0,
+                        color: "#bae6fd",
+                        fontSize: "0.86rem",
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      {riskData.verdict ||
+                        "Risk decomposition calculated successfully."}
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* ========== 7. REBALANCING ADVISOR ========== */}
+        {activeTab === "Risk" && (
+          <div
+            style={{
+              borderRadius: "1rem",
+              border: "1px solid rgba(255,255,255,0.08)",
+              backgroundColor: "rgba(15,23,42,0.6)",
+              backdropFilter: "blur(8px)",
+              padding: "1.25rem",
+            }}
+          >
+            <h2
+              style={{
+                margin: "0 0 0.25rem",
+                fontSize: "1.1rem",
+                fontWeight: 700,
+                color: "#f8fafc",
+              }}
+            >
+              Rebalancing Advisor
+            </h2>
+            <p
+              style={{
+                margin: "0 0 1rem",
+                color: "#94a3b8",
+                fontSize: "0.85rem",
+              }}
+            >
+              AI-powered advice grounded in your actual portfolio data
+            </p>
+
+            <button
+              type="button"
+              onClick={onGetAdvice}
+              disabled={adviceLoading}
+              style={{
+                width: "100%",
+                border: "none",
+                borderRadius: "0.85rem",
+                backgroundColor: adviceLoading ? "#ea580c" : "#f97316",
+                color: "#ffffff",
+                padding: "0.85rem 1rem",
+                fontWeight: 900,
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+                cursor: adviceLoading ? "not-allowed" : "pointer",
+                opacity: adviceLoading ? 0.85 : 1,
+                fontFamily: "'DM Sans', sans-serif",
+                fontSize: "0.9rem",
+              }}
+            >
+              {adviceLoading ? "Analysing..." : "Get Rebalancing Advice"}
+            </button>
+
+            <p
+              style={{
+                margin: "0.5rem 0 0",
+                color: "#6b7280",
+                fontSize: "0.75rem",
+              }}
+            >
+              This is AI-generated analysis, not financial advice
+            </p>
+
+            {adviceError && (
+              <p
+                style={{
+                  margin: "0.75rem 0 0",
+                  color: "#fca5a5",
+                  fontSize: "0.875rem",
+                }}
+              >
+                {adviceError}
+              </p>
+            )}
+
+            {!adviceLoading && adviceText && (
+              <div
+                style={{
+                  marginTop: "1rem",
+                  borderRadius: "0.85rem",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  backgroundColor: "rgba(2,6,23,0.55)",
+                  padding: "1rem",
+                  display: "grid",
+                  gap: "0.85rem",
+                }}
+              >
+                <div style={{ display: "grid", gap: "0.3rem" }}>
+                  <h3
+                    style={{
+                      margin: 0,
+                      fontSize: "1rem",
+                      fontWeight: 700,
+                      color: "#22c55e",
+                    }}
+                  >
+                    What You Did Well
+                  </h3>
                   <p
                     style={{
-                      ...numberStyle,
                       margin: 0,
-                      fontSize: "1.55rem",
+                      color: "#ffffff",
+                      fontSize: "0.95rem",
+                      lineHeight: 1.7,
+                      whiteSpace: "pre-wrap",
+                      fontFamily: "'DM Sans', sans-serif",
+                    }}
+                  >
+                    {parsedAdvice.well || "No details provided."}
+                  </p>
+                </div>
+                <div style={{ display: "grid", gap: "0.3rem" }}>
+                  <h3
+                    style={{
+                      margin: 0,
+                      fontSize: "1rem",
+                      fontWeight: 700,
+                      color: "#ef4444",
+                    }}
+                  >
+                    Key Risks
+                  </h3>
+                  <p
+                    style={{
+                      margin: 0,
+                      color: "#ffffff",
+                      fontSize: "0.95rem",
+                      lineHeight: 1.7,
+                      whiteSpace: "pre-wrap",
+                      fontFamily: "'DM Sans', sans-serif",
+                    }}
+                  >
+                    {parsedAdvice.risks || "No details provided."}
+                  </p>
+                </div>
+                <div style={{ display: "grid", gap: "0.3rem" }}>
+                  <h3
+                    style={{
+                      margin: 0,
+                      fontSize: "1rem",
                       fontWeight: 700,
                       color: "#f97316",
                     }}
                   >
-                    {formatPercent(riskData.portfolio_vol_pct || 0)}
-                  </p>
-                </div>
-                <div
-                  style={{
-                    borderRadius: "0.75rem",
-                    border: "1px solid rgba(255,255,255,0.1)",
-                    backgroundColor: "rgba(30,41,59,0.3)",
-                    padding: "0.75rem",
-                  }}
-                >
-                  <p style={labelStyle}>Systematic Risk</p>
+                    Rebalancing Steps
+                  </h3>
                   <p
                     style={{
-                      ...numberStyle,
                       margin: 0,
-                      fontSize: "1.55rem",
-                      fontWeight: 700,
-                      color: "#60a5fa",
+                      color: "#ffffff",
+                      fontSize: "0.95rem",
+                      lineHeight: 1.7,
+                      whiteSpace: "pre-wrap",
+                      fontFamily: "'DM Sans', sans-serif",
                     }}
                   >
-                    {formatPercent(riskData.systematic_pct || 0)}
+                    {parsedAdvice.steps || "No details provided."}
                   </p>
                 </div>
               </div>
-
-              <div style={{ display: "grid", gap: "0.75rem" }}>
-                <div>
-                  <p style={labelStyle}>Systematic (Market)</p>
-                  <div
-                    style={{
-                      height: "7px",
-                      backgroundColor: "#1e293b",
-                      borderRadius: "999px",
-                      overflow: "hidden",
-                    }}
-                  >
-                    <div
-                      style={{
-                        height: "100%",
-                        borderRadius: "999px",
-                        width: `${Math.min(100, Number(riskData.systematic_pct) || 0)}%`,
-                        backgroundColor: "#60a5fa",
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <p style={labelStyle}>Sector Concentration</p>
-                  <div
-                    style={{
-                      height: "7px",
-                      backgroundColor: "#1e293b",
-                      borderRadius: "999px",
-                      overflow: "hidden",
-                    }}
-                  >
-                    <div
-                      style={{
-                        height: "100%",
-                        borderRadius: "999px",
-                        width: `${Math.min(100, Number(riskData.sector_concentration_pct) || 0)}%`,
-                        backgroundColor: "#f59e0b",
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <p style={labelStyle}>Idiosyncratic (Stock-Specific)</p>
-                  <div
-                    style={{
-                      height: "7px",
-                      backgroundColor: "#1e293b",
-                      borderRadius: "999px",
-                      overflow: "hidden",
-                    }}
-                  >
-                    <div
-                      style={{
-                        height: "100%",
-                        borderRadius: "999px",
-                        width: `${Math.min(100, Number(riskData.idiosyncratic_pct) || 0)}%`,
-                        backgroundColor: "#34d399",
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div
-                style={{
-                  marginTop: "0.85rem",
-                  borderRadius: "0.75rem",
-                  border: "1px solid rgba(56,189,248,0.35)",
-                  backgroundColor: "rgba(14,116,144,0.15)",
-                  padding: "0.8rem",
-                }}
-              >
-                <p
-                  style={{
-                    margin: 0,
-                    color: "#bae6fd",
-                    fontSize: "0.86rem",
-                    lineHeight: 1.5,
-                  }}
-                >
-                  {riskData.verdict ||
-                    "Risk decomposition calculated successfully."}
-                </p>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* ========== 7. REBALANCING ADVISOR ========== */}
-        <div
-          style={{
-            borderRadius: "1rem",
-            border: "1px solid rgba(255,255,255,0.08)",
-            backgroundColor: "rgba(15,23,42,0.6)",
-            backdropFilter: "blur(8px)",
-            padding: "1.25rem",
-          }}
-        >
-          <h2
-            style={{
-              margin: "0 0 0.25rem",
-              fontSize: "1.1rem",
-              fontWeight: 700,
-              color: "#f8fafc",
-            }}
-          >
-            Rebalancing Advisor
-          </h2>
-          <p
-            style={{
-              margin: "0 0 1rem",
-              color: "#94a3b8",
-              fontSize: "0.85rem",
-            }}
-          >
-            AI-powered advice grounded in your actual portfolio data
-          </p>
-
-          <button
-            type="button"
-            onClick={onGetAdvice}
-            disabled={adviceLoading}
-            style={{
-              width: "100%",
-              border: "none",
-              borderRadius: "0.85rem",
-              backgroundColor: adviceLoading ? "#ea580c" : "#f97316",
-              color: "#ffffff",
-              padding: "0.85rem 1rem",
-              fontWeight: 900,
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-              cursor: adviceLoading ? "not-allowed" : "pointer",
-              opacity: adviceLoading ? 0.85 : 1,
-              fontFamily: "'DM Sans', sans-serif",
-              fontSize: "0.9rem",
-            }}
-          >
-            {adviceLoading ? "Analysing..." : "Get Rebalancing Advice"}
-          </button>
-
-          <p
-            style={{
-              margin: "0.5rem 0 0",
-              color: "#6b7280",
-              fontSize: "0.75rem",
-            }}
-          >
-            This is AI-generated analysis, not financial advice
-          </p>
-
-          {adviceError && (
-            <p
-              style={{
-                margin: "0.75rem 0 0",
-                color: "#fca5a5",
-                fontSize: "0.875rem",
-              }}
-            >
-              {adviceError}
-            </p>
-          )}
-
-          {!adviceLoading && adviceText && (
-            <div
-              style={{
-                marginTop: "1rem",
-                borderRadius: "0.85rem",
-                border: "1px solid rgba(255,255,255,0.08)",
-                backgroundColor: "rgba(2,6,23,0.55)",
-                padding: "1rem",
-                display: "grid",
-                gap: "0.85rem",
-              }}
-            >
-              <div style={{ display: "grid", gap: "0.3rem" }}>
-                <h3
-                  style={{
-                    margin: 0,
-                    fontSize: "1rem",
-                    fontWeight: 700,
-                    color: "#22c55e",
-                  }}
-                >
-                  What You Did Well
-                </h3>
-                <p
-                  style={{
-                    margin: 0,
-                    color: "#ffffff",
-                    fontSize: "0.95rem",
-                    lineHeight: 1.7,
-                    whiteSpace: "pre-wrap",
-                    fontFamily: "'DM Sans', sans-serif",
-                  }}
-                >
-                  {parsedAdvice.well || "No details provided."}
-                </p>
-              </div>
-              <div style={{ display: "grid", gap: "0.3rem" }}>
-                <h3
-                  style={{
-                    margin: 0,
-                    fontSize: "1rem",
-                    fontWeight: 700,
-                    color: "#ef4444",
-                  }}
-                >
-                  Key Risks
-                </h3>
-                <p
-                  style={{
-                    margin: 0,
-                    color: "#ffffff",
-                    fontSize: "0.95rem",
-                    lineHeight: 1.7,
-                    whiteSpace: "pre-wrap",
-                    fontFamily: "'DM Sans', sans-serif",
-                  }}
-                >
-                  {parsedAdvice.risks || "No details provided."}
-                </p>
-              </div>
-              <div style={{ display: "grid", gap: "0.3rem" }}>
-                <h3
-                  style={{
-                    margin: 0,
-                    fontSize: "1rem",
-                    fontWeight: 700,
-                    color: "#f97316",
-                  }}
-                >
-                  Rebalancing Steps
-                </h3>
-                <p
-                  style={{
-                    margin: 0,
-                    color: "#ffffff",
-                    fontSize: "0.95rem",
-                    lineHeight: 1.7,
-                    whiteSpace: "pre-wrap",
-                    fontFamily: "'DM Sans', sans-serif",
-                  }}
-                >
-                  {parsedAdvice.steps || "No details provided."}
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

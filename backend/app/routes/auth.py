@@ -1,4 +1,5 @@
 import os
+import re
 from datetime import datetime, timedelta
 from pathlib import Path
 from datetime import timezone
@@ -8,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from jose import jwt
 from passlib.context import CryptContext
 from motor.motor_asyncio import AsyncIOMotorCollection
+from pydantic import BaseModel, Field
 
 from app.deps import get_users_collection
 from app.middleware.auth import get_current_user
@@ -24,6 +26,15 @@ ACCESS_TOKEN_EXPIRE_DAYS = 7
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 router = APIRouter(tags=["auth"])
+
+
+class UpdateUsernameRequest(BaseModel):
+    new_username: str = Field(..., min_length=3, max_length=30)
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(..., min_length=8)
 
 def _get_jwt_secret() -> str:
     jwt_secret = os.getenv("JWT_SECRET")
@@ -110,3 +121,61 @@ async def login(
 @router.get("/me", response_model=UserResponse)
 async def me(current_user: dict = Depends(get_current_user)):
     return _to_user_response(current_user)
+
+
+@router.put("/update-username")
+async def update_username(
+    payload: UpdateUsernameRequest,
+    current_user: dict = Depends(get_current_user),
+    users_collection: AsyncIOMotorCollection = Depends(get_users_collection),
+):
+    existing_user = await users_collection.find_one(
+        {
+            "username": {
+                "$regex": f"^{re.escape(payload.new_username)}$",
+                "$options": "i",
+            },
+            "_id": {"$ne": current_user.get("_id")},
+        }
+    )
+
+    if existing_user is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Username already exists",
+        )
+
+    await users_collection.update_one(
+        {"_id": current_user.get("_id")},
+        {"$set": {"username": payload.new_username}},
+    )
+
+    return {"message": "Username updated successfully"}
+
+
+@router.put("/change-password")
+async def change_password(
+    payload: ChangePasswordRequest,
+    current_user: dict = Depends(get_current_user),
+    users_collection: AsyncIOMotorCollection = Depends(get_users_collection),
+):
+    user = await users_collection.find_one({"_id": current_user.get("_id")})
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    if not pwd_context.verify(payload.current_password, user.get("password", "")):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Current password is incorrect",
+        )
+
+    hashed_password = pwd_context.hash(payload.new_password)
+    await users_collection.update_one(
+        {"_id": current_user.get("_id")},
+        {"$set": {"password": hashed_password}},
+    )
+
+    return {"message": "Password changed successfully"}
