@@ -1,4 +1,5 @@
 import asyncio
+import email.utils as _email_utils
 import html
 import logging
 import os
@@ -14,7 +15,7 @@ import yfinance as yf
 from dotenv import load_dotenv
 import time as _time
 
-_hf_executor = ThreadPoolExecutor(max_workers=3)
+_hf_executor = ThreadPoolExecutor(max_workers=10)
 
 load_dotenv()
 
@@ -101,7 +102,18 @@ def _fetch_yfinance_news(ticker: str) -> list[dict]:
                 or ""
             ).strip()
             if title:
-                results.append({"title": title, "summary": summary})
+                import datetime as _dt
+
+                pub_ts = item.get("providerPublishTime") or 0
+                if pub_ts:
+                    try:
+                        pub_date = _dt.datetime.utcfromtimestamp(pub_ts).strftime("%d %b %Y")
+                    except Exception:
+                        pub_date = ""
+                else:
+                    pub_date = ""
+
+                results.append({"title": title, "summary": summary, "pubDate": pub_date})
         return results
     except Exception as exc:
         logger.warning("yfinance news failed for %s: %s", ticker, exc)
@@ -139,8 +151,25 @@ def _fetch_google_news_rss(ticker: str) -> list[dict]:
             summary = html.unescape(summary)
             if "\xa0\xa0" in summary:
                 summary = summary.split("\xa0\xa0")[0].strip()
+
+            raw_pub = entry.get("published", "") or entry.get("updated", "") or ""
+            pub_date = ""
+            pub_timestamp = 0
+            if raw_pub:
+                try:
+                    parsed_dt = _email_utils.parsedate_to_datetime(raw_pub)
+                    pub_timestamp = parsed_dt.timestamp()
+                    pub_date = parsed_dt.strftime("%d %b %Y")
+                except Exception:
+                    pub_date = ""
+                    pub_timestamp = 0
+
+            # Skip articles older than 30 days
+            if pub_timestamp > 0 and pub_timestamp < (_time.time() - 30 * 24 * 3600):
+                continue
+
             if title:
-                results.append({"title": title, "summary": summary})
+                results.append({"title": title, "summary": summary, "pubDate": pub_date})
         return results
     except Exception as exc:
         logger.warning("Google News RSS failed for %s: %s", ticker, exc)
@@ -247,11 +276,14 @@ async def run_finbert_scored(headlines: list[str]) -> list[dict]:
         logger.error("Missing HF_API_KEY environment variable")
         return []
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        gathered = await asyncio.gather(
-            *[_score_single_headline(client, headline, HF_API_KEY) for headline in headlines],
-            return_exceptions=True,
-        )
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            gathered = await asyncio.gather(
+                *[_score_single_headline(client, headline, HF_API_KEY) for headline in headlines],
+                return_exceptions=True,
+            )
+    except asyncio.CancelledError:
+        return []
 
     results: list[dict] = []
     for result in gathered:
@@ -469,6 +501,7 @@ def _get_stock_sentiment_cached(ticker: str) -> dict:
             "label": sentiment["label"] if sentiment else "neutral",
             "score": sentiment["score"] if sentiment else 0.0,
         }
+        headline_entry["pubDate"] = str(article.get("pubDate", "") or "")
         summary_text = str(article.get("summary", "") or "").strip()
         if summary_text:
             headline_entry["summary"] = _truncate(summary_text, 200)
@@ -508,10 +541,34 @@ async def _get_sentiment_bounded(ticker: str) -> dict:
 
 
 async def get_portfolio_sentiment(tickers: list) -> dict:
-    stock_results = await asyncio.gather(
-        *[_get_sentiment_bounded(str(ticker)) for ticker in tickers]
-    )
+    try:
+        stock_results = await asyncio.gather(
+            *[_get_sentiment_bounded(str(ticker)) for ticker in tickers],
+            return_exceptions=True,
+        )
+    except asyncio.CancelledError:
+        return {
+            "portfolioSignal": "Mixed",
+            "stocks": [],
+        }
+
     stock_results = list(stock_results)
+    normalized_results: list[dict] = []
+    for ticker, result in zip(tickers, stock_results):
+        if isinstance(result, Exception):
+            normalized_results.append(
+                {
+                    "ticker": str(ticker).strip().upper(),
+                    "badge": "Neutral",
+                    "confidence": 0,
+                    "reason": "error",
+                    "headlines": [],
+                }
+            )
+            continue
+        normalized_results.append(result)
+
+    stock_results = normalized_results
     badge_counts = Counter(str(item.get("badge", "Neutral")) for item in stock_results)
     bullish = badge_counts.get("Bullish", 0)
     bearish = badge_counts.get("Bearish", 0)

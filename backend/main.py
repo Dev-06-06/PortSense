@@ -6,8 +6,9 @@ import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.gzip import GZipMiddleware
 import yfinance as yf
+from starlette.middleware.gzip import GZipMiddleware
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.config.db import close_mongo_connection, connect_to_mongo, ensure_indexes
 from app.routes.analytics import router as analytics_router
@@ -26,6 +27,16 @@ from app.routes.watchlist import router as watchlist_router
 logging.basicConfig(level=logging.INFO)
 logging.getLogger("app.services.analytics").setLevel(logging.DEBUG)
 logger = logging.getLogger(__name__)
+
+
+class SelectiveGZipMiddleware(GZipMiddleware):
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http":
+            path = scope.get("path", "")
+            if path.endswith("/stream"):
+                await self.app(scope, receive, send)
+                return
+        await super().__call__(scope, receive, send)
 
 
 async def warmup_yfinance_pool():
@@ -48,7 +59,7 @@ app = FastAPI(lifespan=lifespan)
 
 origins = [origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",") if origin.strip()]
 
-app.add_middleware(GZipMiddleware, minimum_size=500)
+app.add_middleware(SelectiveGZipMiddleware, minimum_size=1000)
 
 app.add_middleware(
     CORSMiddleware,
