@@ -291,6 +291,68 @@ async def get_holdings_summary(
     }
 
 
+@router.get("/since")
+async def get_holdings_since(
+    current_user: dict = Depends(get_current_user),
+    holdings_collection: AsyncIOMotorCollection = Depends(get_holdings_collection),
+):
+    from datetime import date, datetime
+
+    user_id = current_user.get("_id")
+    holdings = []
+    async for h in holdings_collection.find({"userId": user_id}):
+        holdings.append(h)
+
+    if not holdings:
+        return {
+            "earliestBuyDate": None,
+            "totalDaysInvested": 0,
+            "longestHeldTicker": None,
+            "longestHeldDays": 0,
+            "totalHoldings": 0,
+        }
+
+    today = date.today()
+
+    def to_date(val):
+        try:
+            if isinstance(val, datetime):
+                return val.date()
+            if isinstance(val, date):
+                return val
+            return datetime.strptime(str(val)[:10], "%Y-%m-%d").date()
+        except Exception:
+            return None
+
+    dated = []
+    for h in holdings:
+        d = to_date(h.get("buyDate"))
+        if d:
+            ticker = str(h.get("schemeName") or h.get("ticker") or "Unknown")
+            days = (today - d).days
+            dated.append({"ticker": ticker, "buyDate": d, "days": days})
+
+    if not dated:
+        return {
+            "earliestBuyDate": None,
+            "totalDaysInvested": 0,
+            "longestHeldTicker": None,
+            "longestHeldDays": 0,
+            "totalHoldings": len(holdings),
+        }
+
+    earliest = min(dated, key=lambda x: x["buyDate"])
+    longest = max(dated, key=lambda x: x["days"])
+
+    return {
+        "earliestBuyDate": earliest["buyDate"].isoformat(),
+        "totalDaysInvested": (today - earliest["buyDate"]).days,
+        "longestHeldTicker": longest["ticker"].replace(".NS", ""),
+        "longestHeldDays": longest["days"],
+        "totalHoldings": len(holdings),
+    }
+
+
 @router.get("/dashboard")
 async def get_dashboard(
     current_user: dict = Depends(get_current_user),

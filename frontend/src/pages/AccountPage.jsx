@@ -50,14 +50,6 @@ const outlineButtonStyle = {
   cursor: "pointer",
 };
 
-const formatCurrency = (value) =>
-  new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(Number(value) || 0);
-
 const formatMemberSince = (createdAt) => {
   const createdDate = createdAt ? new Date(createdAt) : null;
 
@@ -73,19 +65,15 @@ const formatMemberSince = (createdAt) => {
   return `Member since ${monthYear}`;
 };
 
-const EMPTY_SUMMARY = {
-  totalInvested: 0,
-  totalCurrentValue: 0,
-  totalPnl: 0,
-  holdingCount: 0,
-};
-
 const AccountPage = () => {
   const navigate = useNavigate();
   const { logout } = useAuth();
 
   const [userDetails, setUserDetails] = useState(null);
-  const [summary, setSummary] = useState(EMPTY_SUMMARY);
+  const [healthData, setHealthData] = useState(null);
+  const [sinceData, setSinceData] = useState(null);
+  const [healthLoading, setHealthLoading] = useState(true);
+  const [sinceLoading, setSinceLoading] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [isEditingUsername, setIsEditingUsername] = useState(false);
@@ -108,24 +96,30 @@ const AccountPage = () => {
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
+      setHealthLoading(true);
+      setSinceLoading(true);
       setError("");
 
       try {
-        const [meResponse, summaryResponse] = await Promise.all([
+        const [meResponse, healthResponse, sinceResponse] = await Promise.all([
           api.get("/api/auth/me"),
-          api.get("/api/holdings/summary"),
+          api.get("/api/analytics/health-score"),
+          api.get("/api/holdings/since"),
         ]);
 
         setUserDetails(meResponse.data || null);
-        setSummary({
-          ...EMPTY_SUMMARY,
-          ...(summaryResponse.data || {}),
-        });
+        setHealthData(healthResponse.data || null);
+        setSinceData(sinceResponse.data || null);
+        setHealthLoading(false);
+        setSinceLoading(false);
       } catch {
         setError(
           "Unable to load account details. Please refresh and try again.",
         );
-        setSummary(EMPTY_SUMMARY);
+        setHealthData(null);
+        setSinceData(null);
+        setHealthLoading(false);
+        setSinceLoading(false);
       } finally {
         setLoading(false);
       }
@@ -426,102 +420,218 @@ const AccountPage = () => {
               fontWeight: 600,
             }}
           >
-            Portfolio Summary
+            Portfolio Health Score
           </h2>
-
-          <div className="account-grid">
-            <div className="account-stat">
-              <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.82rem" }}>
-                Total Invested
-              </p>
-              <p
+          {healthLoading ? (
+            <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.88rem" }}>
+              Calculating...
+            </p>
+          ) : !healthData ? (
+            <p style={{ margin: 0, color: "#64748b", fontSize: "0.88rem" }}>
+              Not enough data
+            </p>
+          ) : (
+            <>
+              <div
                 style={{
-                  ...numberStyle,
-                  margin: "0.15rem 0 0",
-                  fontSize: "1.55rem",
-                  color: "#f8fafc",
+                  display: "flex",
+                  alignItems: "baseline",
+                  gap: "0.5rem",
+                  marginBottom: "1rem",
                 }}
               >
-                {formatCurrency(summary.totalInvested)}
-              </p>
-            </div>
+                <span
+                  style={{
+                    fontFamily: "'Barlow Condensed', 'DM Sans', sans-serif",
+                    fontSize: "3.5rem",
+                    fontWeight: 700,
+                    color: healthData.color,
+                    lineHeight: 1,
+                  }}
+                >
+                  {healthData.score}
+                </span>
+                <span
+                  style={{
+                    fontSize: "1.2rem",
+                    color: "#475569",
+                    fontWeight: 600,
+                  }}
+                >
+                  /100
+                </span>
+                <span
+                  style={{
+                    marginLeft: "0.5rem",
+                    fontSize: "0.85rem",
+                    fontWeight: 700,
+                    color: healthData.color,
+                    backgroundColor: `${healthData.color}18`,
+                    borderRadius: "20px",
+                    padding: "3px 10px",
+                  }}
+                >
+                  {healthData.label}
+                </span>
+              </div>
 
-            <div className="account-stat">
-              <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.82rem" }}>
-                Current Value
-              </p>
-              <p
-                style={{
-                  ...numberStyle,
-                  margin: "0.15rem 0 0",
-                  fontSize: "1.55rem",
-                  color: "#f8fafc",
-                }}
-              >
-                {formatCurrency(summary.totalCurrentValue)}
-              </p>
-            </div>
-
-            <div className="account-stat">
-              <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.82rem" }}>
-                Overall P&L
-              </p>
-              <p
-                style={{
-                  ...numberStyle,
-                  margin: "0.15rem 0 0",
-                  fontSize: "1.55rem",
-                  color: summary.totalPnl >= 0 ? "#22c55e" : "#ef4444",
-                }}
-              >
-                {formatCurrency(summary.totalPnl)}
-              </p>
-            </div>
-
-            <div className="account-stat">
-              <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.82rem" }}>
-                Holdings Count
-              </p>
-              <p
-                style={{
-                  ...numberStyle,
-                  margin: "0.15rem 0 0",
-                  fontSize: "1.55rem",
-                  color: "#f8fafc",
-                }}
-              >
-                {summary.holdingCount}
-              </p>
-            </div>
-          </div>
+              {[
+                { key: "diversification", label: "Diversification", max: 40 },
+                { key: "beta", label: "Beta Stability", max: 30 },
+                { key: "sector", label: "Sector Balance", max: 30 },
+              ].map(({ key, label, max }) => {
+                const val = healthData.breakdown?.[key] || 0;
+                const pct = Math.round((val / max) * 100);
+                return (
+                  <div key={key} style={{ marginBottom: "0.65rem" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        marginBottom: "3px",
+                      }}
+                    >
+                      <span style={{ fontSize: "0.78rem", color: "#94a3b8" }}>
+                        {label}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "0.78rem",
+                          color: "#f8fafc",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {val}/{max}
+                      </span>
+                    </div>
+                    <div
+                      style={{
+                        height: "5px",
+                        backgroundColor: "rgba(255,255,255,0.08)",
+                        borderRadius: "999px",
+                        overflow: "hidden",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: `${pct}%`,
+                          height: "100%",
+                          backgroundColor: healthData.color,
+                          borderRadius: "999px",
+                          transition: "width 0.5s ease",
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </>
+          )}
         </div>
 
         <div style={{ ...cardStyle, padding: "1rem" }}>
           <h2
             style={{
-              margin: 0,
+              margin: "0 0 0.85rem",
               color: "#f8fafc",
               fontSize: "1.05rem",
               fontWeight: 600,
             }}
           >
-            Account
+            Holding Since
           </h2>
-
-          <div style={{ marginTop: "0.75rem" }}>
-            <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.8rem" }}>
-              Email
+          {sinceLoading ? (
+            <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.88rem" }}>
+              Loading...
             </p>
-            <p
-              style={{
-                margin: "0.2rem 0 0",
-                color: "#e2e8f0",
-                fontSize: "0.98rem",
-              }}
-            >
-              {userDetails?.email || "-"}
+          ) : !sinceData || !sinceData.earliestBuyDate ? (
+            <p style={{ margin: 0, color: "#64748b", fontSize: "0.88rem" }}>
+              No holdings yet
             </p>
-          </div>
+          ) : (
+            <div className="account-grid">
+              <div className="account-stat">
+                <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.78rem" }}>
+                  Investing Since
+                </p>
+                <p
+                  style={{
+                    ...numberStyle,
+                    margin: "0.2rem 0 0",
+                    fontSize: "1.1rem",
+                    fontWeight: 700,
+                    color: "#f8fafc",
+                  }}
+                >
+                  {new Date(sinceData.earliestBuyDate).toLocaleDateString(
+                    "en-IN",
+                    {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    },
+                  )}
+                </p>
+              </div>
+              <div className="account-stat">
+                <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.78rem" }}>
+                  Days Invested
+                </p>
+                <p
+                  style={{
+                    ...numberStyle,
+                    margin: "0.2rem 0 0",
+                    fontSize: "1.55rem",
+                    fontWeight: 700,
+                    color: "#f97316",
+                  }}
+                >
+                  {sinceData.totalDaysInvested}
+                </p>
+              </div>
+              <div className="account-stat">
+                <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.78rem" }}>
+                  Longest Held
+                </p>
+                <p
+                  style={{
+                    ...numberStyle,
+                    margin: "0.2rem 0 0",
+                    fontSize: "1.1rem",
+                    fontWeight: 700,
+                    color: "#f8fafc",
+                  }}
+                >
+                  {sinceData.longestHeldTicker}
+                </p>
+                <p
+                  style={{
+                    margin: "2px 0 0",
+                    color: "#64748b",
+                    fontSize: "0.75rem",
+                  }}
+                >
+                  {sinceData.longestHeldDays} days
+                </p>
+              </div>
+              <div className="account-stat">
+                <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.78rem" }}>
+                  Total Holdings
+                </p>
+                <p
+                  style={{
+                    ...numberStyle,
+                    margin: "0.2rem 0 0",
+                    fontSize: "1.55rem",
+                    fontWeight: 700,
+                    color: "#f8fafc",
+                  }}
+                >
+                  {sinceData.totalHoldings}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         <div style={{ ...cardStyle, padding: "1rem" }}>

@@ -234,6 +234,87 @@ async def get_diversification(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/health-score")
+async def get_health_score(
+    current_user: dict = Depends(get_current_user),
+    holdings_collection: AsyncIOMotorCollection = Depends(get_holdings_collection),
+):
+    try:
+        div_data, beta_data, sector_data = await asyncio.gather(
+            get_diversification(current_user, holdings_collection),
+            get_beta_analytics(current_user, holdings_collection),
+            sectors_breakdown(current_user, holdings_collection),
+            return_exceptions=True,
+        )
+
+        # Diversification component (40 pts)
+        div_score = 0.0
+        if not isinstance(div_data, Exception):
+            raw = float((div_data or {}).get("score", 0) or 0)
+            div_score = (raw / 10.0) * 40.0
+
+        # Beta component (30 pts)
+        beta_score = 0.0
+        if not isinstance(beta_data, Exception):
+            beta = float((beta_data or {}).get("portfolioBeta", 1.0) or 1.0)
+            if beta < 0.8:
+                beta_factor = 1.0
+            elif beta <= 1.2:
+                beta_factor = 0.8
+            elif beta <= 1.6:
+                beta_factor = 0.5
+            else:
+                beta_factor = 0.2
+            beta_score = beta_factor * 30.0
+
+        # Sector concentration component (30 pts)
+        sector_score = 0.0
+        if not isinstance(sector_data, Exception):
+            sectors = (sector_data or {}).get("sectors", [])
+            overweight = sum(1 for s in sectors if s.get("isOverweight"))
+            if overweight == 0:
+                sector_factor = 1.0
+            elif overweight == 1:
+                sector_factor = 0.6
+            else:
+                sector_factor = 0.3
+            sector_score = sector_factor * 30.0
+
+        total = round(div_score + beta_score + sector_score, 1)
+
+        if total >= 80:
+            label = "Excellent"
+            color = "#22c55e"
+        elif total >= 60:
+            label = "Good"
+            color = "#f97316"
+        elif total >= 40:
+            label = "Fair"
+            color = "#f59e0b"
+        else:
+            label = "Needs Work"
+            color = "#ef4444"
+
+        return {
+            "score": total,
+            "label": label,
+            "color": color,
+            "breakdown": {
+                "diversification": round(div_score, 1),
+                "beta": round(beta_score, 1),
+                "sector": round(sector_score, 1),
+            },
+            "maxScores": {
+                "diversification": 40,
+                "beta": 30,
+                "sector": 30,
+            },
+        }
+
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 @router.get("/correlation")
 async def get_correlation_analytics(
     current_user: dict = Depends(get_current_user),
