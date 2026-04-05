@@ -12,12 +12,14 @@ import yfinance as yf
 from app.config.db import close_mongo_connection, connect_to_mongo, ensure_indexes
 from app.routes.analytics import router as analytics_router
 from app.routes.auth import router as auth_router
+from app.routes.comparison import router as comparison_router
 from app.routes.genai import router as genai_router
 from app.routes.holdings import router as holdings_router
 from app.routes.market import router as market_router
 from app.routes.news import router as news_router
 from app.routes.sentiment import router as sentiment_router
 from app.routes.stock_intel import router as stock_intel_router
+from app.routes.tax_returns import router as tax_router
 from app.routes.watchlist import router as watchlist_router
 
 
@@ -59,12 +61,14 @@ app.add_middleware(
 app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
 app.include_router(holdings_router, prefix="/api/holdings", tags=["holdings"])
 app.include_router(analytics_router, prefix="/api/analytics", tags=["analytics"])
+app.include_router(comparison_router, prefix="/api/comparison")
 app.include_router(sentiment_router, prefix="/api/sentiment", tags=["sentiment"])
 app.include_router(genai_router, prefix="/api/genai", tags=["genai"])
 app.include_router(stock_intel_router, prefix="/api/stock-intel", tags=["stock-intel"])
 app.include_router(watchlist_router, prefix="/api/watchlist", tags=["watchlist"])
 app.include_router(market_router, prefix="/api/market")
 app.include_router(news_router, prefix="/api/news")
+app.include_router(tax_router, prefix="/api/tax")
 
 
 @app.get("/ping")

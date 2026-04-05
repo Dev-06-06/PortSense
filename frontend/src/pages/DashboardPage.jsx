@@ -172,6 +172,11 @@ const DashboardPage = () => {
   const [showWatchTickerDrop, setShowWatchTickerDrop] = useState(false);
   const [watchInputError, setWatchInputError] = useState("");
   const [watchInputLoading, setWatchInputLoading] = useState(false);
+  const [dashTab, setDashTab] = useState("Holdings");
+  const [newsArticles, setNewsArticles] = useState([]);
+  const [newsLoading, setNewsLoading] = useState(false);
+  const [newsError, setNewsError] = useState("");
+  const [newsCategory, setNewsCategory] = useState("all");
 
   const tickerSuggestions =
     tickerQuery.length < 1
@@ -225,6 +230,21 @@ const DashboardPage = () => {
     }
   };
 
+  const fetchNews = async (category = newsCategory) => {
+    setNewsLoading(true);
+    setNewsError("");
+    try {
+      const res = await api.get(`/api/news/feed?category=${category}`);
+      setNewsArticles(
+        Array.isArray(res.data.articles) ? res.data.articles : [],
+      );
+    } catch {
+      setNewsError("News feed unavailable.");
+    } finally {
+      setNewsLoading(false);
+    }
+  };
+
   useEffect(() => {
     document.title = "Dashboard | PortSense";
   }, []);
@@ -236,6 +256,12 @@ const DashboardPage = () => {
   useEffect(() => {
     fetchWatchlist();
   }, []);
+
+  useEffect(() => {
+    if (dashTab === "News" && newsArticles.length === 0) {
+      fetchNews();
+    }
+  }, [dashTab]);
 
   useEffect(() => {
     const intervalId = setInterval(() => {
@@ -360,8 +386,8 @@ const DashboardPage = () => {
 
         .summary-grid {
           display: grid;
-                  color: summary.totalPnl >= 0 ? "#22c55e" : "#ef4444",
-          display: none;
+          grid-template-columns: 1fr;
+          gap: 0.75rem;
         }
 
         .holdings-table {
@@ -379,6 +405,15 @@ const DashboardPage = () => {
 
         .animate-pulse {
           animation: dashboard-pulse 1.4s ease-in-out infinite;
+        }
+
+        .add-holding-form {
+          grid-template-columns: 1fr;
+          width: 100%;
+        }
+
+        .mobile-hide-col {
+          display: none;
         }
 
         @keyframes dashboard-pulse {
@@ -517,418 +552,50 @@ const DashboardPage = () => {
         </div>
 
         <div style={{ ...cardStyle, padding: "1rem" }}>
+          {/* ── TAB BAR ── */}
           <div
             style={{
               display: "flex",
-              justifyContent: "space-between",
+              gap: "8px",
+              marginBottom: "1rem",
+              borderBottom: "1px solid #1e293b",
+              paddingBottom: "10px",
+              overflowX: "auto",
               alignItems: "center",
-              marginBottom: "0.8rem",
-              gap: "0.7rem",
-              flexWrap: "wrap",
             }}
           >
-            <h2 style={{ margin: 0, fontSize: "1.1rem", color: "#f8fafc" }}>
-              My Holdings
-            </h2>
-            <button
-              type="button"
-              onClick={() => {
-                setShowAddForm((prev) => !prev);
-                setLivePrice(null);
-              }}
-              style={{
-                background: "#f97316",
-                color: "white",
-                borderRadius: "20px",
-                padding: "6px 18px",
-                fontSize: "13px",
-                fontWeight: 600,
-                border: "none",
-                cursor: "pointer",
-                whiteSpace: "nowrap",
-                letterSpacing: "0.3px",
-              }}
-            >
-              + Add Holding
-            </button>
-          </div>
-
-          {showAddForm && (
-            <form
-              onSubmit={onSubmitHolding}
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "0.7rem",
-                marginBottom: "1rem",
-              }}
-            >
-              <div style={{ position: "relative" }}>
-                <p
-                  style={{
-                    margin: "0 0 0.3rem",
-                    color: "#94a3b8",
-                    fontSize: "0.75rem",
-                    fontWeight: 600,
-                  }}
-                >
-                  TICKER
-                </p>
-                <input
-                  name="ticker"
-                  type="text"
-                  placeholder="Search e.g. INFY, Infosys..."
-                  value={tickerQuery}
-                  autoComplete="off"
-                  onChange={(e) => {
-                    const val = e.target.value.toUpperCase();
-                    setTickerQuery(e.target.value);
-                    setFormData((p) => ({ ...p, ticker: val }));
-                    setShowTickerDrop(true);
-                  }}
-                  onBlur={() => setTimeout(() => setShowTickerDrop(false), 150)}
-                  onFocus={() => {
-                    if (tickerQuery.length > 0) setShowTickerDrop(true);
-                  }}
-                  required
-                  style={{
-                    ...inputStyle,
-                    fontSize: "1rem",
-                    minHeight: "2.75rem",
-                  }}
-                />
-
-                {showTickerDrop && tickerSuggestions.length > 0 && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: "calc(100% + 4px)",
-                      left: 0,
-                      right: 0,
-                      backgroundColor: "#0f172a",
-                      border: "1px solid rgba(255,255,255,0.15)",
-                      borderRadius: "0.75rem",
-                      overflow: "hidden",
-                      zIndex: 100,
-                      boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
-                    }}
-                  >
-                    {tickerSuggestions.map((t) => (
-                      <div
-                        key={t.symbol}
-                        onMouseDown={() => {
-                          const fullTicker = `${t.symbol}.NS`;
-                          setFormData((p) => ({
-                            ...p,
-                            ticker: fullTicker,
-                          }));
-                          setTickerQuery(t.symbol);
-                          setShowTickerDrop(false);
-                          fetchLivePrice(fullTicker);
-                        }}
-                        style={{
-                          padding: "0.7rem 1rem",
-                          cursor: "pointer",
-                          borderBottom: "1px solid rgba(255,255,255,0.06)",
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                        }}
-                        onMouseEnter={(e) =>
-                          (e.currentTarget.style.backgroundColor =
-                            "rgba(249,115,22,0.1)")
-                        }
-                        onMouseLeave={(e) =>
-                          (e.currentTarget.style.backgroundColor =
-                            "transparent")
-                        }
-                      >
-                        <span
-                          style={{
-                            color: "#f97316",
-                            fontWeight: 700,
-                            fontSize: "0.9rem",
-                          }}
-                        >
-                          {t.symbol}
-                        </span>
-                        <span style={{ color: "#94a3b8", fontSize: "0.8rem" }}>
-                          {t.full}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <p
-                  style={{
-                    margin: "0 0 0.3rem",
-                    color: "#94a3b8",
-                    fontSize: "0.75rem",
-                    fontWeight: 600,
-                  }}
-                >
-                  BUY DATE
-                </p>
-                <input
-                  name="buyDate"
-                  type="date"
-                  value={formData.buyDate}
-                  onChange={onChangeForm}
-                  required
-                  style={inputStyle}
-                />
-              </div>
-
-              {(livePriceFetching || livePrice !== null) && (
-                <div
-                  style={{
-                    padding: "0.75rem 0.9rem",
-                    borderRadius: "0.75rem",
-                    border: "1px solid rgba(249, 115, 22, 0.2)",
-                    backgroundColor: "rgba(249, 115, 22, 0.08)",
-                  }}
-                >
-                  <p
-                    style={{
-                      margin: 0,
-                      color: "#f8fafc",
-                      fontSize: "0.8rem",
-                      fontWeight: 700,
-                    }}
-                  >
-                    Current market price:
-                  </p>
-                  <p
-                    style={{
-                      margin: "0.25rem 0 0",
-                      color: "#fdba74",
-                      fontSize: "1rem",
-                      fontWeight: 700,
-                    }}
-                  >
-                    {livePriceFetching
-                      ? "Fetching..."
-                      : formatCurrency(livePrice)}
-                  </p>
-                </div>
-              )}
-
-              <div>
-                <p
-                  style={{
-                    margin: "0 0 0.3rem",
-                    color: "#94a3b8",
-                    fontSize: "0.75rem",
-                    fontWeight: 600,
-                  }}
-                >
-                  BUY PRICE (₹)
-                </p>
-                <input
-                  name="buyPrice"
-                  type="text"
-                  inputMode="decimal"
-                  placeholder="e.g. 1380.50"
-                  value={formData.buyPrice}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    if (/^\d*\.?\d*$/.test(val)) {
-                      setFormData((p) => ({ ...p, buyPrice: val }));
-                    }
-                  }}
-                  required
-                  style={{
-                    ...inputStyle,
-                    fontSize: "1rem",
-                    minHeight: "2.75rem",
-                  }}
-                />
-              </div>
-
-              <div>
-                <p
-                  style={{
-                    margin: "0 0 0.3rem",
-                    color: "#94a3b8",
-                    fontSize: "0.75rem",
-                    fontWeight: 600,
-                  }}
-                >
-                  QUANTITY
-                </p>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    border: "1px solid rgba(255,255,255,0.18)",
-                    borderRadius: "0.75rem",
-                    overflow: "hidden",
-                    backgroundColor: "#0f172a",
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setFormData((p) => ({
-                        ...p,
-                        quantity: String(Math.max(1, Number(p.quantity) - 1)),
-                      }))
-                    }
-                    style={{
-                      width: "3rem",
-                      height: "2.75rem",
-                      backgroundColor: "transparent",
-                      border: "none",
-                      borderRight: "1px solid rgba(255,255,255,0.18)",
-                      color: "#f97316",
-                      fontSize: "1.4rem",
-                      fontWeight: 700,
-                      cursor: "pointer",
-                      flexShrink: 0,
-                    }}
-                  >
-                    −
-                  </button>
-                  <input
-                    name="quantity"
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="0"
-                    value={formData.quantity}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (/^\d*$/.test(val)) {
-                        setFormData((p) => ({ ...p, quantity: val }));
-                      }
-                    }}
-                    required
-                    style={{
-                      flex: 1,
-                      backgroundColor: "transparent",
-                      border: "none",
-                      padding: "0.7rem 0.5rem",
-                      color: "#e5e7eb",
-                      fontSize: "1rem",
-                      textAlign: "center",
-                      minWidth: 0,
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setFormData((p) => ({
-                        ...p,
-                        quantity: String(Number(p.quantity || 0) + 1),
-                      }))
-                    }
-                    style={{
-                      width: "3rem",
-                      height: "2.75rem",
-                      backgroundColor: "transparent",
-                      border: "none",
-                      borderLeft: "1px solid rgba(255,255,255,0.18)",
-                      color: "#f97316",
-                      fontSize: "1.4rem",
-                      fontWeight: 700,
-                      cursor: "pointer",
-                      flexShrink: 0,
-                    }}
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-
+            {["Holdings", "Watchlist", "News"].map((tab) => (
               <button
-                type="submit"
-                disabled={submitting}
+                key={tab}
+                type="button"
+                onClick={() => setDashTab(tab)}
                 style={{
-                  ...buttonBaseStyle,
-                  backgroundColor: "#f97316",
+                  background: dashTab === tab ? "#f97316" : "#1e293b",
+                  color: dashTab === tab ? "white" : "#94a3b8",
+                  borderRadius: "20px",
+                  padding: "6px 18px",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  border: "none",
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                  fontFamily: "inherit",
+                  transition: "background 0.15s ease, color 0.15s ease",
                 }}
               >
-                {submitting ? "Submitting..." : "Submit"}
+                {tab}
               </button>
-            </form>
-          )}
+            ))}
 
-          {error && <p style={{ color: "#ef4444", marginTop: 0 }}>{error}</p>}
-
-          {loading ? (
-            <div style={{ display: "grid", gap: "0.75rem" }}>
-              {[1, 2, 3].map((index) => (
-                <div
-                  key={`skeleton-${index}`}
-                  className="animate-pulse"
-                  style={{
-                    borderRadius: "0.9rem",
-                    border: "1px solid rgba(148, 163, 184, 0.25)",
-                    backgroundColor: "rgba(51, 65, 85, 0.35)",
-                    padding: "0.9rem",
-                    display: "grid",
-                    gap: "0.55rem",
-                  }}
-                >
-                  <div
-                    style={{
-                      height: "0.9rem",
-                      width: "32%",
-                      borderRadius: "0.5rem",
-                      backgroundColor: "#475569",
-                    }}
-                  />
-                  <div
-                    style={{
-                      height: "0.9rem",
-                      width: "56%",
-                      borderRadius: "0.5rem",
-                      backgroundColor: "#64748b",
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
-          ) : holdings.length === 0 ? (
-            <div
-              style={{
-                display: "grid",
-                placeItems: "center",
-                padding: "2rem 1rem",
-              }}
-            >
-              <div
-                style={{
-                  width: "100%",
-                  maxWidth: "30rem",
-                  borderRadius: "1rem",
-                  border: "1px solid rgba(255, 255, 255, 0.08)",
-                  backgroundColor: "rgba(2, 6, 23, 0.55)",
-                  padding: "1.3rem 1rem",
-                  display: "grid",
-                  justifyItems: "center",
-                  gap: "0.65rem",
-                  textAlign: "center",
-                }}
-              >
-                <p
-                  style={{
-                    margin: 0,
-                    color: "#ffffff",
-                    fontWeight: 700,
-                    fontSize: "1.05rem",
-                  }}
-                >
-                  No holdings yet
-                </p>
-                <p style={{ margin: 0, color: "#94a3b8" }}>
-                  Add your first stock to get started
-                </p>
+            {/* Context action button — right aligned */}
+            <div style={{ marginLeft: "auto", flexShrink: 0 }}>
+              {dashTab === "Holdings" && (
                 <button
                   type="button"
-                  onClick={() => setShowAddForm(true)}
+                  onClick={() => {
+                    setShowAddForm((p) => !p);
+                    setLivePrice(null);
+                  }}
                   style={{
                     background: "#f97316",
                     color: "white",
@@ -939,486 +606,1154 @@ const DashboardPage = () => {
                     border: "none",
                     cursor: "pointer",
                     whiteSpace: "nowrap",
-                    letterSpacing: "0.3px",
-                    marginTop: "0.2rem",
+                    fontFamily: "inherit",
                   }}
                 >
                   + Add Holding
                 </button>
-              </div>
+              )}
+              {dashTab === "Watchlist" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowWatchlistInput((p) => !p);
+                    setWatchInputError("");
+                  }}
+                  style={{
+                    background: "#1e293b",
+                    color: "#94a3b8",
+                    borderRadius: "20px",
+                    padding: "6px 18px",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                    fontFamily: "inherit",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "#f97316";
+                    e.currentTarget.style.color = "white";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "#1e293b";
+                    e.currentTarget.style.color = "#94a3b8";
+                  }}
+                >
+                  + Add
+                </button>
+              )}
+              {dashTab === "News" && (
+                <button
+                  type="button"
+                  onClick={() => fetchNews(newsCategory)}
+                  style={{
+                    background: "#1e293b",
+                    color: "#94a3b8",
+                    borderRadius: "20px",
+                    padding: "6px 18px",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                    fontFamily: "inherit",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "#f97316";
+                    e.currentTarget.style.color = "white";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "#1e293b";
+                    e.currentTarget.style.color = "#94a3b8";
+                  }}
+                >
+                  ↻ Refresh
+                </button>
+              )}
             </div>
-          ) : (
-            <div style={{ width: "100%", overflowX: "auto" }}>
-              <table
-                className="holdings-table"
-                style={{ width: "100%", borderCollapse: "collapse" }}
-              >
-                <thead>
-                  <tr>
-                    {[
-                      "Ticker",
-                      "Qty",
-                      "Buy Price",
-                      "Current Price",
-                      "Invested",
-                      "Current Value",
-                      "P&L",
-                      "P&L%",
-                      "",
-                    ].map((title) => (
-                      <th
-                        key={title || "action"}
-                        className={
-                          title === "Invested" || title === "Current Value"
-                            ? "mobile-hide-col"
-                            : ""
-                        }
-                        style={{
-                          textAlign: title === "" ? "center" : "left",
-                          color: "#94a3b8",
-                          fontSize: "0.8rem",
-                          fontWeight: 700,
-                          padding: "0.75rem 0.6rem",
-                          borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {title}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {holdings.map((holding) => {
-                    const invested =
-                      Number(holding.invested) ||
-                      (Number(holding.buyPrice) || 0) *
-                        (Number(holding.quantity) || 0);
-                    const currentValue =
-                      Number(holding.currentValue) ||
-                      (Number(holding.currentPrice) || 0) *
-                        (Number(holding.quantity) || 0);
-                    const pnl = Number(holding.pnl) || currentValue - invested;
-                    const pnlPercent =
-                      Number(holding.pnlPercent) ||
-                      (invested ? (pnl / invested) * 100 : 0);
-                    const isPositivePnl = pnl >= 0;
-
-                    return (
-                      <tr
-                        key={holding.id || holding._id}
-                        className="holding-row"
-                        title="Click for Stock Intel"
-                        onClick={() => {
-                          setSelectedTicker(holding.ticker);
-                          setDrawerOpen(true);
-                        }}
-                      >
-                        <td
-                          style={{
-                            padding: "0.8rem 0.6rem",
-                            color: "#f8fafc",
-                            fontWeight: 700,
-                          }}
-                        >
-                          {holding.ticker.replace(/\.NS$/i, "")}
-                        </td>
-                        <td
-                          style={{ ...numberStyle, padding: "0.8rem 0.6rem" }}
-                        >
-                          {formatNumber(holding.quantity)}
-                        </td>
-                        <td
-                          style={{ ...numberStyle, padding: "0.8rem 0.6rem" }}
-                        >
-                          {formatCurrency(holding.buyPrice)}
-                        </td>
-                        <td
-                          style={{ ...numberStyle, padding: "0.8rem 0.6rem" }}
-                        >
-                          {formatCurrency(holding.currentPrice)}
-                        </td>
-                        <td
-                          className="mobile-hide-col"
-                          style={{ ...numberStyle, padding: "0.8rem 0.6rem" }}
-                        >
-                          {formatCurrency(invested)}
-                        </td>
-                        <td
-                          className="mobile-hide-col"
-                          style={{ ...numberStyle, padding: "0.8rem 0.6rem" }}
-                        >
-                          {formatCurrency(currentValue)}
-                        </td>
-                        <td
-                          style={{
-                            ...numberStyle,
-                            padding: "0.8rem 0.6rem",
-                            color: isPositivePnl ? "#22c55e" : "#ef4444",
-                          }}
-                        >
-                          {formatCurrency(pnl)}
-                        </td>
-                        <td
-                          style={{
-                            ...numberStyle,
-                            padding: "0.8rem 0.6rem",
-                            color: isPositivePnl ? "#22c55e" : "#ef4444",
-                          }}
-                        >
-                          {`${pnlPercent.toFixed(2)}%`}
-                        </td>
-                        <td
-                          style={{
-                            padding: "0.8rem 0.6rem",
-                            textAlign: "center",
-                          }}
-                        >
-                          <div
-                            style={{
-                              display: "flex",
-                              gap: "0.5rem",
-                              justifyContent: "center",
-                            }}
-                          >
-                            <button
-                              type="button"
-                              aria-label={`Edit ${holding.ticker}`}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setEditTarget(holding);
-                                setEditForm({
-                                  buyPrice: holding.buyPrice,
-                                  qty: holding.qty ?? holding.quantity,
-                                  buyDate: holding.buyDate,
-                                });
-                              }}
-                              style={{
-                                ...buttonBaseStyle,
-                                backgroundColor: "#1f2937",
-                                border: "1px solid rgba(255, 255, 255, 0.12)",
-                                width: "2.25rem",
-                                height: "2.25rem",
-                                padding: 0,
-                                lineHeight: 1,
-                              }}
-                            >
-                              ✏
-                            </button>
-                            <button
-                              type="button"
-                              aria-label={`Delete ${holding.ticker}`}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setDeleteTarget(holding);
-                              }}
-                              style={{
-                                ...buttonBaseStyle,
-                                backgroundColor: "#1f2937",
-                                border: "1px solid rgba(255, 255, 255, 0.12)",
-                                width: "2.25rem",
-                                height: "2.25rem",
-                                padding: 0,
-                                lineHeight: 1,
-                              }}
-                            >
-                              🗑
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        <div style={{ ...cardStyle, padding: "1rem" }}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "0.8rem",
-              flexWrap: "wrap",
-              gap: "0.7rem",
-            }}
-          >
-            <div>
-              <h2 style={{ margin: 0, fontSize: "1.1rem", color: "#f8fafc" }}>
-                Watchlist
-              </h2>
-              <p
-                style={{
-                  margin: "2px 0 0",
-                  fontSize: "0.78rem",
-                  color: "#64748b",
-                }}
-              >
-                Track stocks without buying them
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                setShowWatchlistInput((p) => !p);
-                setWatchInputError("");
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "#f97316";
-                e.currentTarget.style.color = "white";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "#1e293b";
-                e.currentTarget.style.color = "#94a3b8";
-              }}
-              style={{
-                background: "#1e293b",
-                color: "#94a3b8",
-                borderRadius: "20px",
-                padding: "6px 18px",
-                fontSize: "13px",
-                fontWeight: 600,
-                border: "none",
-                cursor: "pointer",
-                whiteSpace: "nowrap",
-                letterSpacing: "0.3px",
-              }}
-            >
-              + Add
-            </button>
           </div>
 
-          {showWatchlistInput && (
-            <div
-              style={{
-                marginBottom: "0.9rem",
-                display: "flex",
-                flexDirection: "column",
-                gap: "0.5rem",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  gap: "0.5rem",
-                  alignItems: "flex-start",
-                }}
-              >
-                {/* Typeahead input - mirrors the Add Holding ticker search */}
-                <div style={{ position: "relative", flex: 1 }}>
-                  <input
-                    type="text"
-                    placeholder="Search e.g. ZOMATO, Bajaj Finance..."
-                    value={watchInputTicker}
-                    autoComplete="off"
-                    onChange={(e) => {
-                      setWatchInputTicker(e.target.value.toUpperCase());
-                      setShowWatchTickerDrop(true);
-                      setWatchInputError("");
-                    }}
-                    onBlur={() =>
-                      setTimeout(() => setShowWatchTickerDrop(false), 150)
-                    }
-                    onFocus={() => {
-                      if (watchInputTicker.length > 0)
-                        setShowWatchTickerDrop(true);
-                    }}
-                    onKeyDown={(e) => e.key === "Enter" && handleWatchlistAdd()}
-                    style={{
-                      ...inputStyle,
-                      fontSize: "0.9rem",
-                      width: "100%",
-                      boxSizing: "border-box",
-                    }}
-                  />
-
-                  {/* Dropdown suggestions - same NSE_TICKERS source */}
-                  {showWatchTickerDrop && watchTickerSuggestions.length > 0 && (
-                    <div
+          {/* ── HOLDINGS TAB ── */}
+          {dashTab === "Holdings" && (
+            <>
+              {showAddForm && (
+                <form
+                  onSubmit={onSubmitHolding}
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.7rem",
+                    marginBottom: "1rem",
+                  }}
+                >
+                  <div style={{ position: "relative" }}>
+                    <p
                       style={{
-                        position: "absolute",
-                        top: "calc(100% + 4px)",
-                        left: 0,
-                        right: 0,
-                        backgroundColor: "#0f172a",
-                        border: "1px solid rgba(255,255,255,0.15)",
-                        borderRadius: "0.75rem",
-                        overflow: "hidden",
-                        zIndex: 200,
-                        boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+                        margin: "0 0 0.3rem",
+                        color: "#94a3b8",
+                        fontSize: "0.75rem",
+                        fontWeight: 600,
                       }}
                     >
-                      {watchTickerSuggestions.map((t) => (
-                        <div
-                          key={t.symbol}
-                          onMouseDown={() => {
-                            setWatchInputTicker(t.symbol);
-                            setShowWatchTickerDrop(false);
-                          }}
-                          style={{
-                            padding: "0.7rem 1rem",
-                            cursor: "pointer",
-                            borderBottom: "1px solid rgba(255,255,255,0.06)",
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                          }}
-                          onMouseEnter={(e) =>
-                            (e.currentTarget.style.backgroundColor =
-                              "rgba(249,115,22,0.1)")
-                          }
-                          onMouseLeave={(e) =>
-                            (e.currentTarget.style.backgroundColor =
-                              "transparent")
-                          }
-                        >
-                          <span
+                      TICKER
+                    </p>
+                    <input
+                      name="ticker"
+                      type="text"
+                      placeholder="Search e.g. INFY, Infosys..."
+                      value={tickerQuery}
+                      autoComplete="off"
+                      onChange={(e) => {
+                        const val = e.target.value.toUpperCase();
+                        setTickerQuery(e.target.value);
+                        setFormData((p) => ({ ...p, ticker: val }));
+                        setShowTickerDrop(true);
+                      }}
+                      onBlur={() =>
+                        setTimeout(() => setShowTickerDrop(false), 150)
+                      }
+                      onFocus={() => {
+                        if (tickerQuery.length > 0) setShowTickerDrop(true);
+                      }}
+                      required
+                      style={{
+                        ...inputStyle,
+                        fontSize: "1rem",
+                        minHeight: "2.75rem",
+                      }}
+                    />
+
+                    {showTickerDrop && tickerSuggestions.length > 0 && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: "calc(100% + 4px)",
+                          left: 0,
+                          right: 0,
+                          backgroundColor: "#0f172a",
+                          border: "1px solid rgba(255,255,255,0.15)",
+                          borderRadius: "0.75rem",
+                          overflow: "hidden",
+                          zIndex: 100,
+                          boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+                        }}
+                      >
+                        {tickerSuggestions.map((t) => (
+                          <div
+                            key={t.symbol}
+                            onMouseDown={() => {
+                              const fullTicker = `${t.symbol}.NS`;
+                              setFormData((p) => ({
+                                ...p,
+                                ticker: fullTicker,
+                              }));
+                              setTickerQuery(t.symbol);
+                              setShowTickerDrop(false);
+                              fetchLivePrice(fullTicker);
+                            }}
                             style={{
-                              color: "#f97316",
+                              padding: "0.7rem 1rem",
+                              cursor: "pointer",
+                              borderBottom: "1px solid rgba(255,255,255,0.06)",
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                            }}
+                            onMouseEnter={(e) =>
+                              (e.currentTarget.style.backgroundColor =
+                                "rgba(249,115,22,0.1)")
+                            }
+                            onMouseLeave={(e) =>
+                              (e.currentTarget.style.backgroundColor =
+                                "transparent")
+                            }
+                          >
+                            <span
+                              style={{
+                                color: "#f97316",
+                                fontWeight: 700,
+                                fontSize: "0.9rem",
+                              }}
+                            >
+                              {t.symbol}
+                            </span>
+                            <span
+                              style={{ color: "#94a3b8", fontSize: "0.8rem" }}
+                            >
+                              {t.full}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <p
+                      style={{
+                        margin: "0 0 0.3rem",
+                        color: "#94a3b8",
+                        fontSize: "0.75rem",
+                        fontWeight: 600,
+                      }}
+                    >
+                      BUY DATE
+                    </p>
+                    <input
+                      name="buyDate"
+                      type="date"
+                      value={formData.buyDate}
+                      onChange={onChangeForm}
+                      required
+                      style={inputStyle}
+                    />
+                  </div>
+
+                  {(livePriceFetching || livePrice !== null) && (
+                    <div
+                      style={{
+                        padding: "0.75rem 0.9rem",
+                        borderRadius: "0.75rem",
+                        border: "1px solid rgba(249, 115, 22, 0.2)",
+                        backgroundColor: "rgba(249, 115, 22, 0.08)",
+                      }}
+                    >
+                      <p
+                        style={{
+                          margin: 0,
+                          color: "#f8fafc",
+                          fontSize: "0.8rem",
+                          fontWeight: 700,
+                        }}
+                      >
+                        Current market price:
+                      </p>
+                      <p
+                        style={{
+                          margin: "0.25rem 0 0",
+                          color: "#fdba74",
+                          fontSize: "1rem",
+                          fontWeight: 700,
+                        }}
+                      >
+                        {livePriceFetching
+                          ? "Fetching..."
+                          : formatCurrency(livePrice)}
+                      </p>
+                    </div>
+                  )}
+
+                  <div>
+                    <p
+                      style={{
+                        margin: "0 0 0.3rem",
+                        color: "#94a3b8",
+                        fontSize: "0.75rem",
+                        fontWeight: 600,
+                      }}
+                    >
+                      BUY PRICE (₹)
+                    </p>
+                    <input
+                      name="buyPrice"
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="e.g. 1380.50"
+                      value={formData.buyPrice}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (/^\d*\.?\d*$/.test(val)) {
+                          setFormData((p) => ({ ...p, buyPrice: val }));
+                        }
+                      }}
+                      required
+                      style={{
+                        ...inputStyle,
+                        fontSize: "1rem",
+                        minHeight: "2.75rem",
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <p
+                      style={{
+                        margin: "0 0 0.3rem",
+                        color: "#94a3b8",
+                        fontSize: "0.75rem",
+                        fontWeight: 600,
+                      }}
+                    >
+                      QUANTITY
+                    </p>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        border: "1px solid rgba(255,255,255,0.18)",
+                        borderRadius: "0.75rem",
+                        overflow: "hidden",
+                        backgroundColor: "#0f172a",
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setFormData((p) => ({
+                            ...p,
+                            quantity: String(
+                              Math.max(1, Number(p.quantity) - 1),
+                            ),
+                          }))
+                        }
+                        style={{
+                          width: "3rem",
+                          height: "2.75rem",
+                          backgroundColor: "transparent",
+                          border: "none",
+                          borderRight: "1px solid rgba(255,255,255,0.18)",
+                          color: "#f97316",
+                          fontSize: "1.4rem",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          flexShrink: 0,
+                        }}
+                      >
+                        −
+                      </button>
+                      <input
+                        name="quantity"
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="0"
+                        value={formData.quantity}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (/^\d*$/.test(val)) {
+                            setFormData((p) => ({ ...p, quantity: val }));
+                          }
+                        }}
+                        required
+                        style={{
+                          flex: 1,
+                          backgroundColor: "transparent",
+                          border: "none",
+                          padding: "0.7rem 0.5rem",
+                          color: "#e5e7eb",
+                          fontSize: "1rem",
+                          textAlign: "center",
+                          minWidth: 0,
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setFormData((p) => ({
+                            ...p,
+                            quantity: String(Number(p.quantity || 0) + 1),
+                          }))
+                        }
+                        style={{
+                          width: "3rem",
+                          height: "2.75rem",
+                          backgroundColor: "transparent",
+                          border: "none",
+                          borderLeft: "1px solid rgba(255,255,255,0.18)",
+                          color: "#f97316",
+                          fontSize: "1.4rem",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          flexShrink: 0,
+                        }}
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    style={{
+                      background: "#f97316",
+                      color: "white",
+                      borderRadius: "20px",
+                      padding: "6px 18px",
+                      fontSize: "13px",
+                      fontWeight: 600,
+                      border: "none",
+                      cursor: submitting ? "not-allowed" : "pointer",
+                      whiteSpace: "nowrap",
+                      fontFamily: "inherit",
+                      opacity: submitting ? 0.7 : 1,
+                    }}
+                  >
+                    {submitting ? "Submitting..." : "Submit"}
+                  </button>
+                </form>
+              )}
+              {error && (
+                <p style={{ color: "#ef4444", marginTop: 0 }}>{error}</p>
+              )}
+              {loading ? (
+                <div style={{ display: "grid", gap: "0.75rem" }}>
+                  {[1, 2, 3].map((index) => (
+                    <div
+                      key={`skeleton-${index}`}
+                      className="animate-pulse"
+                      style={{
+                        borderRadius: "0.9rem",
+                        border: "1px solid rgba(148, 163, 184, 0.25)",
+                        backgroundColor: "rgba(51, 65, 85, 0.35)",
+                        padding: "0.9rem",
+                        display: "grid",
+                        gap: "0.55rem",
+                      }}
+                    >
+                      <div
+                        style={{
+                          height: "0.9rem",
+                          width: "32%",
+                          borderRadius: "0.5rem",
+                          backgroundColor: "#475569",
+                        }}
+                      />
+                      <div
+                        style={{
+                          height: "0.9rem",
+                          width: "56%",
+                          borderRadius: "0.5rem",
+                          backgroundColor: "#64748b",
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : holdings.length === 0 ? (
+                <div
+                  style={{
+                    display: "grid",
+                    placeItems: "center",
+                    padding: "2rem 1rem",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "100%",
+                      maxWidth: "30rem",
+                      borderRadius: "1rem",
+                      border: "1px solid rgba(255, 255, 255, 0.08)",
+                      backgroundColor: "rgba(2, 6, 23, 0.55)",
+                      padding: "1.3rem 1rem",
+                      display: "grid",
+                      justifyItems: "center",
+                      gap: "0.65rem",
+                      textAlign: "center",
+                    }}
+                  >
+                    <p
+                      style={{
+                        margin: 0,
+                        color: "#ffffff",
+                        fontWeight: 700,
+                        fontSize: "1.05rem",
+                      }}
+                    >
+                      No holdings yet
+                    </p>
+                    <p style={{ margin: 0, color: "#94a3b8" }}>
+                      Add your first stock to get started
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddForm(true)}
+                      style={{
+                        background: "#f97316",
+                        color: "white",
+                        borderRadius: "20px",
+                        padding: "6px 18px",
+                        fontSize: "13px",
+                        fontWeight: 600,
+                        border: "none",
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                        letterSpacing: "0.3px",
+                        marginTop: "0.2rem",
+                      }}
+                    >
+                      + Add Holding
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ width: "100%", overflowX: "auto" }}>
+                  <table
+                    className="holdings-table"
+                    style={{ width: "100%", borderCollapse: "collapse" }}
+                  >
+                    <thead>
+                      <tr>
+                        {[
+                          "Ticker",
+                          "Qty",
+                          "Buy Price",
+                          "Current Price",
+                          "Invested",
+                          "Current Value",
+                          "P&L",
+                          "P&L%",
+                          "",
+                        ].map((title) => (
+                          <th
+                            key={title || "action"}
+                            className={
+                              title === "Invested" || title === "Current Value"
+                                ? "mobile-hide-col"
+                                : ""
+                            }
+                            style={{
+                              textAlign: title === "" ? "center" : "left",
+                              color: "#94a3b8",
+                              fontSize: "0.8rem",
+                              fontWeight: 700,
+                              padding: "0.75rem 0.6rem",
+                              borderBottom:
+                                "1px solid rgba(255, 255, 255, 0.08)",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {title}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {holdings.map((holding) => {
+                        const invested =
+                          Number(holding.invested) ||
+                          (Number(holding.buyPrice) || 0) *
+                            (Number(holding.quantity) || 0);
+                        const currentValue =
+                          Number(holding.currentValue) ||
+                          (Number(holding.currentPrice) || 0) *
+                            (Number(holding.quantity) || 0);
+                        const pnl =
+                          Number(holding.pnl) || currentValue - invested;
+                        const pnlPercent =
+                          Number(holding.pnlPercent) ||
+                          (invested ? (pnl / invested) * 100 : 0);
+                        const isPositivePnl = pnl >= 0;
+
+                        return (
+                          <tr
+                            key={holding.id || holding._id}
+                            className="holding-row"
+                            title="Click for Stock Intel"
+                            onClick={() => {
+                              setSelectedTicker(holding.ticker);
+                              setDrawerOpen(true);
+                            }}
+                          >
+                            <td
+                              style={{
+                                padding: "0.8rem 0.6rem",
+                                color: "#f8fafc",
+                                fontWeight: 700,
+                              }}
+                            >
+                              {holding.ticker.replace(/\.NS$/i, "")}
+                            </td>
+                            <td
+                              style={{
+                                ...numberStyle,
+                                padding: "0.8rem 0.6rem",
+                              }}
+                            >
+                              {formatNumber(holding.quantity)}
+                            </td>
+                            <td
+                              style={{
+                                ...numberStyle,
+                                padding: "0.8rem 0.6rem",
+                              }}
+                            >
+                              {formatCurrency(holding.buyPrice)}
+                            </td>
+                            <td
+                              style={{
+                                ...numberStyle,
+                                padding: "0.8rem 0.6rem",
+                              }}
+                            >
+                              {formatCurrency(holding.currentPrice)}
+                            </td>
+                            <td
+                              className="mobile-hide-col"
+                              style={{
+                                ...numberStyle,
+                                padding: "0.8rem 0.6rem",
+                              }}
+                            >
+                              {formatCurrency(invested)}
+                            </td>
+                            <td
+                              className="mobile-hide-col"
+                              style={{
+                                ...numberStyle,
+                                padding: "0.8rem 0.6rem",
+                              }}
+                            >
+                              {formatCurrency(currentValue)}
+                            </td>
+                            <td
+                              style={{
+                                ...numberStyle,
+                                padding: "0.8rem 0.6rem",
+                                color: isPositivePnl ? "#22c55e" : "#ef4444",
+                              }}
+                            >
+                              {formatCurrency(pnl)}
+                            </td>
+                            <td
+                              style={{
+                                ...numberStyle,
+                                padding: "0.8rem 0.6rem",
+                                color: isPositivePnl ? "#22c55e" : "#ef4444",
+                              }}
+                            >
+                              {`${pnlPercent.toFixed(2)}%`}
+                            </td>
+                            <td
+                              style={{
+                                padding: "0.8rem 0.6rem",
+                                textAlign: "center",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  display: "flex",
+                                  gap: "0.5rem",
+                                  justifyContent: "center",
+                                }}
+                              >
+                                <button
+                                  type="button"
+                                  aria-label={`Edit ${holding.ticker}`}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setEditTarget(holding);
+                                    setEditForm({
+                                      buyPrice: holding.buyPrice,
+                                      qty: holding.qty ?? holding.quantity,
+                                      buyDate: holding.buyDate,
+                                    });
+                                  }}
+                                  style={{
+                                    ...buttonBaseStyle,
+                                    backgroundColor: "#1f2937",
+                                    border:
+                                      "1px solid rgba(255, 255, 255, 0.12)",
+                                    width: "2.25rem",
+                                    height: "2.25rem",
+                                    padding: 0,
+                                    lineHeight: 1,
+                                  }}
+                                >
+                                  ✏
+                                </button>
+                                <button
+                                  type="button"
+                                  aria-label={`Delete ${holding.ticker}`}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setDeleteTarget(holding);
+                                  }}
+                                  style={{
+                                    ...buttonBaseStyle,
+                                    backgroundColor: "#1f2937",
+                                    border:
+                                      "1px solid rgba(255, 255, 255, 0.12)",
+                                    width: "2.25rem",
+                                    height: "2.25rem",
+                                    padding: 0,
+                                    lineHeight: 1,
+                                  }}
+                                >
+                                  🗑
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ── WATCHLIST TAB ── */}
+          {dashTab === "Watchlist" && (
+            <>
+              {showWatchlistInput && (
+                <div
+                  style={{
+                    marginBottom: "0.9rem",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.5rem",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "0.5rem",
+                      alignItems: "flex-start",
+                    }}
+                  >
+                    <div style={{ position: "relative", flex: 1 }}>
+                      <input
+                        type="text"
+                        placeholder="Search e.g. ZOMATO, Bajaj Finance..."
+                        value={watchInputTicker}
+                        autoComplete="off"
+                        onChange={(e) => {
+                          setWatchInputTicker(e.target.value.toUpperCase());
+                          setShowWatchTickerDrop(true);
+                          setWatchInputError("");
+                        }}
+                        onBlur={() =>
+                          setTimeout(() => setShowWatchTickerDrop(false), 150)
+                        }
+                        onFocus={() => {
+                          if (watchInputTicker.length > 0)
+                            setShowWatchTickerDrop(true);
+                        }}
+                        onKeyDown={(e) =>
+                          e.key === "Enter" && handleWatchlistAdd()
+                        }
+                        style={{
+                          ...inputStyle,
+                          fontSize: "0.9rem",
+                          width: "100%",
+                          boxSizing: "border-box",
+                        }}
+                      />
+
+                      {showWatchTickerDrop &&
+                        watchTickerSuggestions.length > 0 && (
+                          <div
+                            style={{
+                              position: "absolute",
+                              top: "calc(100% + 4px)",
+                              left: 0,
+                              right: 0,
+                              backgroundColor: "#0f172a",
+                              border: "1px solid rgba(255,255,255,0.15)",
+                              borderRadius: "0.75rem",
+                              overflow: "hidden",
+                              zIndex: 200,
+                              boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+                            }}
+                          >
+                            {watchTickerSuggestions.map((t) => (
+                              <div
+                                key={t.symbol}
+                                onMouseDown={() => {
+                                  setWatchInputTicker(t.symbol);
+                                  setShowWatchTickerDrop(false);
+                                }}
+                                style={{
+                                  padding: "0.7rem 1rem",
+                                  cursor: "pointer",
+                                  borderBottom:
+                                    "1px solid rgba(255,255,255,0.06)",
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  alignItems: "center",
+                                }}
+                                onMouseEnter={(e) =>
+                                  (e.currentTarget.style.backgroundColor =
+                                    "rgba(249,115,22,0.1)")
+                                }
+                                onMouseLeave={(e) =>
+                                  (e.currentTarget.style.backgroundColor =
+                                    "transparent")
+                                }
+                              >
+                                <span
+                                  style={{
+                                    color: "#f97316",
+                                    fontWeight: 700,
+                                    fontSize: "0.9rem",
+                                  }}
+                                >
+                                  {t.symbol}
+                                </span>
+                                <span
+                                  style={{
+                                    color: "#94a3b8",
+                                    fontSize: "0.8rem",
+                                  }}
+                                >
+                                  {t.full}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleWatchlistAdd}
+                      disabled={watchInputLoading || !watchInputTicker.trim()}
+                      style={{
+                        background: "#f97316",
+                        color: "white",
+                        borderRadius: "20px",
+                        padding: "6px 18px",
+                        fontSize: "13px",
+                        fontWeight: 600,
+                        border: "none",
+                        whiteSpace: "nowrap",
+                        fontFamily: "inherit",
+                        opacity:
+                          watchInputLoading || !watchInputTicker.trim()
+                            ? 0.6
+                            : 1,
+                        cursor:
+                          watchInputLoading || !watchInputTicker.trim()
+                            ? "not-allowed"
+                            : "pointer",
+                      }}
+                    >
+                      {watchInputLoading ? "Adding..." : "Add"}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowWatchlistInput(false);
+                        setWatchInputError("");
+                        setWatchInputTicker("");
+                        setShowWatchTickerDrop(false);
+                      }}
+                      style={{
+                        ...buttonBaseStyle,
+                        backgroundColor: "transparent",
+                        border: "1px solid rgba(255,255,255,0.12)",
+                        color: "#94a3b8",
+                        padding: "0.7rem 0.8rem",
+                        fontSize: "0.85rem",
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  {watchInputError && (
+                    <p
+                      style={{
+                        margin: 0,
+                        color: "#ef4444",
+                        fontSize: "0.78rem",
+                      }}
+                    >
+                      {watchInputError}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {watchlistLoading ? (
+                <div style={{ display: "grid", gap: "0.6rem" }}>
+                  {[1, 2].map((i) => (
+                    <div
+                      key={i}
+                      className="animate-pulse"
+                      style={{
+                        height: "3.2rem",
+                        borderRadius: "0.75rem",
+                        backgroundColor: "rgba(51,65,85,0.35)",
+                        border: "1px solid rgba(148,163,184,0.15)",
+                      }}
+                    />
+                  ))}
+                </div>
+              ) : watchlistError ? (
+                <p style={{ color: "#ef4444", fontSize: "0.85rem", margin: 0 }}>
+                  {watchlistError}{" "}
+                  <span
+                    onClick={fetchWatchlist}
+                    style={{
+                      color: "#f97316",
+                      cursor: "pointer",
+                      textDecoration: "underline",
+                    }}
+                  >
+                    Retry
+                  </span>
+                </p>
+              ) : watchlist.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "1.5rem 1rem" }}>
+                  <p
+                    style={{ margin: 0, color: "#94a3b8", fontSize: "0.9rem" }}
+                  >
+                    No stocks in watchlist
+                  </p>
+                  <p
+                    style={{
+                      margin: "0.3rem 0 0",
+                      color: "#475569",
+                      fontSize: "0.8rem",
+                    }}
+                  >
+                    Add tickers you want to monitor
+                  </p>
+                </div>
+              ) : (
+                <div style={{ display: "grid", gap: "0.5rem" }}>
+                  {watchlist.map((item) => {
+                    const isPos = Number(item.changePct) >= 0;
+                    const badgeColor =
+                      item.sentimentBadge === "Bullish"
+                        ? { bg: "rgba(34,197,94,0.15)", color: "#22c55e" }
+                        : item.sentimentBadge === "Bearish"
+                          ? { bg: "rgba(239,68,68,0.15)", color: "#ef4444" }
+                          : { bg: "rgba(100,116,139,0.2)", color: "#94a3b8" };
+
+                    return (
+                      <div
+                        key={item.ticker}
+                        onClick={() => {
+                          setSelectedTicker(item.ticker);
+                          setDrawerOpen(true);
+                        }}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "0.7rem 0.85rem",
+                          borderRadius: "0.75rem",
+                          border: "1px solid rgba(255,255,255,0.07)",
+                          backgroundColor: "rgba(15,23,42,0.5)",
+                          cursor: "pointer",
+                          gap: "0.5rem",
+                        }}
+                        onMouseEnter={(e) =>
+                          (e.currentTarget.style.borderColor =
+                            "rgba(249,115,22,0.35)")
+                        }
+                        onMouseLeave={(e) =>
+                          (e.currentTarget.style.borderColor =
+                            "rgba(255,255,255,0.07)")
+                        }
+                      >
+                        <div style={{ minWidth: "5rem" }}>
+                          <p
+                            style={{
+                              margin: 0,
+                              color: "#f8fafc",
                               fontWeight: 700,
                               fontSize: "0.9rem",
                             }}
                           >
-                            {t.symbol}
-                          </span>
-                          <span
-                            style={{ color: "#94a3b8", fontSize: "0.8rem" }}
-                          >
-                            {t.full}
-                          </span>
+                            {item.ticker.replace(/\.NS$/i, "")}
+                          </p>
                         </div>
-                      ))}
-                    </div>
-                  )}
+
+                        <div style={{ flex: 1, textAlign: "center" }}>
+                          <p
+                            style={{
+                              ...numberStyle,
+                              margin: 0,
+                              color: "#f8fafc",
+                              fontSize: "0.95rem",
+                              fontWeight: 600,
+                            }}
+                          >
+                            {item.currentPrice
+                              ? formatCurrency(item.currentPrice)
+                              : "—"}
+                          </p>
+                          {item.changePct != null && (
+                            <p
+                              style={{
+                                margin: 0,
+                                fontSize: "0.75rem",
+                                color: isPos ? "#22c55e" : "#ef4444",
+                              }}
+                            >
+                              {isPos ? "▲" : "▼"}{" "}
+                              {Math.abs(Number(item.changePct)).toFixed(2)}%
+                            </p>
+                          )}
+                        </div>
+
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.5rem",
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize: "0.7rem",
+                              fontWeight: 700,
+                              padding: "3px 8px",
+                              borderRadius: "20px",
+                              background: badgeColor.bg,
+                              color: badgeColor.color,
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {item.sentimentBadge || "Neutral"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleWatchlistRemove(item.ticker);
+                            }}
+                            style={{
+                              background: "transparent",
+                              border: "none",
+                              cursor: "pointer",
+                              color: "#475569",
+                              fontSize: "0.9rem",
+                              padding: "2px 4px",
+                              borderRadius: "4px",
+                              lineHeight: 1,
+                            }}
+                            onMouseEnter={(e) =>
+                              (e.currentTarget.style.color = "#ef4444")
+                            }
+                            onMouseLeave={(e) =>
+                              (e.currentTarget.style.color = "#475569")
+                            }
+                          >
+                            🗑
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-
-                {/* Add button */}
-                <button
-                  type="button"
-                  onClick={handleWatchlistAdd}
-                  disabled={watchInputLoading || !watchInputTicker.trim()}
-                  style={{
-                    ...buttonBaseStyle,
-                    backgroundColor: "#f97316",
-                    padding: "0.7rem 1.1rem",
-                    fontSize: "0.85rem",
-                    opacity:
-                      watchInputLoading || !watchInputTicker.trim() ? 0.6 : 1,
-                    cursor:
-                      watchInputLoading || !watchInputTicker.trim()
-                        ? "not-allowed"
-                        : "pointer",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {watchInputLoading ? "Adding..." : "Add"}
-                </button>
-
-                {/* Cancel button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowWatchlistInput(false);
-                    setWatchInputError("");
-                    setWatchInputTicker("");
-                    setShowWatchTickerDrop(false);
-                  }}
-                  style={{
-                    ...buttonBaseStyle,
-                    backgroundColor: "transparent",
-                    border: "1px solid rgba(255,255,255,0.12)",
-                    color: "#94a3b8",
-                    padding: "0.7rem 0.8rem",
-                    fontSize: "0.85rem",
-                  }}
-                >
-                  ✕
-                </button>
-              </div>
-
-              {watchInputError && (
-                <p style={{ margin: 0, color: "#ef4444", fontSize: "0.78rem" }}>
-                  {watchInputError}
-                </p>
               )}
-            </div>
+            </>
           )}
 
-          {watchlistLoading ? (
-            <div style={{ display: "grid", gap: "0.6rem" }}>
-              {[1, 2].map((i) => (
-                <div
-                  key={i}
-                  className="animate-pulse"
-                  style={{
-                    height: "3.2rem",
-                    borderRadius: "0.75rem",
-                    backgroundColor: "rgba(51,65,85,0.35)",
-                    border: "1px solid rgba(148,163,184,0.15)",
-                  }}
-                />
-              ))}
-            </div>
-          ) : watchlistError ? (
-            <p style={{ color: "#ef4444", fontSize: "0.85rem", margin: 0 }}>
-              {watchlistError}{" "}
-              <span
-                onClick={fetchWatchlist}
+          {/* ── NEWS TAB ── */}
+          {dashTab === "News" && (
+            <>
+              <div
                 style={{
-                  color: "#f97316",
-                  cursor: "pointer",
-                  textDecoration: "underline",
+                  display: "flex",
+                  gap: "6px",
+                  overflowX: "auto",
+                  paddingBottom: "8px",
+                  marginBottom: "12px",
                 }}
               >
-                Retry
-              </span>
-            </p>
-          ) : watchlist.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "1.5rem 1rem" }}>
-              <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.9rem" }}>
-                No stocks in watchlist
-              </p>
-              <p
-                style={{
-                  margin: "0.3rem 0 0",
-                  color: "#475569",
-                  fontSize: "0.8rem",
-                }}
-              >
-                Add tickers you want to monitor
-              </p>
-            </div>
-          ) : (
-            <div style={{ display: "grid", gap: "0.5rem" }}>
-              {watchlist.map((item) => {
-                const isPos = Number(item.changePct) >= 0;
-                const badgeColor =
-                  item.sentimentBadge === "Bullish"
-                    ? { bg: "rgba(34,197,94,0.15)", color: "#22c55e" }
-                    : item.sentimentBadge === "Bearish"
-                      ? { bg: "rgba(239,68,68,0.15)", color: "#ef4444" }
-                      : { bg: "rgba(100,116,139,0.2)", color: "#94a3b8" };
-
-                return (
-                  <div
-                    key={item.ticker}
+                {[
+                  "all",
+                  "market",
+                  "banking",
+                  "it",
+                  "pharma",
+                  "auto",
+                  "energy",
+                ].map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
                     onClick={() => {
-                      setSelectedTicker(item.ticker);
-                      setDrawerOpen(true);
+                      setNewsCategory(cat);
+                      fetchNews(cat);
                     }}
                     style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "0.7rem 0.85rem",
+                      background: newsCategory === cat ? "#f97316" : "#1e293b",
+                      color: newsCategory === cat ? "white" : "#94a3b8",
+                      borderRadius: "20px",
+                      padding: "4px 12px",
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      border: "none",
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                      fontFamily: "inherit",
+                      textTransform: "capitalize",
+                    }}
+                  >
+                    {cat === "all"
+                      ? "All"
+                      : cat.charAt(0).toUpperCase() + cat.slice(1)}
+                  </button>
+                ))}
+              </div>
+
+              {newsLoading && (
+                <div style={{ display: "grid", gap: "0.6rem" }}>
+                  {[1, 2, 3].map((i) => (
+                    <div
+                      key={i}
+                      className="animate-pulse"
+                      style={{
+                        height: "4rem",
+                        borderRadius: "0.75rem",
+                        backgroundColor: "rgba(51,65,85,0.35)",
+                        border: "1px solid rgba(148,163,184,0.15)",
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {!newsLoading && newsError && (
+                <p style={{ color: "#ef4444", fontSize: "0.85rem", margin: 0 }}>
+                  {newsError}{" "}
+                  <span
+                    onClick={() => fetchNews(newsCategory)}
+                    style={{
+                      color: "#f97316",
+                      cursor: "pointer",
+                      textDecoration: "underline",
+                    }}
+                  >
+                    Retry
+                  </span>
+                </p>
+              )}
+
+              {!newsLoading && !newsError && newsArticles.length === 0 && (
+                <p
+                  style={{
+                    color: "#64748b",
+                    fontSize: "0.85rem",
+                    textAlign: "center",
+                    padding: "1.5rem 0",
+                  }}
+                >
+                  No news available. Click Refresh to load.
+                </p>
+              )}
+
+              {!newsLoading &&
+                newsArticles.map((article, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => window.open(article.link, "_blank")}
+                    style={{
+                      background: "rgba(15,23,42,0.5)",
                       borderRadius: "0.75rem",
                       border: "1px solid rgba(255,255,255,0.07)",
-                      backgroundColor: "rgba(15,23,42,0.5)",
+                      padding: "0.75rem 0.9rem",
+                      marginBottom: "8px",
                       cursor: "pointer",
-                      gap: "0.5rem",
                     }}
                     onMouseEnter={(e) =>
                       (e.currentTarget.style.borderColor =
@@ -1429,97 +1764,45 @@ const DashboardPage = () => {
                         "rgba(255,255,255,0.07)")
                     }
                   >
-                    <div style={{ minWidth: "5rem" }}>
-                      <p
-                        style={{
-                          margin: 0,
-                          color: "#f8fafc",
-                          fontWeight: 700,
-                          fontSize: "0.9rem",
-                        }}
-                      >
-                        {item.ticker.replace(/\.NS$/i, "")}
-                      </p>
-                    </div>
-
-                    <div style={{ flex: 1, textAlign: "center" }}>
-                      <p
-                        style={{
-                          ...numberStyle,
-                          margin: 0,
-                          color: "#f8fafc",
-                          fontSize: "0.95rem",
-                          fontWeight: 600,
-                        }}
-                      >
-                        {item.currentPrice
-                          ? formatCurrency(item.currentPrice)
-                          : "—"}
-                      </p>
-                      {item.changePct != null && (
-                        <p
-                          style={{
-                            margin: 0,
-                            fontSize: "0.75rem",
-                            color: isPos ? "#22c55e" : "#ef4444",
-                          }}
-                        >
-                          {isPos ? "▲" : "▼"}{" "}
-                          {Math.abs(Number(item.changePct)).toFixed(2)}%
-                        </p>
-                      )}
-                    </div>
-
+                    <p
+                      style={{
+                        margin: 0,
+                        color: "#f8fafc",
+                        fontSize: "0.88rem",
+                        fontWeight: 600,
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      {article.title}
+                    </p>
                     <div
                       style={{
                         display: "flex",
-                        alignItems: "center",
+                        justifyContent: "space-between",
+                        marginTop: "0.35rem",
                         gap: "0.5rem",
                       }}
                     >
-                      <span
-                        style={{
-                          fontSize: "0.7rem",
-                          fontWeight: 700,
-                          padding: "3px 8px",
-                          borderRadius: "20px",
-                          background: badgeColor.bg,
-                          color: badgeColor.color,
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {item.sentimentBadge || "Neutral"}
+                      <span style={{ color: "#64748b", fontSize: "0.72rem" }}>
+                        {article.source || "News"}
                       </span>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleWatchlistRemove(item.ticker);
-                        }}
-                        style={{
-                          background: "transparent",
-                          border: "none",
-                          cursor: "pointer",
-                          color: "#475569",
-                          fontSize: "0.9rem",
-                          padding: "2px 4px",
-                          borderRadius: "4px",
-                          lineHeight: 1,
-                        }}
-                        onMouseEnter={(e) =>
-                          (e.currentTarget.style.color = "#ef4444")
-                        }
-                        onMouseLeave={(e) =>
-                          (e.currentTarget.style.color = "#475569")
-                        }
-                      >
-                        🗑
-                      </button>
+                      <span style={{ color: "#475569", fontSize: "0.72rem" }}>
+                        {article.pubDate
+                          ? new Date(article.pubDate).toLocaleDateString(
+                              "en-IN",
+                              {
+                                day: "numeric",
+                                month: "short",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              },
+                            )
+                          : ""}
+                      </span>
                     </div>
                   </div>
-                );
-              })}
-            </div>
+                ))}
+            </>
           )}
         </div>
       </div>

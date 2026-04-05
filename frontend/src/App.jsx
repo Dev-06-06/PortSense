@@ -10,7 +10,9 @@ const LoginPage = lazy(() => import("./pages/LoginPage"));
 const RegisterPage = lazy(() => import("./pages/RegisterPage"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const AnalyticsPage = lazy(() => import("./pages/AnalyticsPage"));
+const ComparisonPage = lazy(() => import("./pages/ComparisonPage"));
 const NewsPage = lazy(() => import("./pages/NewsPage"));
+const TaxPage = lazy(() => import("./pages/TaxPage"));
 const CorrelationPage = lazy(() => import("./pages/CorrelationPage"));
 const SentimentPage = lazy(() => import("./pages/SentimentPage"));
 const AccountPage = lazy(() => import("./pages/AccountPage"));
@@ -99,11 +101,29 @@ function App() {
             }
           />
           <Route
+            path="/comparison"
+            element={
+              <ProtectedLayout>
+                <ComparisonPage />
+              </ProtectedLayout>
+            }
+          />
+          <Route
             path="/news"
             element={
               <ProtectedLayout>
                 <PageTransition>
                   <NewsPage />
+                </PageTransition>
+              </ProtectedLayout>
+            }
+          />
+          <Route
+            path="/tax"
+            element={
+              <ProtectedLayout>
+                <PageTransition>
+                  <TaxPage />
                 </PageTransition>
               </ProtectedLayout>
             }

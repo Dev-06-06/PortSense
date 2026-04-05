@@ -2,9 +2,10 @@ import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
   BarChart2,
-  GitBranch,
+  TrendingUp,
   Radio,
   UserCircle,
+  Receipt,
 } from "lucide-react";
 import { prefetchRoute } from "../routes/prefetch";
 
@@ -16,15 +17,11 @@ const tabs = [
   },
   { label: "Analytics", icon: <BarChart2 size={20} />, path: "/analytics" },
   {
-    label: "News",
-    icon: (
-      <span role="img" aria-label="News">
-        📰
-      </span>
-    ),
-    path: "/news",
+    label: "Tax",
+    icon: <Receipt size={20} />,
+    path: "/tax",
   },
-  { label: "Correlation", icon: <GitBranch size={20} />, path: "/correlation" },
+  { label: "Compare", icon: <TrendingUp size={20} />, path: "/comparison" },
   { label: "Sentiment", icon: <Radio size={20} />, path: "/sentiment" },
   { label: "Account", icon: <UserCircle size={20} />, path: "/account" },
 ];
