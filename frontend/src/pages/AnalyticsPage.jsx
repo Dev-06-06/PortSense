@@ -1,16 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  Bar,
+  BarChart,
+  CartesianGrid,
   Cell,
+  Line,
+  LineChart,
+  Legend,
   Pie,
   PieChart,
+  ReferenceLine,
+  ResponsiveContainer,
   Tooltip,
-  LineChart,
-  Line,
   XAxis,
   YAxis,
-  CartesianGrid,
-  Legend,
-  ResponsiveContainer,
 } from "recharts";
 import api from "../services/api";
 
@@ -95,7 +98,13 @@ const tdStyle = {
   borderBottom: "1px solid rgba(255,255,255,0.05)",
 };
 
-const tabs = ["Overview", "Beta / Diversification", "Benchmark", "Risk", "Correlation"];
+const tabs = [
+  "Overview",
+  "Beta / Diversification",
+  "Benchmark",
+  "Risk",
+  "Correlation",
+];
 
 const formatCurrency = (value) =>
   new Intl.NumberFormat("en-IN", {
@@ -139,7 +148,9 @@ const AnalyticsPage = () => {
   const [stressData, setStressData] = useState(null);
   const [loadingStress, setLoadingStress] = useState(false);
   const [stressAnalysed, setStressAnalysed] = useState(false);
+  const [activeScenarios, setActiveScenarios] = useState([]);
   const [customShock, setCustomShock] = useState("");
+  const [customShockInput, setCustomShockInput] = useState("");
   const [runningCustom, setRunningCustom] = useState(false);
   const [customResult, setCustomResult] = useState(null);
   const [riskData, setRiskData] = useState(null);
@@ -149,7 +160,10 @@ const AnalyticsPage = () => {
   const [adviceLoading, setAdviceLoading] = useState(false);
   const [adviceError, setAdviceError] = useState("");
   const [activeTab, setActiveTab] = useState("Overview");
-  const [corrMatrixData, setCorrMatrixData] = useState({ tickers: [], matrix: [] });
+  const [corrMatrixData, setCorrMatrixData] = useState({
+    tickers: [],
+    matrix: [],
+  });
   const [corrLoading, setCorrLoading] = useState(false);
   const [corrError, setCorrError] = useState("");
   const [corrFetched, setCorrFetched] = useState(false);
@@ -184,6 +198,13 @@ const AnalyticsPage = () => {
       const res = await api.get("/api/analytics/stress-test");
       setStressData(res.data);
       setStressAnalysed(true);
+      const ids = (res.data?.scenarios || [])
+        .filter((s) => s.id !== "custom")
+        .map((s) => s.id);
+      setActiveScenarios(ids);
+      setCustomResult(null);
+      setCustomShockInput("");
+      setCustomShock("");
     } catch {
       setStressData(null);
     } finally {
@@ -191,8 +212,18 @@ const AnalyticsPage = () => {
     }
   };
 
+  const toggleScenario = (id) => {
+    setActiveScenarios((prev) => {
+      if (prev.includes(id)) {
+        if (prev.length === 1) return prev;
+        return prev.filter((s) => s !== id);
+      }
+      return [...prev, id];
+    });
+  };
+
   const onRunCustomStress = async () => {
-    const raw = parseFloat(customShock);
+    const raw = parseFloat(customShockInput);
     if (!raw || raw >= 0 || raw < -99) return;
     setRunningCustom(true);
     setCustomResult(null);
@@ -203,7 +234,13 @@ const AnalyticsPage = () => {
       const customScenario = (res.data?.scenarios || []).find(
         (s) => s.id === "custom",
       );
-      setCustomResult(customScenario || null);
+      if (customScenario) {
+        setCustomResult(customScenario);
+        setCustomShock(String(raw));
+        setActiveScenarios((prev) =>
+          prev.includes("custom") ? prev : [...prev, "custom"],
+        );
+      }
     } catch {
       // silent fail
     } finally {
@@ -212,122 +249,151 @@ const AnalyticsPage = () => {
   };
 
   // CORRELATION HELPER FUNCTIONS
-  const sanitizeTicker = (ticker) => String(ticker || '').replace(/\.NS$/i, '').trim()
+  const sanitizeTicker = (ticker) =>
+    String(ticker || "")
+      .replace(/\.NS$/i, "")
+      .trim();
 
   const toNumber = (value) => {
-    const numeric = Number(value)
-    return Number.isFinite(numeric) ? numeric : 0
-  }
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : 0;
+  };
 
   const normalizeCorrelationPayload = (payload) => {
-    const matrixSource = payload?.matrix || payload?.correlationMatrix || payload?.correlations || payload || {}
+    const matrixSource =
+      payload?.matrix ||
+      payload?.correlationMatrix ||
+      payload?.correlations ||
+      payload ||
+      {};
     const payloadTickers = Array.isArray(payload?.tickers)
       ? payload.tickers
       : Array.isArray(payload?.symbols)
         ? payload.symbols
-        : []
+        : [];
     if (Array.isArray(matrixSource)) {
-      const tickers = payloadTickers.map(sanitizeTicker)
+      const tickers = payloadTickers.map(sanitizeTicker);
       const matrix = matrixSource.map((row, rowIndex) =>
         (Array.isArray(row) ? row : []).map((value, columnIndex) => {
-          if (rowIndex === columnIndex) return 1
-          return toNumber(value)
+          if (rowIndex === columnIndex) return 1;
+          return toNumber(value);
         }),
-      )
-      return { tickers, matrix }
+      );
+      return { tickers, matrix };
     }
-    const objectMatrix = typeof matrixSource === 'object' && matrixSource !== null ? matrixSource : {}
-    const rawTickers = payloadTickers.length > 0 ? payloadTickers : Object.keys(objectMatrix)
-    const tickers = rawTickers.map(sanitizeTicker)
+    const objectMatrix =
+      typeof matrixSource === "object" && matrixSource !== null
+        ? matrixSource
+        : {};
+    const rawTickers =
+      payloadTickers.length > 0 ? payloadTickers : Object.keys(objectMatrix);
+    const tickers = rawTickers.map(sanitizeTicker);
     const matrix = tickers.map((rowTicker, rowIndex) =>
       tickers.map((columnTicker, columnIndex) => {
-        if (rowIndex === columnIndex) return 1
-        const rowKey = rawTickers[rowIndex]
-        const columnKey = rawTickers[columnIndex]
-        const fromExact = objectMatrix?.[rowKey]?.[columnKey]
-        const fromSanitized = objectMatrix?.[rowTicker]?.[columnTicker]
-        const reverseExact = objectMatrix?.[columnKey]?.[rowKey]
-        const reverseSanitized = objectMatrix?.[columnTicker]?.[rowTicker]
-        return toNumber(fromExact ?? fromSanitized ?? reverseExact ?? reverseSanitized)
+        if (rowIndex === columnIndex) return 1;
+        const rowKey = rawTickers[rowIndex];
+        const columnKey = rawTickers[columnIndex];
+        const fromExact = objectMatrix?.[rowKey]?.[columnKey];
+        const fromSanitized = objectMatrix?.[rowTicker]?.[columnTicker];
+        const reverseExact = objectMatrix?.[columnKey]?.[rowKey];
+        const reverseSanitized = objectMatrix?.[columnTicker]?.[rowTicker];
+        return toNumber(
+          fromExact ?? fromSanitized ?? reverseExact ?? reverseSanitized,
+        );
       }),
-    )
-    return { tickers, matrix }
-  }
+    );
+    return { tickers, matrix };
+  };
 
   const getCellVisual = (value, isDiagonal) => {
-    if (isDiagonal) return { background: '#f97316', color: '#111827' }
-    if (value > 0.7) return { background: '#16a34a', color: '#f8fafc' }
-    if (value >= 0.3 && value <= 0.7) return { background: '#4ade80', color: '#111827' }
-    if (value >= -0.3 && value <= 0.3) return { background: '#334155', color: '#e2e8f0' }
-    if (value >= -0.7 && value < -0.3) return { background: '#f87171', color: '#111827' }
-    return { background: '#dc2626', color: '#f8fafc' }
-  }
+    if (isDiagonal) return { background: "#f97316", color: "#111827" };
+    if (value > 0.7) return { background: "#16a34a", color: "#f8fafc" };
+    if (value >= 0.3 && value <= 0.7)
+      return { background: "#4ade80", color: "#111827" };
+    if (value >= -0.3 && value <= 0.3)
+      return { background: "#334155", color: "#e2e8f0" };
+    if (value >= -0.7 && value < -0.3)
+      return { background: "#f87171", color: "#111827" };
+    return { background: "#dc2626", color: "#f8fafc" };
+  };
 
   const getStrengthLabel = (value) => {
-    const absValue = Math.abs(value)
-    if (absValue < 0.3) return 'Weak'
-    if (absValue < 0.7) return value >= 0 ? 'Moderate Positive' : 'Moderate Negative'
-    return value >= 0 ? 'Strong Positive' : 'Strong Negative'
-  }
+    const absValue = Math.abs(value);
+    if (absValue < 0.3) return "Weak";
+    if (absValue < 0.7)
+      return value >= 0 ? "Moderate Positive" : "Moderate Negative";
+    return value >= 0 ? "Strong Positive" : "Strong Negative";
+  };
 
   const getPairBorderColor = (value) => {
-    const absValue = Math.abs(value)
-    if (absValue < 0.3) return '#64748b'
-    return value >= 0 ? '#16a34a' : '#dc2626'
-  }
+    const absValue = Math.abs(value);
+    if (absValue < 0.3) return "#64748b";
+    return value >= 0 ? "#16a34a" : "#dc2626";
+  };
 
   const corrTopPairs = useMemo(() => {
-    const pairs = []
-    const { tickers, matrix } = corrMatrixData
+    const pairs = [];
+    const { tickers, matrix } = corrMatrixData;
     for (let r = 0; r < tickers.length; r++) {
       for (let c = r + 1; c < tickers.length; c++) {
-        const value = toNumber(matrix?.[r]?.[c])
+        const value = toNumber(matrix?.[r]?.[c]);
         pairs.push({
           ticker1: tickers[r],
           ticker2: tickers[c],
           correlation: Number(value.toFixed(2)),
           absCorrelation: Math.abs(value),
-        })
+        });
       }
     }
-    return pairs.sort((a, b) => b.absCorrelation - a.absCorrelation).slice(0, 5)
-  }, [corrMatrixData])
+    return pairs
+      .sort((a, b) => b.absCorrelation - a.absCorrelation)
+      .slice(0, 5);
+  }, [corrMatrixData]);
 
   const fetchCorrelation = async () => {
-    setCorrLoading(true)
-    setCorrError("")
+    setCorrLoading(true);
+    setCorrError("");
     try {
-      const res = await api.get('/api/analytics/correlation')
-      setCorrMatrixData(normalizeCorrelationPayload(res?.data))
-      setCorrFetched(true)
+      const res = await api.get("/api/analytics/correlation");
+      setCorrMatrixData(normalizeCorrelationPayload(res?.data));
+      setCorrFetched(true);
     } catch {
-      setCorrError('Unable to load correlation data.')
+      setCorrError("Unable to load correlation data.");
     } finally {
-      setCorrLoading(false)
+      setCorrLoading(false);
     }
-  }
+  };
 
   const handleCorrExplain = async (pair) => {
-    const key = `${pair.ticker1}-${pair.ticker2}`
-    if (expandedPair === key) { setExpandedPair(null); return }
-    if (explanations[key]) { setExpandedPair(key); return }
-    setLoadingPair(key)
+    const key = `${pair.ticker1}-${pair.ticker2}`;
+    if (expandedPair === key) {
+      setExpandedPair(null);
+      return;
+    }
+    if (explanations[key]) {
+      setExpandedPair(key);
+      return;
+    }
+    setLoadingPair(key);
     try {
-      const res = await api.post('/api/genai/explain-correlation', {
+      const res = await api.post("/api/genai/explain-correlation", {
         ticker1: pair.ticker1,
         ticker2: pair.ticker2,
         correlation: pair.correlation,
         strength: getStrengthLabel(pair.correlation),
-      })
-      setExplanations(prev => ({ ...prev, [key]: res.data.explanation }))
-      setExpandedPair(key)
+      });
+      setExplanations((prev) => ({ ...prev, [key]: res.data.explanation }));
+      setExpandedPair(key);
     } catch {
-      setExplanations(prev => ({ ...prev, [key]: 'Unable to load explanation.' }))
-      setExpandedPair(key)
+      setExplanations((prev) => ({
+        ...prev,
+        [key]: "Unable to load explanation.",
+      }));
+      setExpandedPair(key);
     } finally {
-      setLoadingPair(null)
+      setLoadingPair(null);
     }
-  }
+  };
 
   // Initial fetch - all endpoints in parallel
   useEffect(() => {
@@ -401,9 +467,9 @@ const AnalyticsPage = () => {
 
   useEffect(() => {
     if (activeTab === "Correlation" && !corrFetched) {
-      fetchCorrelation()
+      fetchCorrelation();
     }
-  }, [activeTab])
+  }, [activeTab]);
 
   return (
     <div style={shellStyle}>
@@ -939,26 +1005,66 @@ const AnalyticsPage = () => {
         {activeTab === "Risk" && (
           <>
             <div style={cardStyle}>
-              <h2
+              {/* Header row */}
+              <div
                 style={{
-                  margin: "0 0 0.25rem",
-                  fontSize: "1.1rem",
-                  fontWeight: 700,
-                  color: "#f8fafc",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "flex-start",
+                  marginBottom: "0.25rem",
                 }}
               >
-                Stress Test
-              </h2>
-              <p
-                style={{
-                  margin: "0 0 1rem",
-                  color: "#94a3b8",
-                  fontSize: "0.85rem",
-                }}
-              >
-                See your estimated portfolio impact under market crash scenarios
-              </p>
+                <div>
+                  <h2
+                    style={{
+                      margin: "0 0 0.25rem",
+                      fontSize: "1.1rem",
+                      fontWeight: 700,
+                      color: "#f8fafc",
+                    }}
+                  >
+                    Stress Test
+                  </h2>
+                  <p
+                    style={{ margin: 0, color: "#94a3b8", fontSize: "0.85rem" }}
+                  >
+                    See your estimated portfolio impact under market crash
+                    scenarios
+                  </p>
+                </div>
+                {stressAnalysed && (
+                  <button
+                    type="button"
+                    onClick={onAnalyseStress}
+                    style={{
+                      background: "#1e293b",
+                      color: "#94a3b8",
+                      borderRadius: "20px",
+                      padding: "5px 14px",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                      fontFamily: "inherit",
+                      flexShrink: 0,
+                      marginLeft: "0.75rem",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = "#f97316";
+                      e.currentTarget.style.color = "white";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = "#1e293b";
+                      e.currentTarget.style.color = "#94a3b8";
+                    }}
+                  >
+                    ↻ Refresh
+                  </button>
+                )}
+              </div>
 
+              {/* Initial analyse button */}
               {!stressAnalysed && !loadingStress && (
                 <button
                   type="button"
@@ -976,6 +1082,7 @@ const AnalyticsPage = () => {
                     cursor: "pointer",
                     fontFamily: "'DM Sans', sans-serif",
                     fontSize: "0.9rem",
+                    marginTop: "0.75rem",
                   }}
                 >
                   Analyse Scenarios
@@ -983,65 +1090,155 @@ const AnalyticsPage = () => {
               )}
 
               {loadingStress && (
-                <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.88rem" }}>
+                <p
+                  style={{
+                    margin: "0.75rem 0 0",
+                    color: "#94a3b8",
+                    fontSize: "0.88rem",
+                  }}
+                >
                   Running scenarios...
                 </p>
               )}
 
-              {stressAnalysed && stressData && (
-                <>
-                  <div style={{ display: "grid", gap: "0.75rem" }}>
-                    {(stressData?.scenarios || [])
-                      .filter((s) => s.id !== "custom")
-                      .map((scenario) => {
-                        const isLoss = scenario.total_portfolio_loss < 0;
-                        return (
-                          <div
-                            key={scenario.id}
-                            style={{
-                              borderRadius: "0.75rem",
-                              border: "1px solid rgba(255,255,255,0.1)",
-                              backgroundColor: "rgba(30,41,59,0.3)",
-                              padding: "0.75rem",
-                            }}
-                          >
+              {stressAnalysed &&
+                stressData &&
+                (() => {
+                  const allScenarios = [
+                    ...(stressData?.scenarios || []).filter(
+                      (s) => s.id !== "custom",
+                    ),
+                    ...(customResult ? [customResult] : []),
+                  ];
+
+                  return (
+                    <>
+                      {/* Hint text */}
+                      <p
+                        style={{
+                          margin: "0.85rem 0 0.6rem",
+                          color: "#475569",
+                          fontSize: "11px",
+                          letterSpacing: "0.04em",
+                        }}
+                      >
+                        Tap a scenario to include or exclude it from the chart
+                      </p>
+
+                      {/* Scenario cards grid */}
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "repeat(3, 1fr)",
+                          gap: "0.5rem",
+                        }}
+                      >
+                        {allScenarios.map((scenario) => {
+                          const isActive = activeScenarios.includes(
+                            scenario.id,
+                          );
+                          const isLoss = scenario.total_portfolio_loss < 0;
+                          const isCustom = scenario.id === "custom";
+
+                          return (
                             <div
+                              key={scenario.id}
+                              onClick={() => toggleScenario(scenario.id)}
                               style={{
+                                borderRadius: "0.85rem",
+                                border: isCustom
+                                  ? isActive
+                                    ? "1px solid rgba(249,115,22,0.5)"
+                                    : "1px solid rgba(255,255,255,0.1)"
+                                  : isActive
+                                    ? "1px solid rgba(249,115,22,0.5)"
+                                    : "1px solid rgba(255,255,255,0.07)",
+                                backgroundColor: isCustom
+                                  ? isActive
+                                    ? "rgba(249,115,22,0.08)"
+                                    : "rgba(15,23,42,0.4)"
+                                  : isActive
+                                    ? "rgba(249,115,22,0.08)"
+                                    : "rgba(15,23,42,0.4)",
+                                padding: "0.75rem",
+                                cursor: "pointer",
+                                opacity: isActive ? 1 : 0.45,
+                                transition: "all 0.2s ease",
                                 display: "flex",
-                                alignItems: "center",
+                                flexDirection: "column",
+                                gap: "0.35rem",
+                                minHeight: "90px",
                                 justifyContent: "space-between",
-                                gap: "0.75rem",
                               }}
                             >
+                              {/* Dot + name */}
+                              <div
+                                style={{
+                                  display: "flex",
+                                  alignItems: "flex-start",
+                                  gap: "6px",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    width: "7px",
+                                    height: "7px",
+                                    borderRadius: "50%",
+                                    flexShrink: 0,
+                                    marginTop: "4px",
+                                    backgroundColor: isActive
+                                      ? "#f97316"
+                                      : "#334155",
+                                    transition: "background-color 0.2s ease",
+                                  }}
+                                />
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    flexDirection: "column",
+                                  }}
+                                >
+                                  {isCustom && isActive && (
+                                    <p
+                                      style={{
+                                        margin: "0 0 2px",
+                                        fontSize: "9px",
+                                        color: "#f97316",
+                                        fontWeight: 700,
+                                        letterSpacing: "0.08em",
+                                      }}
+                                    >
+                                      CUSTOM
+                                    </p>
+                                  )}
+                                  <p
+                                    style={{
+                                      margin: 0,
+                                      fontSize: "0.75rem",
+                                      fontWeight: 700,
+                                      color: isActive ? "#f8fafc" : "#64748b",
+                                      lineHeight: 1.3,
+                                    }}
+                                  >
+                                    {scenario.name}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Loss values */}
                               <div>
                                 <p
                                   style={{
                                     margin: 0,
-                                    fontSize: "0.95rem",
-                                    fontWeight: 700,
-                                    color: "#f8fafc",
-                                  }}
-                                >
-                                  {scenario.name}
-                                </p>
-                                <p
-                                  style={{
-                                    margin: "0.2rem 0 0",
-                                    fontSize: "0.8rem",
-                                    color: "#94a3b8",
-                                  }}
-                                >
-                                  {scenario.description}
-                                </p>
-                              </div>
-
-                              <div style={{ textAlign: "right" }}>
-                                <p
-                                  style={{
-                                    margin: 0,
                                     fontSize: "1rem",
-                                    fontWeight: 700,
-                                    color: isLoss ? "#f87171" : "#4ade80",
+                                    fontWeight: 800,
+                                    color: isActive
+                                      ? isLoss
+                                        ? "#f87171"
+                                        : "#4ade80"
+                                      : "#475569",
+                                    fontFamily:
+                                      "'Barlow Condensed', sans-serif",
                                   }}
                                 >
                                   {scenario.total_portfolio_loss_pct > 0
@@ -1051,9 +1248,9 @@ const AnalyticsPage = () => {
                                 </p>
                                 <p
                                   style={{
-                                    margin: "0.2rem 0 0",
-                                    fontSize: "0.82rem",
-                                    color: "#cbd5e1",
+                                    margin: 0,
+                                    fontSize: "0.72rem",
+                                    color: isActive ? "#94a3b8" : "#334155",
                                   }}
                                 >
                                   ₹
@@ -1065,177 +1262,420 @@ const AnalyticsPage = () => {
                                 </p>
                               </div>
                             </div>
-                          </div>
-                        );
-                      })}
-                  </div>
+                          );
+                        })}
 
-                  <div
+                        {/* Custom card placeholder - always show as 7th */}
+                        {!customResult && (
+                          <div
+                            style={{
+                              borderRadius: "0.85rem",
+                              border: "1px dashed rgba(255,255,255,0.12)",
+                              backgroundColor: "rgba(15,23,42,0.3)",
+                              padding: "0.75rem",
+                              display: "flex",
+                              flexDirection: "column",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              minHeight: "90px",
+                              gap: "0.25rem",
+                            }}
+                          >
+                            <p
+                              style={{
+                                margin: 0,
+                                fontSize: "0.72rem",
+                                color: "#f97316",
+                                fontWeight: 600,
+                              }}
+                            >
+                              Custom
+                            </p>
+                            <p
+                              style={{
+                                margin: 0,
+                                fontSize: "0.68rem",
+                                color: "#475569",
+                                textAlign: "center",
+                              }}
+                            >
+                              Set below
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  );
+                })()}
+
+              {/* Custom shock input - FD rate style */}
+              {stressAnalysed && (
+                <div
+                  style={{
+                    marginTop: "0.85rem",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                    flexWrap: "wrap",
+                    background: "#111827",
+                    borderRadius: "12px",
+                    padding: "10px 14px",
+                    border: "1px solid #1e293b",
+                  }}
+                >
+                  <span
                     style={{
-                      marginTop: "1rem",
-                      borderRadius: "0.85rem",
-                      border: "1px solid rgba(255,255,255,0.12)",
-                      backgroundColor: "rgba(15,23,42,0.45)",
-                      padding: "0.85rem",
-                      display: "grid",
-                      gap: "0.75rem",
+                      color: "#94a3b8",
+                      fontSize: "13px",
+                      fontWeight: 600,
+                      whiteSpace: "nowrap",
                     }}
                   >
-                    <p
+                    Custom shock (%):
+                  </span>
+                  <input
+                    type="number"
+                    min="-99"
+                    max="-0.1"
+                    step="0.1"
+                    placeholder="-25"
+                    value={customShockInput}
+                    onChange={(e) => setCustomShockInput(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && onRunCustomStress()}
+                    style={{
+                      width: "70px",
+                      background: "#0f172a",
+                      border: "1px solid #334155",
+                      borderRadius: "8px",
+                      color: "white",
+                      padding: "6px 10px",
+                      fontSize: "14px",
+                      fontWeight: 700,
+                      textAlign: "center",
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={onRunCustomStress}
+                    disabled={
+                      runningCustom ||
+                      !customShockInput ||
+                      parseFloat(customShockInput) >= 0
+                    }
+                    style={{
+                      background: "#f97316",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "20px",
+                      padding: "6px 16px",
+                      fontSize: "13px",
+                      fontWeight: 600,
+                      cursor:
+                        runningCustom ||
+                        !customShockInput ||
+                        parseFloat(customShockInput) >= 0
+                          ? "not-allowed"
+                          : "pointer",
+                      opacity:
+                        runningCustom ||
+                        !customShockInput ||
+                        parseFloat(customShockInput) >= 0
+                          ? 0.6
+                          : 1,
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    {runningCustom ? "Running..." : "Apply"}
+                  </button>
+                  <span style={{ color: "#475569", fontSize: "11px" }}>
+                    e.g. -25 means market falls 25%
+                  </span>
+                </div>
+              )}
+
+              {/* Horizontal bar chart */}
+              {stressAnalysed &&
+                activeScenarios.length > 0 &&
+                (() => {
+                  const allScenarios = [
+                    ...(stressData?.scenarios || []).filter(
+                      (s) => s.id !== "custom",
+                    ),
+                    ...(customResult ? [customResult] : []),
+                  ];
+
+                  const activeData = allScenarios
+                    .filter((s) => activeScenarios.includes(s.id))
+                    .map((s) => {
+                      const currentValue = Math.round(
+                        Math.abs(s.total_portfolio_loss) /
+                          (Math.abs(s.total_portfolio_loss_pct) / 100),
+                      );
+                      const stressedValue = Math.round(
+                        currentValue + s.total_portfolio_loss,
+                      );
+                      const stressedPct = Math.max(
+                        2,
+                        (stressedValue / currentValue) * 100,
+                      );
+                      return {
+                        ...s,
+                        currentValue,
+                        stressedValue,
+                        stressedPct,
+                      };
+                    });
+
+                  return (
+                    <div
                       style={{
-                        margin: 0,
-                        fontSize: "0.75rem",
-                        color: "#94a3b8",
-                        letterSpacing: "0.1em",
-                        fontWeight: 700,
+                        marginTop: "0.85rem",
+                        borderRadius: "0.85rem",
+                        border: "1px solid rgba(255,255,255,0.08)",
+                        backgroundColor: "rgba(15,23,42,0.5)",
+                        padding: "1rem",
                       }}
                     >
-                      CUSTOM SCENARIO
-                    </p>
-
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: "0.82rem",
-                        color: "#cbd5e1",
-                      }}
-                    >
-                      Enter a negative number (e.g. -25 means market falls 25%)
-                    </p>
-
-                    <div style={{ display: "grid", gap: "0.6rem" }}>
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        step="0.1"
-                        min="-99"
-                        max="-0.1"
-                        placeholder="-25"
-                        value={customShock}
-                        onChange={(e) => setCustomShock(e.target.value)}
-                        style={{
-                          width: "100%",
-                          backgroundColor: "#0f172a",
-                          border: "1px solid rgba(255,255,255,0.15)",
-                          borderRadius: "0.75rem",
-                          padding: "0.7rem 0.85rem",
-                          color: "#e5e7eb",
-                          fontSize: "1rem",
-                          boxSizing: "border-box",
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={onRunCustomStress}
-                        disabled={
-                          runningCustom ||
-                          !customShock ||
-                          parseFloat(customShock) >= 0
-                        }
-                        style={{
-                          width: "100%",
-                          border: "none",
-                          borderRadius: "0.75rem",
-                          backgroundColor: runningCustom
-                            ? "#ea580c"
-                            : "#f97316",
-                          color: "#fff",
-                          padding: "0.7rem 1rem",
-                          fontWeight: 700,
-                          cursor:
-                            runningCustom ||
-                            !customShock ||
-                            parseFloat(customShock) >= 0
-                              ? "not-allowed"
-                              : "pointer",
-                          opacity:
-                            runningCustom ||
-                            !customShock ||
-                            parseFloat(customShock) >= 0
-                              ? 0.6
-                              : 1,
-                          fontSize: "0.9rem",
-                        }}
-                      >
-                        {runningCustom
-                          ? "Calculating..."
-                          : "Run Custom Scenario"}
-                      </button>
-                    </div>
-
-                    {customResult && (
+                      {/* Chart header */}
                       <div
                         style={{
-                          borderRadius: "0.75rem",
-                          border: "1px solid rgba(255,255,255,0.1)",
-                          backgroundColor: "rgba(30,41,59,0.3)",
-                          padding: "0.75rem",
-                          display: "grid",
-                          gap: "0.25rem",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          marginBottom: "0.85rem",
+                          flexWrap: "wrap",
+                          gap: "0.5rem",
                         }}
                       >
                         <p
                           style={{
                             margin: 0,
-                            fontSize: "0.95rem",
+                            fontSize: "0.85rem",
                             fontWeight: 700,
                             color: "#f8fafc",
                           }}
                         >
-                          {customResult.name}
+                          Portfolio Value Under Stress
                         </p>
-                        <p
+                        <div
                           style={{
-                            margin: 0,
-                            fontSize: "1rem",
-                            fontWeight: 700,
-                            color: "#f87171",
+                            display: "flex",
+                            gap: "12px",
+                            alignItems: "center",
+                            flexWrap: "wrap",
                           }}
                         >
-                          {customResult.total_portfolio_loss_pct}%
-                        </p>
-                        <p
-                          style={{
-                            margin: 0,
-                            fontSize: "0.82rem",
-                            color: "#cbd5e1",
-                          }}
-                        >
-                          Estimated loss: ₹
-                          {Math.abs(
-                            customResult.total_portfolio_loss,
-                          ).toLocaleString("en-IN", {
-                            maximumFractionDigits: 0,
-                          })}
-                        </p>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "5px",
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: 10,
+                                height: 10,
+                                borderRadius: 2,
+                                backgroundColor: "#334155",
+                              }}
+                            />
+                            <span
+                              style={{ fontSize: "10px", color: "#94a3b8" }}
+                            >
+                              Current Portfolio
+                            </span>
+                          </div>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "5px",
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: 10,
+                                height: 10,
+                                borderRadius: 2,
+                                backgroundColor: "#22c55e",
+                              }}
+                            />
+                            <span
+                              style={{ fontSize: "10px", color: "#94a3b8" }}
+                            >
+                              Value Retained
+                            </span>
+                          </div>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "5px",
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: 10,
+                                height: 10,
+                                borderRadius: 2,
+                                backgroundColor: "#ef4444",
+                              }}
+                            />
+                            <span
+                              style={{ fontSize: "10px", color: "#94a3b8" }}
+                            >
+                              Estimated Loss
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                    )}
-                  </div>
 
-                  <div style={{ marginTop: "1rem" }}>
-                    <button
-                      type="button"
-                      onClick={onAnalyseStress}
-                      style={{
-                        width: "100%",
-                        border: "none",
-                        borderRadius: "0.85rem",
-                        backgroundColor: "#f97316",
-                        color: "#ffffff",
-                        padding: "0.85rem 1rem",
-                        fontWeight: 900,
-                        letterSpacing: "0.12em",
-                        textTransform: "uppercase",
-                        cursor: "pointer",
-                        fontFamily: "'DM Sans', sans-serif",
-                        fontSize: "0.9rem",
-                      }}
-                    >
-                      Refresh
-                    </button>
-                  </div>
-                </>
-              )}
+                      {/* Bars */}
+                      <div style={{ display: "grid", gap: "0.75rem" }}>
+                        {activeData.map((scenario) => {
+                          const lossWidth = Math.max(
+                            0,
+                            100 - scenario.stressedPct,
+                          );
+
+                          return (
+                            <div key={scenario.id}>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  marginBottom: "4px",
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    fontSize: "0.72rem",
+                                    fontWeight: 600,
+                                    color: "#cbd5e1",
+                                  }}
+                                >
+                                  {scenario.name}
+                                </span>
+                                <span
+                                  style={{
+                                    fontSize: "0.72rem",
+                                    fontWeight: 700,
+                                    color: "#f87171",
+                                  }}
+                                >
+                                  {scenario.total_portfolio_loss_pct}
+                                  %&nbsp;/&nbsp;₹
+                                  {Math.abs(
+                                    scenario.total_portfolio_loss,
+                                  ).toLocaleString("en-IN", {
+                                    maximumFractionDigits: 0,
+                                  })}
+                                </span>
+                              </div>
+
+                              {/* Current bar */}
+                              <div
+                                style={{
+                                  height: "9px",
+                                  borderRadius: "6px",
+                                  backgroundColor: "#334155",
+                                  marginBottom: "3px",
+                                  width: "100%",
+                                }}
+                              />
+
+                              {/* Stressed bar */}
+                              <div
+                                style={{
+                                  height: "9px",
+                                  borderRadius: "6px",
+                                  backgroundColor: "rgba(15,23,42,0.4)",
+                                  overflow: "hidden",
+                                  position: "relative",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    height: "100%",
+                                    width: `${scenario.stressedPct}%`,
+                                    borderRadius: "6px",
+                                    backgroundColor: "#22c55e",
+                                    transition: "width 0.4s ease",
+                                  }}
+                                />
+                                <div
+                                  style={{
+                                    position: "absolute",
+                                    right: 0,
+                                    top: 0,
+                                    height: "100%",
+                                    width: `${lossWidth}%`,
+                                    backgroundColor: "rgba(239,68,68,0.25)",
+                                    borderLeft: "2px dashed #ef4444",
+                                  }}
+                                />
+                                <div
+                                  style={{
+                                    position: "absolute",
+                                    right: "4px",
+                                    top: "50%",
+                                    transform: "translateY(-50%)",
+                                    fontSize: "9px",
+                                    color: "#f87171",
+                                    fontWeight: 700,
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  -{Math.abs(scenario.total_portfolio_loss_pct)}
+                                  %
+                                </div>
+                              </div>
+
+                              {/* Value labels */}
+                              <div
+                                style={{
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  marginTop: "3px",
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    fontSize: "0.65rem",
+                                    color: "#22c55e",
+                                  }}
+                                >
+                                  ₹
+                                  {scenario.stressedValue.toLocaleString(
+                                    "en-IN",
+                                    {
+                                      maximumFractionDigits: 0,
+                                    },
+                                  )}
+                                </span>
+                                <span
+                                  style={{
+                                    fontSize: "0.65rem",
+                                    color: "#94a3b8",
+                                  }}
+                                >
+                                  ₹
+                                  {scenario.currentValue.toLocaleString(
+                                    "en-IN",
+                                    {
+                                      maximumFractionDigits: 0,
+                                    },
+                                  )}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
             </div>
 
             {/* ========== 6. RISK DECOMPOSITION ========== */}
@@ -1596,7 +2036,13 @@ const AnalyticsPage = () => {
             {/* Heatmap Card */}
             <div style={cardStyle}>
               <h2 style={sectionTitleStyle}>Correlation Heatmap</h2>
-              <p style={{ margin: "0 0 1rem", color: "#94a3b8", fontSize: "0.85rem" }}>
+              <p
+                style={{
+                  margin: "0 0 1rem",
+                  color: "#94a3b8",
+                  fontSize: "0.85rem",
+                }}
+              >
                 Pairwise stock correlation matrix for current holdings.
               </p>
 
@@ -1604,47 +2050,90 @@ const AnalyticsPage = () => {
                 type="button"
                 onClick={fetchCorrelation}
                 style={{
-                  background: "#1e293b", color: "#94a3b8",
-                  borderRadius: "20px", padding: "6px 18px",
-                  fontSize: "13px", fontWeight: 600,
+                  background: "#1e293b",
+                  color: "#94a3b8",
+                  borderRadius: "20px",
+                  padding: "6px 18px",
+                  fontSize: "13px",
+                  fontWeight: 600,
                   border: "1px solid rgba(255,255,255,0.08)",
-                  cursor: "pointer", marginBottom: "1rem",
+                  cursor: "pointer",
+                  marginBottom: "1rem",
                   fontFamily: "inherit",
                 }}
-                onMouseEnter={e => { e.currentTarget.style.background="#f97316"; e.currentTarget.style.color="white"; }}
-                onMouseLeave={e => { e.currentTarget.style.background="#1e293b"; e.currentTarget.style.color="#94a3b8"; }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "#f97316";
+                  e.currentTarget.style.color = "white";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "#1e293b";
+                  e.currentTarget.style.color = "#94a3b8";
+                }}
               >
                 ↻ Refresh
               </button>
 
               {corrLoading ? (
-                <div style={{ minHeight: "200px", display: "grid", placeItems: "center" }}>
-                  <div className="analytics-spin" style={{
-                    width: "1.5rem", height: "1.5rem",
-                    borderRadius: "999px",
-                    border: "3px solid #475569",
-                    borderTopColor: "#f97316",
-                  }} />
+                <div
+                  style={{
+                    minHeight: "200px",
+                    display: "grid",
+                    placeItems: "center",
+                  }}
+                >
+                  <div
+                    className="analytics-spin"
+                    style={{
+                      width: "1.5rem",
+                      height: "1.5rem",
+                      borderRadius: "999px",
+                      border: "3px solid #475569",
+                      borderTopColor: "#f97316",
+                    }}
+                  />
                 </div>
               ) : corrError ? (
                 <p style={{ margin: 0, color: "#fca5a5" }}>{corrError}</p>
               ) : corrMatrixData.tickers.length === 0 ? (
-                <p style={{ margin: 0, color: "#94a3b8" }}>No correlation data available.</p>
+                <p style={{ margin: 0, color: "#94a3b8" }}>
+                  No correlation data available.
+                </p>
               ) : (
                 <div style={{ overflowX: "auto", paddingBottom: "0.25rem" }}>
-                  <table style={{ borderCollapse: "separate", borderSpacing: "6px", width: "max-content", minWidth: "400px" }}>
+                  <table
+                    style={{
+                      borderCollapse: "separate",
+                      borderSpacing: "6px",
+                      width: "max-content",
+                      minWidth: "400px",
+                    }}
+                  >
                     <thead>
                       <tr>
-                        <th style={{ minWidth: "80px", padding: "0.45rem", color: "#cbd5e1", textAlign: "left", fontWeight: 600 }}>
+                        <th
+                          style={{
+                            minWidth: "80px",
+                            padding: "0.45rem",
+                            color: "#cbd5e1",
+                            textAlign: "left",
+                            fontWeight: 600,
+                          }}
+                        >
                           Ticker
                         </th>
-                        {corrMatrixData.tickers.map(ticker => (
-                          <th key={`h-${ticker}`} style={{
-                            minWidth: "56px", width: "56px",
-                            padding: "0.25rem", color: "#cbd5e1",
-                            textAlign: "center", fontWeight: 600,
-                            fontSize: "0.75rem",
-                          }}>
+                        {corrMatrixData.tickers.map((ticker) => (
+                          <th
+                            key={`h-${ticker}`}
+                            style={{
+                              minWidth: "56px",
+                              width: "56px",
+                              padding: "0.25rem",
+                              color: "#cbd5e1",
+                              textAlign: "center",
+                              fontWeight: 600,
+                              fontSize: "0.75rem",
+                            }}
+                          >
                             {ticker}
                           </th>
                         ))}
@@ -1653,25 +2142,46 @@ const AnalyticsPage = () => {
                     <tbody>
                       {corrMatrixData.tickers.map((rowTicker, rowIndex) => (
                         <tr key={`row-${rowTicker}`}>
-                          <th style={{ minWidth: "80px", padding: "0.45rem", color: "#cbd5e1", textAlign: "left", fontWeight: 600, fontSize: "0.75rem" }}>
+                          <th
+                            style={{
+                              minWidth: "80px",
+                              padding: "0.45rem",
+                              color: "#cbd5e1",
+                              textAlign: "left",
+                              fontWeight: 600,
+                              fontSize: "0.75rem",
+                            }}
+                          >
                             {rowTicker}
                           </th>
                           {corrMatrixData.tickers.map((colTicker, colIndex) => {
-                            const isDiag = rowIndex === colIndex
-                            const val = isDiag ? 1 : toNumber(corrMatrixData.matrix?.[rowIndex]?.[colIndex])
-                            const visual = getCellVisual(val, isDiag)
+                            const isDiag = rowIndex === colIndex;
+                            const val = isDiag
+                              ? 1
+                              : toNumber(
+                                  corrMatrixData.matrix?.[rowIndex]?.[colIndex],
+                                );
+                            const visual = getCellVisual(val, isDiag);
                             return (
-                              <td key={`cell-${rowTicker}-${colTicker}`} style={{
-                                minWidth: "56px", width: "56px", height: "56px",
-                                padding: "0.25rem", textAlign: "center",
-                                verticalAlign: "middle", borderRadius: "0.5rem",
-                                backgroundColor: visual.background,
-                                color: visual.color,
-                                fontSize: "0.85rem", fontWeight: 600,
-                              }}>
+                              <td
+                                key={`cell-${rowTicker}-${colTicker}`}
+                                style={{
+                                  minWidth: "56px",
+                                  width: "56px",
+                                  height: "56px",
+                                  padding: "0.25rem",
+                                  textAlign: "center",
+                                  verticalAlign: "middle",
+                                  borderRadius: "0.5rem",
+                                  backgroundColor: visual.background,
+                                  color: visual.color,
+                                  fontSize: "0.85rem",
+                                  fontWeight: 600,
+                                }}
+                              >
                                 {val.toFixed(2)}
                               </td>
-                            )
+                            );
                           })}
                         </tr>
                       ))}
@@ -1685,28 +2195,49 @@ const AnalyticsPage = () => {
             <div style={cardStyle}>
               <h2 style={sectionTitleStyle}>Top Correlated Pairs</h2>
               {corrLoading ? (
-                <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.88rem" }}>Calculating...</p>
+                <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.88rem" }}>
+                  Calculating...
+                </p>
               ) : corrTopPairs.length === 0 ? (
-                <p style={{ margin: 0, color: "#94a3b8" }}>Not enough data to compute pairs.</p>
+                <p style={{ margin: 0, color: "#94a3b8" }}>
+                  Not enough data to compute pairs.
+                </p>
               ) : (
                 <div style={{ display: "grid", gap: "0.5rem" }}>
-                  {corrTopPairs.map(pair => {
-                    const key = `${pair.ticker1}-${pair.ticker2}`
+                  {corrTopPairs.map((pair) => {
+                    const key = `${pair.ticker1}-${pair.ticker2}`;
                     return (
                       <div key={key}>
-                        <div style={{
-                          borderRadius: "0.85rem",
-                          border: `1px solid ${getPairBorderColor(pair.correlation)}`,
-                          backgroundColor: "rgba(2,6,23,0.45)",
-                          padding: "0.85rem 1rem",
-                          display: "flex", flexWrap: "wrap",
-                          gap: "0.75rem", alignItems: "center",
-                          justifyContent: "space-between",
-                        }}>
-                          <p style={{ margin: 0, color: "#e2e8f0", fontWeight: 600 }}>
+                        <div
+                          style={{
+                            borderRadius: "0.85rem",
+                            border: `1px solid ${getPairBorderColor(pair.correlation)}`,
+                            backgroundColor: "rgba(2,6,23,0.45)",
+                            padding: "0.85rem 1rem",
+                            display: "flex",
+                            flexWrap: "wrap",
+                            gap: "0.75rem",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                          }}
+                        >
+                          <p
+                            style={{
+                              margin: 0,
+                              color: "#e2e8f0",
+                              fontWeight: 600,
+                            }}
+                          >
                             {pair.ticker1} ↔ {pair.ticker2}
                           </p>
-                          <p style={{ margin: 0, color: "#cbd5e1", fontSize: "1.1rem", fontWeight: 600 }}>
+                          <p
+                            style={{
+                              margin: 0,
+                              color: "#cbd5e1",
+                              fontSize: "1.1rem",
+                              fontWeight: 600,
+                            }}
+                          >
                             {pair.correlation.toFixed(2)}
                           </p>
                           <p style={{ margin: 0, color: "#94a3b8" }}>
@@ -1721,29 +2252,44 @@ const AnalyticsPage = () => {
                               color: "#f97316",
                               borderRadius: "0.6rem",
                               padding: "0.35rem 0.85rem",
-                              fontSize: "0.8rem", fontWeight: 700,
-                              cursor: loadingPair === key ? "not-allowed" : "pointer",
+                              fontSize: "0.8rem",
+                              fontWeight: 700,
+                              cursor:
+                                loadingPair === key ? "not-allowed" : "pointer",
                               opacity: loadingPair === key ? 0.6 : 1,
                             }}
                           >
-                            {loadingPair === key ? "Loading..." : expandedPair === key ? "Hide" : "Explain"}
+                            {loadingPair === key
+                              ? "Loading..."
+                              : expandedPair === key
+                                ? "Hide"
+                                : "Explain"}
                           </button>
                         </div>
                         {expandedPair === key && explanations[key] && (
-                          <div style={{
-                            borderRadius: "0.75rem",
-                            border: "1px solid rgba(255,255,255,0.07)",
-                            backgroundColor: "rgba(2,6,23,0.6)",
-                            padding: "0.85rem 1rem",
-                            marginTop: "-0.25rem",
-                          }}>
-                            <p style={{ margin: 0, color: "#cbd5e1", fontSize: "0.85rem", lineHeight: 1.6 }}>
+                          <div
+                            style={{
+                              borderRadius: "0.75rem",
+                              border: "1px solid rgba(255,255,255,0.07)",
+                              backgroundColor: "rgba(2,6,23,0.6)",
+                              padding: "0.85rem 1rem",
+                              marginTop: "-0.25rem",
+                            }}
+                          >
+                            <p
+                              style={{
+                                margin: 0,
+                                color: "#cbd5e1",
+                                fontSize: "0.85rem",
+                                lineHeight: 1.6,
+                              }}
+                            >
                               {explanations[key]}
                             </p>
                           </div>
                         )}
                       </div>
-                    )
+                    );
                   })}
                 </div>
               )}
