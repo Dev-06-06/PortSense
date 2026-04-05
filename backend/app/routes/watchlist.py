@@ -1,6 +1,7 @@
 import asyncio
 from datetime import datetime, timezone
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from motor.motor_asyncio import AsyncIOMotorCollection
 from pydantic import BaseModel
@@ -22,6 +23,8 @@ router = APIRouter(tags=["watchlist"])
 
 def _normalize_ticker(ticker: str) -> str:
     normalized = ticker.strip().upper()
+    if normalized.isdigit():
+        return normalized
     if not normalized.endswith((".NS", ".BO")):
         normalized = f"{normalized}.NS"
     return normalized
@@ -59,6 +62,14 @@ def _build_watchlist_entry(document: dict, stock_info: dict, sentiment: dict) ->
 
 
 async def _validate_ticker(ticker: str) -> bool:
+    if ticker.isdigit():
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(f"https://api.mfapi.in/mf/{ticker}")
+                return resp.status_code == 200
+        except Exception:
+            return False
+
     def _check() -> bool:
         try:
             t = yf.Ticker(ticker)

@@ -4,6 +4,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import ASCENDING
+from pymongo.errors import OperationFailure
 
 # Always load backend/.env even when the app is started from the repository root.
 ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
@@ -68,6 +69,38 @@ def get_database():
     return get_database_from_client(active_client)
 
 
+async def _ensure_holdings_user_ticker_partial_unique_index(holdings_collection) -> None:
+    """Ensure the holdings unique index uses the required partial filter.
+
+    Older deployments may already have a non-partial index with the same
+    auto-generated name (userId_1_ticker_1). In that case, replace it.
+    """
+
+    desired_name = "userId_1_ticker_1"
+    desired_partial = {"assetType": {"$in": ["stock", "mutual_fund"]}}
+
+    existing_indexes = await holdings_collection.index_information()
+    existing = existing_indexes.get(desired_name)
+
+    if existing is not None and existing.get("partialFilterExpression") != desired_partial:
+        await holdings_collection.drop_index(desired_name)
+        logger.info("Dropped legacy holdings index '%s' to apply partial unique constraint", desired_name)
+
+    try:
+        await holdings_collection.create_index(
+            [("userId", ASCENDING), ("ticker", ASCENDING)],
+            name=desired_name,
+            unique=True,
+            partialFilterExpression=desired_partial,
+            background=True,
+        )
+    except OperationFailure as exc:
+        # Handle race conditions during concurrent startups where another instance
+        # creates the same index first.
+        if getattr(exc, "code", None) != 86:
+            raise
+
+
 async def ensure_indexes(client: AsyncIOMotorClient) -> None:
     db = get_database_from_client(client)
 
@@ -87,9 +120,10 @@ async def ensure_indexes(client: AsyncIOMotorClient) -> None:
         background=True,
     )
 
+    await _ensure_holdings_user_ticker_partial_unique_index(holdings_collection)
+
     await holdings_collection.create_index(
-        [("userId", ASCENDING), ("ticker", ASCENDING)],
-        unique=True,
+        [("userId", ASCENDING), ("assetType", ASCENDING)],
         background=True,
     )
 

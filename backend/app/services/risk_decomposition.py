@@ -20,12 +20,20 @@ def compute_risk_decomposition(holdings: list[dict]) -> dict:
     if not holdings:
         return _empty_result("No holdings provided")
 
-    total_value = sum(float(h.get("currentValue", 0)) for h in holdings)
+    stock_holdings = [
+        h
+        for h in holdings
+        if str(h.get("assetType", "stock")).strip().lower() == "stock"
+    ]
+    if not stock_holdings:
+        return _empty_result("No stock holdings available")
+
+    total_value = sum(float(h.get("currentValue", 0)) for h in stock_holdings)
     if total_value <= 0:
         return _empty_result("Portfolio value is zero")
 
-    tickers = [str(h.get("ticker", "")).strip().upper() for h in holdings]
-    weights = [float(h.get("currentValue", 0)) / total_value for h in holdings]
+    tickers = [str(h.get("ticker", "")).strip().upper() for h in stock_holdings]
+    weights = [float(h.get("currentValue", 0)) / total_value for h in stock_holdings]
 
     all_tickers = tickers + ["^NSEI"]
     try:
@@ -102,9 +110,9 @@ def compute_risk_decomposition(holdings: list[dict]) -> dict:
     systematic_share = min(100.0, portfolio_systematic_var / portfolio_total_var * 100)
     idio_share = min(100.0, portfolio_idio_var / portfolio_total_var * 100)
 
-    total_value_for_sector = sum(float(h.get("currentValue", 0)) for h in holdings)
+    total_value_for_sector = sum(float(h.get("currentValue", 0)) for h in stock_holdings)
     sector_weights: dict[str, float] = {}
-    for h in holdings:
+    for h in stock_holdings:
         sector_key = str(h.get("ticker", ""))
         val = float(h.get("currentValue", 0))
         sector_weights[sector_key] = sector_weights.get(sector_key, 0) + val / total_value_for_sector if total_value_for_sector > 0 else 0

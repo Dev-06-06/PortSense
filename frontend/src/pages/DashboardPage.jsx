@@ -2,10 +2,12 @@ import { useEffect, useState } from "react";
 import api from "../services/api";
 import StockIntelDrawer from "../components/StockIntelDrawer";
 
+// ─── Styles ──────────────────────────────────────────────────────────────────
+
 const shellStyle = {
   minHeight: "100vh",
   backgroundColor: "#0d1117",
-  color: "#e5e7eb",
+  color: "#f8fafc",
   fontFamily: "'DM Sans', sans-serif",
   padding: "1.25rem",
 };
@@ -20,48 +22,54 @@ const containerStyle = {
 
 const cardStyle = {
   borderRadius: "1rem",
-  border: "1px solid rgba(255, 255, 255, 0.08)",
-  backgroundColor: "rgba(15, 23, 42, 0.6)",
+  border: "1px solid rgba(255,255,255,0.08)",
+  backgroundColor: "rgba(15,23,42,0.6)",
   backdropFilter: "blur(8px)",
 };
 
 const numberStyle = {
-  fontFamily: "'Barlow Condensed', 'DM Sans', sans-serif",
+  fontFamily: "'Barlow Condensed','DM Sans',sans-serif",
   letterSpacing: "0.02em",
 };
 
 const buttonBaseStyle = {
   border: "none",
-  borderRadius: "0.75rem",
-  padding: "0.7rem 1rem",
-  color: "#ffffff",
-  fontWeight: 700,
   cursor: "pointer",
+  borderRadius: "20px",
+  padding: "6px 18px",
+  fontSize: "13px",
+  fontWeight: 600,
+  transition: "opacity 0.15s",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "5px",
 };
 
 const inputStyle = {
-  width: "100%",
-  border: "1px solid rgba(255, 255, 255, 0.18)",
   backgroundColor: "#0f172a",
-  color: "#e5e7eb",
+  border: "1px solid rgba(255,255,255,0.18)",
   borderRadius: "0.75rem",
-  padding: "0.7rem 0.8rem",
+  color: "#f8fafc",
+  padding: "0.55rem 0.85rem",
+  fontSize: "13px",
+  outline: "none",
+  width: "100%",
   boxSizing: "border-box",
 };
 
-const formatCurrency = (value) =>
+// ─── Formatters ───────────────────────────────────────────────────────────────
+
+const formatCurrency = (v) =>
   new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
-    minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(Number(value) || 0);
+  }).format(v ?? 0);
 
-const formatNumber = (value) =>
-  new Intl.NumberFormat("en-IN", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(Number(value) || 0);
+const formatNumber = (v) =>
+  new Intl.NumberFormat("en-IN", { maximumFractionDigits: 4 }).format(v ?? 0);
+
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const EMPTY_SUMMARY = {
   totalInvested: 0,
@@ -73,7 +81,7 @@ const EMPTY_SUMMARY = {
 const NSE_TICKERS = [
   { symbol: "RELIANCE", full: "Reliance Industries" },
   { symbol: "INFY", full: "Infosys" },
-  { symbol: "TCS", full: "TCS" },
+  { symbol: "TCS", full: "Tata Consultancy Services" },
   { symbol: "HDFCBANK", full: "HDFC Bank" },
   { symbol: "ICICIBANK", full: "ICICI Bank" },
   { symbol: "SBIN", full: "State Bank of India" },
@@ -84,27 +92,26 @@ const NSE_TICKERS = [
   { symbol: "TECHM", full: "Tech Mahindra" },
   { symbol: "TATASTEEL", full: "Tata Steel" },
   { symbol: "JSWSTEEL", full: "JSW Steel" },
-  { symbol: "HINDALCO", full: "Hindalco" },
+  { symbol: "HINDALCO", full: "Hindalco Industries" },
   { symbol: "ADANIPOWER", full: "Adani Power" },
   { symbol: "ADANIENT", full: "Adani Enterprises" },
   { symbol: "ADANIPORTS", full: "Adani Ports" },
-  { symbol: "SUNPHARMA", full: "Sun Pharma" },
-  { symbol: "DRREDDY", full: "Dr Reddys" },
+  { symbol: "SUNPHARMA", full: "Sun Pharmaceutical" },
+  { symbol: "DRREDDY", full: "Dr. Reddy's Laboratories" },
   { symbol: "CIPLA", full: "Cipla" },
-  { symbol: "DIVISLAB", full: "Divis Laboratories" },
+  { symbol: "DIVISLAB", full: "Divi's Laboratories" },
   { symbol: "HINDUNILVR", full: "Hindustan Unilever" },
   { symbol: "ITC", full: "ITC" },
   { symbol: "NESTLEIND", full: "Nestle India" },
   { symbol: "BAJFINANCE", full: "Bajaj Finance" },
   { symbol: "BAJAJFINSV", full: "Bajaj Finserv" },
   { symbol: "MARUTI", full: "Maruti Suzuki" },
-  { symbol: "BAJFINANCE", full: "Bajaj Finance" },
   { symbol: "M&M", full: "Mahindra & Mahindra" },
   { symbol: "HEROMOTOCO", full: "Hero MotoCorp" },
   { symbol: "BAJAJ-AUTO", full: "Bajaj Auto" },
-  { symbol: "ONGC", full: "ONGC" },
+  { symbol: "ONGC", full: "Oil and Natural Gas Corporation" },
   { symbol: "NTPC", full: "NTPC" },
-  { symbol: "POWERGRID", full: "Power Grid" },
+  { symbol: "POWERGRID", full: "Power Grid Corporation" },
   { symbol: "COALINDIA", full: "Coal India" },
   { symbol: "LT", full: "Larsen & Toubro" },
   { symbol: "ULTRACEMCO", full: "UltraTech Cement" },
@@ -114,46 +121,29 @@ const NSE_TICKERS = [
   { symbol: "HDFCLIFE", full: "HDFC Life Insurance" },
   { symbol: "SBILIFE", full: "SBI Life Insurance" },
   { symbol: "BHARTIARTL", full: "Bharti Airtel" },
-  { symbol: "JIO", full: "Jio Financial Services" },
-  { symbol: "VEDL", full: "Vedanta" },
-  { symbol: "BEL", full: "Bharat Electronics" },
-  { symbol: "BHEL", full: "Bharat Heavy Electricals" },
-  { symbol: "HAL", full: "Hindustan Aeronautics" },
-  { symbol: "IRCTC", full: "IRCTC" },
   { symbol: "ZOMATO", full: "Zomato" },
-  { symbol: "NYKAA", full: "Nykaa" },
-  { symbol: "PAYTM", full: "Paytm" },
-  { symbol: "DMART", full: "DMart (Avenue Supermarts)" },
+  { symbol: "NYKAA", full: "FSN E-Commerce (Nykaa)" },
+  { symbol: "PAYTM", full: "One97 Communications (Paytm)" },
+  { symbol: "DMART", full: "Avenue Supermarts (DMart)" },
   { symbol: "TATACONSUM", full: "Tata Consumer Products" },
-  { symbol: "PIDILITIND", full: "Pidilite Industries" },
-  { symbol: "SIEMENS", full: "Siemens India" },
-  { symbol: "ABB", full: "ABB India" },
-  { symbol: "BANKBARODA", full: "Bank of Baroda" },
-  { symbol: "PNB", full: "Punjab National Bank" },
-  { symbol: "CANBK", full: "Canara Bank" },
-  { symbol: "INDUSINDBK", full: "IndusInd Bank" },
-  { symbol: "IDFC", full: "IDFC First Bank" },
+  { symbol: "HAL", full: "Hindustan Aeronautics" },
+  { symbol: "BEL", full: "Bharat Electronics" },
+  { symbol: "IRCTC", full: "Indian Railway Catering & Tourism" },
 ];
 
-const DashboardPage = () => {
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export default function DashboardPage() {
+  // Holdings
   const [holdings, setHoldings] = useState([]);
   const [summary, setSummary] = useState(EMPTY_SUMMARY);
   const [loading, setLoading] = useState(true);
   const [silentRefreshing, setSilentRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  // Add stock form
   const [showAddForm, setShowAddForm] = useState(false);
-  const [selectedTicker, setSelectedTicker] = useState("");
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState(null);
-  const [editTarget, setEditTarget] = useState(null);
-  const [editForm, setEditForm] = useState({
-    buyPrice: "",
-    qty: "",
-    buyDate: "",
-  });
-  const [editSaving, setEditSaving] = useState(false);
-  const [editError, setEditError] = useState("");
   const [tickerQuery, setTickerQuery] = useState("");
   const [showTickerDrop, setShowTickerDrop] = useState(false);
   const [formData, setFormData] = useState({
@@ -164,6 +154,53 @@ const DashboardPage = () => {
   });
   const [livePriceFetching, setLivePriceFetching] = useState(false);
   const [livePrice, setLivePrice] = useState(null);
+
+  // Edit / Delete
+  const [editTarget, setEditTarget] = useState(null);
+  const [editForm, setEditForm] = useState({
+    buyPrice: "",
+    qty: "",
+    buyDate: "",
+  });
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState(null);
+
+  // Drawers
+  const [selectedTicker, setSelectedTicker] = useState("");
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [mfDrawerOpen, setMfDrawerOpen] = useState(false);
+  const [mfDrawerData, setMfDrawerData] = useState(null);
+  const [mfDrawerLoading, setMfDrawerLoading] = useState(false);
+
+  // Dashboard tabs
+  const [dashTab, setDashTab] = useState("Holdings");
+  const [holdingsSubTab, setHoldingsSubTab] = useState("Stocks");
+  const [watchlistSubTab, setWatchlistSubTab] = useState("Stocks");
+
+  // MF form
+  const [showMfForm, setShowMfForm] = useState(false);
+  const [mfQuery, setMfQuery] = useState("");
+  const [mfResults, setMfResults] = useState([]);
+  const [mfSearching, setMfSearching] = useState(false);
+  const [selectedMf, setSelectedMf] = useState(null);
+  const [mfBuyNav, setMfBuyNav] = useState("");
+  const [mfUnits, setMfUnits] = useState("");
+  const [mfBuyDate, setMfBuyDate] = useState("");
+  const [mfSubmitting, setMfSubmitting] = useState(false);
+  const [mfError, setMfError] = useState("");
+
+  // FD form
+  const [showFdForm, setShowFdForm] = useState(false);
+  const [fdBank, setFdBank] = useState("");
+  const [fdPrincipal, setFdPrincipal] = useState("");
+  const [fdRate, setFdRate] = useState("");
+  const [fdStartDate, setFdStartDate] = useState("");
+  const [fdMaturityDate, setFdMaturityDate] = useState("");
+  const [fdSubmitting, setFdSubmitting] = useState(false);
+  const [fdError, setFdError] = useState("");
+
+  // Watchlist
   const [watchlist, setWatchlist] = useState([]);
   const [watchlistLoading, setWatchlistLoading] = useState(true);
   const [watchlistError, setWatchlistError] = useState("");
@@ -172,57 +209,71 @@ const DashboardPage = () => {
   const [showWatchTickerDrop, setShowWatchTickerDrop] = useState(false);
   const [watchInputError, setWatchInputError] = useState("");
   const [watchInputLoading, setWatchInputLoading] = useState(false);
-  const [dashTab, setDashTab] = useState("Holdings");
+  const [watchMfQuery, setWatchMfQuery] = useState("");
+  const [watchMfResults, setWatchMfResults] = useState([]);
+  const [watchMfSearching, setWatchMfSearching] = useState(false);
+  const [watchMfSelected, setWatchMfSelected] = useState(null);
+  const [watchMfAdding, setWatchMfAdding] = useState(false);
+  const [watchMfError, setWatchMfError] = useState("");
+
+  // News
   const [newsArticles, setNewsArticles] = useState([]);
   const [newsLoading, setNewsLoading] = useState(false);
   const [newsError, setNewsError] = useState("");
   const [newsCategory, setNewsCategory] = useState("all");
 
+  // ── Computed ────────────────────────────────────────────────────────────────
+
   const tickerSuggestions =
-    tickerQuery.length < 1
-      ? []
-      : NSE_TICKERS.filter(
+    tickerQuery.length >= 1
+      ? NSE_TICKERS.filter(
           (t) =>
-            t.symbol.startsWith(tickerQuery.toUpperCase()) ||
+            t.symbol.toLowerCase().includes(tickerQuery.toLowerCase()) ||
             t.full.toLowerCase().includes(tickerQuery.toLowerCase()),
-        ).slice(0, 6);
+        ).slice(0, 6)
+      : [];
 
   const watchTickerSuggestions =
-    watchInputTicker.length < 1
-      ? []
-      : NSE_TICKERS.filter(
+    watchInputTicker.length >= 1
+      ? NSE_TICKERS.filter(
           (t) =>
-            t.symbol.startsWith(watchInputTicker.toUpperCase()) ||
+            t.symbol.toLowerCase().includes(watchInputTicker.toLowerCase()) ||
             t.full.toLowerCase().includes(watchInputTicker.toLowerCase()),
-        ).slice(0, 6);
+        ).slice(0, 6)
+      : [];
+
+  const stockHoldings = holdings.filter(
+    (h) => !h.assetType || h.assetType === "stock",
+  );
+  const mfHoldings = holdings.filter((h) => h.assetType === "mutual_fund");
+  const fdHoldings = holdings.filter((h) => h.assetType === "fd");
+  const totalDayChange = holdings.reduce((s, h) => s + (h.dayChange || 0), 0);
+  const isDayPositive = totalDayChange >= 0;
+
+  // ── Handlers ────────────────────────────────────────────────────────────────
 
   const fetchPortfolioData = async (silent = false) => {
-    if (!silent) setLoading(true);
-    else setSilentRefreshing(true);
-    setError("");
-
+    if (silent) setSilentRefreshing(true);
+    else setLoading(true);
     try {
-      const response = await api.get("/api/holdings/dashboard");
-      const data = response.data;
-      setHoldings(Array.isArray(data.holdings) ? data.holdings : []);
-      setSummary({ ...EMPTY_SUMMARY, ...(data.summary || {}) });
+      const res = await api.get("/api/holdings/dashboard");
+      setHoldings(res.data.holdings || []);
+      setSummary(res.data.summary || EMPTY_SUMMARY);
+      setError("");
     } catch {
-      if (!silent) {
-        setError("Unable to load holdings. Please try again.");
-        setSummary(EMPTY_SUMMARY);
-      }
+      if (!silent) setError("Failed to load portfolio.");
     } finally {
-      if (!silent) setLoading(false);
-      else setSilentRefreshing(false);
+      if (silent) setSilentRefreshing(false);
+      else setLoading(false);
     }
   };
 
   const fetchWatchlist = async () => {
     setWatchlistLoading(true);
-    setWatchlistError("");
     try {
       const res = await api.get("/api/watchlist/");
-      setWatchlist(Array.isArray(res.data) ? res.data : []);
+      setWatchlist(res.data || []);
+      setWatchlistError("");
     } catch {
       setWatchlistError("Failed to load watchlist.");
     } finally {
@@ -230,20 +281,249 @@ const DashboardPage = () => {
     }
   };
 
-  const fetchNews = async (category = newsCategory) => {
+  const searchWatchMf = async (query) => {
+    if (query.length < 2) {
+      setWatchMfResults([]);
+      return;
+    }
+    setWatchMfSearching(true);
+    try {
+      const res = await api.get(
+        `/api/holdings/mf-search?q=${encodeURIComponent(query)}`,
+      );
+      setWatchMfResults(Array.isArray(res.data) ? res.data : []);
+    } catch {
+      setWatchMfResults([]);
+    } finally {
+      setWatchMfSearching(false);
+    }
+  };
+
+  const fetchNews = async (category = "all") => {
     setNewsLoading(true);
     setNewsError("");
     try {
       const res = await api.get(`/api/news/feed?category=${category}`);
-      setNewsArticles(
-        Array.isArray(res.data.articles) ? res.data.articles : [],
-      );
+      setNewsArticles(res.data.articles || res.data || []);
     } catch {
-      setNewsError("News feed unavailable.");
+      setNewsError("Failed to load news.");
     } finally {
       setNewsLoading(false);
     }
   };
+
+  const searchMf = async (query) => {
+    if (query.length < 2) {
+      setMfResults([]);
+      return;
+    }
+    setMfSearching(true);
+    try {
+      const res = await api.get(
+        `/api/holdings/mf-search?q=${encodeURIComponent(query)}`,
+      );
+      setMfResults(res.data || []);
+    } catch {
+      setMfResults([]);
+    } finally {
+      setMfSearching(false);
+    }
+  };
+
+  const onChangeForm = (e) => {
+    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  const onSubmitHolding = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      await api.post("/api/holdings", {
+        ticker: formData.ticker.toUpperCase(),
+        buyDate: formData.buyDate,
+        buyPrice: Number(formData.buyPrice),
+        quantity: Number(formData.quantity),
+        assetType: "stock",
+      });
+      setFormData({ ticker: "", buyDate: "", buyPrice: "", quantity: "" });
+      setTickerQuery("");
+      setLivePrice(null);
+      setShowAddForm(false);
+      fetchPortfolioData();
+    } catch {
+      setError("Failed to add holding.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (holdingId) => {
+    try {
+      await api.delete(`/api/holdings/${holdingId}`);
+      setDeleteTarget(null);
+      fetchPortfolioData();
+    } catch {
+      setError("Failed to delete holding.");
+    }
+  };
+
+  const fetchLivePrice = async (ticker) => {
+    if (!ticker) return;
+    setLivePriceFetching(true);
+    try {
+      const res = await api.get(`/api/market/price/${ticker}.NS`);
+      setLivePrice(res.data?.price ?? null);
+      setFormData((prev) => ({
+        ...prev,
+        buyPrice: String(res.data?.price ?? ""),
+      }));
+    } catch {
+      setLivePrice(null);
+    } finally {
+      setLivePriceFetching(false);
+    }
+  };
+
+  const handleWatchlistAdd = async () => {
+    if (!watchInputTicker.trim()) return;
+    setWatchInputLoading(true);
+    setWatchInputError("");
+    try {
+      const ticker = watchInputTicker.trim().toUpperCase();
+      const symbol = ticker.endsWith(".NS") ? ticker : `${ticker}.NS`;
+      await api.post("/api/watchlist/", { ticker: symbol });
+      setWatchInputTicker("");
+      setShowWatchlistInput(false);
+      fetchWatchlist();
+    } catch {
+      setWatchInputError("Failed to add to watchlist.");
+    } finally {
+      setWatchInputLoading(false);
+    }
+  };
+
+  const handleAddMfWatchlist = async () => {
+    if (!watchMfSelected) return;
+    setWatchMfAdding(true);
+    setWatchMfError("");
+    try {
+      await api.post("/api/watchlist/", { ticker: watchMfSelected.schemeCode });
+      setWatchMfSelected(null);
+      setWatchMfQuery("");
+      setWatchMfResults([]);
+      await fetchWatchlist();
+    } catch (err) {
+      setWatchMfError(err?.response?.data?.detail || "Failed to add fund");
+    } finally {
+      setWatchMfAdding(false);
+    }
+  };
+
+  const handleWatchlistRemove = async (ticker) => {
+    try {
+      await api.delete(`/api/watchlist/${ticker}`);
+      fetchWatchlist();
+    } catch {
+      setWatchlistError("Failed to remove from watchlist.");
+    }
+  };
+
+  const onSubmitMf = async () => {
+    if (!selectedMf || !mfBuyNav || !mfUnits || !mfBuyDate) {
+      setMfError("Please fill in all fields.");
+      return;
+    }
+    setMfSubmitting(true);
+    setMfError("");
+    try {
+      await api.post("/api/holdings", {
+        ticker: selectedMf.schemeCode,
+        buyDate: mfBuyDate,
+        buyPrice: Number(mfBuyNav),
+        quantity: Number(mfUnits),
+        assetType: "mutual_fund",
+        schemeName: selectedMf.schemeName,
+      });
+      setShowMfForm(false);
+      setMfQuery("");
+      setMfResults([]);
+      setSelectedMf(null);
+      setMfBuyNav("");
+      setMfUnits("");
+      setMfBuyDate("");
+      fetchPortfolioData();
+    } catch {
+      setMfError("Failed to add mutual fund.");
+    } finally {
+      setMfSubmitting(false);
+    }
+  };
+
+  const onSubmitFd = async () => {
+    if (!fdBank || !fdPrincipal || !fdRate || !fdStartDate) {
+      setFdError("Please fill in all required fields.");
+      return;
+    }
+    setFdSubmitting(true);
+    setFdError("");
+    try {
+      await api.post("/api/holdings", {
+        ticker: fdBank.trim(),
+        buyDate: fdStartDate,
+        buyPrice: Number(fdPrincipal),
+        quantity: 1,
+        assetType: "fd",
+        fdRate: Number(fdRate),
+        ...(fdMaturityDate ? { fdMaturityDate } : {}),
+      });
+      setShowFdForm(false);
+      setFdBank("");
+      setFdPrincipal("");
+      setFdRate("");
+      setFdStartDate("");
+      setFdMaturityDate("");
+      fetchPortfolioData();
+    } catch {
+      setFdError("Failed to add FD.");
+    } finally {
+      setFdSubmitting(false);
+    }
+  };
+
+  const openMfDrawer = async (holding) => {
+    setMfDrawerOpen(true);
+    setMfDrawerData(null);
+    setMfDrawerLoading(true);
+    try {
+      const res = await api.get(`/api/holdings/mf-nav/${holding.ticker}`);
+      setMfDrawerData({ ...res.data, holding });
+    } catch {
+      setMfDrawerData({ error: true, holding });
+    } finally {
+      setMfDrawerLoading(false);
+    }
+  };
+
+  const handleEditSave = async () => {
+    if (!editTarget) return;
+    setEditSaving(true);
+    setEditError("");
+    try {
+      await api.put(`/api/holdings/${editTarget.id}`, {
+        buyPrice: Number(editForm.buyPrice),
+        quantity: Number(editForm.qty),
+        buyDate: editForm.buyDate,
+      });
+      setEditTarget(null);
+      fetchPortfolioData();
+    } catch {
+      setEditError("Failed to save changes.");
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  // ── Effects ─────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     document.title = "Dashboard | PortSense";
@@ -259,1143 +539,529 @@ const DashboardPage = () => {
 
   useEffect(() => {
     if (dashTab === "News" && newsArticles.length === 0) {
-      fetchNews();
+      fetchNews(newsCategory);
     }
   }, [dashTab]);
 
   useEffect(() => {
-    const intervalId = setInterval(() => {
-      fetchPortfolioData(true);
-    }, 60000);
-    return () => clearInterval(intervalId);
+    const id = setInterval(() => fetchPortfolioData(true), 60000);
+    return () => clearInterval(id);
   }, []);
 
-  const onChangeForm = (event) => {
-    const { name, value } = event.target;
-    if (name === "ticker") {
-      setLivePrice(null);
-    }
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
+  // ── Render helpers ───────────────────────────────────────────────────────────
 
-  const onSubmitHolding = async (event) => {
-    event.preventDefault();
-    setSubmitting(true);
-    setError("");
-
-    try {
-      await api.post("/api/holdings", {
-        ticker: formData.ticker.trim(),
-        buyDate: formData.buyDate,
-        buyPrice: Number(formData.buyPrice),
-        quantity: Number(formData.quantity),
-      });
-
-      setFormData({
-        ticker: "",
-        buyDate: "",
-        buyPrice: "",
-        quantity: "",
-      });
-      setTickerQuery("");
-      setLivePrice(null);
-      setShowAddForm(false);
-      await fetchPortfolioData();
-    } catch (requestError) {
-      const message =
-        requestError?.response?.data?.detail ||
-        "Unable to add holding. Check your values and try again.";
-      setError(message);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleDelete = async (holdingId) => {
-    setError("");
-
-    try {
-      await api.delete(`/api/holdings/${holdingId}`);
-      await fetchPortfolioData();
-    } catch {
-      setError("Unable to delete holding. Please try again.");
-    }
-  };
-
-  const fetchLivePrice = async (ticker) => {
-    if (!ticker) {
-      setLivePrice(null);
-      return;
-    }
-
-    setLivePriceFetching(true);
-    setLivePrice(null);
-
-    try {
-      const res = await api.get(`/api/market/price/${ticker}`);
-      setLivePrice(res.data?.currentPrice || null);
-    } catch {
-      setLivePrice(null);
-    } finally {
-      setLivePriceFetching(false);
-    }
-  };
-
-  const handleWatchlistAdd = async () => {
-    if (!watchInputTicker.trim()) return;
-    setWatchInputLoading(true);
-    setWatchInputError("");
-    try {
-      const tickerWithSuffix = watchInputTicker.endsWith(".NS")
-        ? watchInputTicker
-        : `${watchInputTicker}.NS`;
-      await api.post("/api/watchlist/", { ticker: tickerWithSuffix });
-      setWatchInputTicker("");
-      setShowWatchTickerDrop(false);
-      setShowWatchlistInput(false);
-      await fetchWatchlist();
-    } catch (err) {
-      const msg = err?.response?.data?.detail || "Failed to add ticker.";
-      setWatchInputError(msg);
-    } finally {
-      setWatchInputLoading(false);
-    }
-  };
-
-  const handleWatchlistRemove = async (ticker) => {
-    try {
-      await api.delete(`/api/watchlist/${ticker}`);
-      setWatchlist((prev) => prev.filter((item) => item.ticker !== ticker));
-    } catch {
-      setWatchlistError("Failed to remove ticker.");
-    }
-  };
-
-  const totalDayChange = holdings.reduce(
-    (sum, h) => sum + (Number(h.dayChange) || 0),
-    0,
+  const skeletonRow = (key) => (
+    <tr key={key} className="holding-row">
+      {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+        <td key={i} style={{ padding: "0.75rem 0.6rem" }}>
+          <div
+            className="animate-pulse"
+            style={{
+              height: 14,
+              borderRadius: 4,
+              backgroundColor: "rgba(255,255,255,0.07)",
+              width: i === 1 ? 60 : 50,
+            }}
+          />
+        </td>
+      ))}
+    </tr>
   );
-  const isDayPositive = totalDayChange >= 0;
+
+  const pnlColor = (v) => (v >= 0 ? "#22c55e" : "#ef4444");
+
+  // Tab pill
+  const tabPill = (label, active, onClick, accent = "#f97316") => (
+    <button
+      key={label}
+      onClick={onClick}
+      style={{
+        ...buttonBaseStyle,
+        backgroundColor: active ? accent : "#1e293b",
+        color: active ? "#fff" : "#94a3b8",
+        border: active ? "none" : "1px solid rgba(255,255,255,0.08)",
+      }}
+    >
+      {label}
+    </button>
+  );
+
+  // Context action button
+  const contextBtn = () => {
+    if (dashTab === "Holdings") {
+      if (holdingsSubTab === "Stocks")
+        return (
+          <button
+            style={{
+              ...buttonBaseStyle,
+              backgroundColor: "#f97316",
+              color: "#fff",
+            }}
+            onClick={() => setShowAddForm((v) => !v)}
+          >
+            + Add Stock
+          </button>
+        );
+      if (holdingsSubTab === "Mutual Funds")
+        return (
+          <button
+            style={{
+              ...buttonBaseStyle,
+              backgroundColor: "#8b5cf6",
+              color: "#fff",
+            }}
+            onClick={() => setShowMfForm((v) => !v)}
+          >
+            + Add MF
+          </button>
+        );
+      if (holdingsSubTab === "FD")
+        return (
+          <button
+            style={{
+              ...buttonBaseStyle,
+              backgroundColor: "#10b981",
+              color: "#fff",
+            }}
+            onClick={() => setShowFdForm((v) => !v)}
+          >
+            + Add FD
+          </button>
+        );
+    }
+    if (dashTab === "Watchlist")
+      return (
+        <button
+          style={{
+            ...buttonBaseStyle,
+            backgroundColor: "transparent",
+            color: "#94a3b8",
+            border: "1px solid rgba(255,255,255,0.18)",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.color = "#f8fafc";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.color = "#94a3b8";
+          }}
+          onClick={() => setShowWatchlistInput((v) => !v)}
+        >
+          + Add
+        </button>
+      );
+    if (dashTab === "News")
+      return (
+        <button
+          style={{
+            ...buttonBaseStyle,
+            backgroundColor: "transparent",
+            color: "#94a3b8",
+            border: "1px solid rgba(255,255,255,0.18)",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.color = "#f8fafc";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.color = "#94a3b8";
+          }}
+          onClick={() => {
+            setNewsArticles([]);
+            fetchNews(newsCategory);
+          }}
+        >
+          ↻ Refresh
+        </button>
+      );
+    return null;
+  };
+
+  // ── JSX ──────────────────────────────────────────────────────────────────────
 
   return (
     <div style={shellStyle}>
       <style>{`
-        .loader-spin {
-          animation: spin 0.9s linear infinite;
-        }
-
         .summary-grid {
           display: grid;
-          grid-template-columns: 1fr;
+          grid-template-columns: repeat(4, 1fr);
           gap: 0.75rem;
         }
-
+        @media (max-width: 640px) {
+          .summary-grid { grid-template-columns: repeat(2, 1fr); }
+          .mobile-hide-col { display: none !important; }
+        }
         .holdings-table {
-          min-width: 560px;
-        }
-
-        .holding-row {
-          cursor: pointer;
-          transition: background-color 0.16s ease;
-        }
-
-        .holding-row:hover {
-          background: rgba(255, 255, 255, 0.04);
-        }
-
-        .animate-pulse {
-          animation: dashboard-pulse 1.4s ease-in-out infinite;
-        }
-
-        .add-holding-form {
-          grid-template-columns: 1fr;
           width: 100%;
+          border-collapse: collapse;
+          font-size: 13px;
         }
-
-        .mobile-hide-col {
-          display: none;
+        .holdings-table th {
+          text-align: left;
+          padding: 0.6rem;
+          color: #64748b;
+          font-weight: 600;
+          border-bottom: 1px solid rgba(255,255,255,0.07);
+          white-space: nowrap;
         }
-
-        @keyframes dashboard-pulse {
+        .holding-row td {
+          padding: 0.7rem 0.6rem;
+          border-bottom: 1px solid rgba(255,255,255,0.04);
+          white-space: nowrap;
+        }
+        .holding-row:hover { background: rgba(255,255,255,0.03); }
+        .animate-pulse {
+          animation: pulse 1.5s ease-in-out infinite;
+        }
+        @keyframes pulse {
           0%, 100% { opacity: 1; }
-          50% { opacity: 0.45; }
+          50% { opacity: 0.4; }
         }
-
         @keyframes spin {
-          from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
         }
-
-        @media (min-width: 768px) {
-          .summary-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-          }
+        .loader-spin {
+          display: inline-block;
+          width: 14px;
+          height: 14px;
+          border: 2px solid rgba(249,115,22,0.3);
+          border-top-color: #f97316;
+          border-radius: 50%;
+          animation: spin 0.7s linear infinite;
         }
-
-        @media (min-width: 900px) {
-          .summary-grid {
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-          }
-
-          .add-holding-form {
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-          }
-
-          .mobile-hide-col {
-            display: table-cell;
-          }
-
-          .holdings-table {
-            min-width: 840px;
-          }
+        @keyframes slideIn {
+          from { transform: translateX(100%); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
         }
+        .drawer-slide { animation: slideIn 0.25s ease-out forwards; }
+        .pill-btn:hover { opacity: 0.85; }
       `}</style>
 
       <div style={containerStyle}>
+        {/* ── SUMMARY CARD ── */}
         <div style={{ ...cardStyle, padding: "1rem" }}>
           <div className="summary-grid">
-            <div>
-              <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.85rem" }}>
+            {/* Total Invested */}
+            <div style={{ padding: "0.5rem 0.25rem" }}>
+              <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4 }}>
                 Total Invested
-              </p>
-              <p
+              </div>
+              <div
                 style={{
                   ...numberStyle,
-                  margin: "0.25rem 0 0",
-                  fontSize: "1.6rem",
+                  fontSize: 20,
+                  fontWeight: 700,
                   color: "#f8fafc",
                 }}
               >
-                {formatCurrency(summary.totalInvested)}
-              </p>
-            </div>
-
-            <div>
-              <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.85rem" }}>
-                Current Value
-              </p>
-              <p
-                style={{
-                  ...numberStyle,
-                  margin: "0.25rem 0 0",
-                  fontSize: "1.6rem",
-                  color:
-                    Number(summary.totalCurrentValue) >=
-                    Number(summary.totalInvested)
-                      ? "#22c55e"
-                      : "#ef4444",
-                }}
-              >
-                {formatCurrency(summary.totalCurrentValue)}
-              </p>
-            </div>
-
-            <div>
-              <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.85rem" }}>
-                Total P&L
-              </p>
-              <p
-                style={{
-                  ...numberStyle,
-                  margin: "0.25rem 0 0",
-                  fontSize: "1.6rem",
-                  color: summary.totalPnl >= 0 ? "#22c55e" : "#ef4444",
-                }}
-              >
-                {formatCurrency(summary.totalPnl)}
-                {Number(summary.totalInvested) > 0 && (
+                {loading ? (
                   <span
+                    className="animate-pulse"
                     style={{
-                      marginLeft: "0.5rem",
-                      fontSize: "0.85rem",
-                      color: summary.totalPnl >= 0 ? "#22c55e" : "#ef4444",
+                      display: "inline-block",
+                      width: 90,
+                      height: 20,
+                      backgroundColor: "rgba(255,255,255,0.07)",
+                      borderRadius: 4,
                     }}
-                  >
-                    {summary.totalPnl >= 0 ? "+" : ""}
-                    {Number(summary.totalPnlPercent || 0).toFixed(2)}%
-                  </span>
+                  />
+                ) : (
+                  formatCurrency(summary.totalInvested)
                 )}
-              </p>
+              </div>
             </div>
-
-            <div>
+            {/* Current Value */}
+            <div style={{ padding: "0.5rem 0.25rem" }}>
+              <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4 }}>
+                Current Value
+              </div>
               <div
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  minHeight: "1.3rem",
+                  ...numberStyle,
+                  fontSize: 20,
+                  fontWeight: 700,
+                  color: "#f8fafc",
                 }}
               >
-                <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.85rem" }}>
-                  Today's P&L
-                </p>
+                {loading ? (
+                  <span
+                    className="animate-pulse"
+                    style={{
+                      display: "inline-block",
+                      width: 90,
+                      height: 20,
+                      backgroundColor: "rgba(255,255,255,0.07)",
+                      borderRadius: 4,
+                    }}
+                  />
+                ) : (
+                  formatCurrency(summary.totalCurrentValue)
+                )}
+              </div>
+            </div>
+            {/* Total P&L */}
+            <div style={{ padding: "0.5rem 0.25rem" }}>
+              <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4 }}>
+                Total P&amp;L
+              </div>
+              <div
+                style={{
+                  ...numberStyle,
+                  fontSize: 18,
+                  fontWeight: 700,
+                  color: loading ? "#94a3b8" : pnlColor(summary.totalPnl),
+                }}
+              >
+                {loading ? (
+                  <span
+                    className="animate-pulse"
+                    style={{
+                      display: "inline-block",
+                      width: 80,
+                      height: 20,
+                      backgroundColor: "rgba(255,255,255,0.07)",
+                      borderRadius: 4,
+                    }}
+                  />
+                ) : (
+                  <>
+                    {formatCurrency(summary.totalPnl)}{" "}
+                    <span style={{ fontSize: 12 }}>
+                      ({(summary.totalPnlPercent ?? 0).toFixed(2)}%)
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+            {/* Today's P&L */}
+            <div style={{ padding: "0.5rem 0.25rem" }}>
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "#64748b",
+                  marginBottom: 4,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                Today&apos;s P&amp;L
                 {silentRefreshing && (
-                  <span style={{ color: "#94a3b8", fontSize: "0.7rem" }}>
-                    updating...
+                  <span style={{ fontSize: 10, color: "#64748b" }}>
+                    updating…
                   </span>
                 )}
               </div>
-              <p
+              <div
                 style={{
                   ...numberStyle,
-                  margin: "0.25rem 0 0",
-                  fontSize: "1.6rem",
-                  color: isDayPositive ? "#22c55e" : "#ef4444",
+                  fontSize: 18,
+                  fontWeight: 700,
+                  color: loading ? "#94a3b8" : pnlColor(totalDayChange),
                 }}
               >
-                {isDayPositive ? "+" : ""}
-                {formatCurrency(totalDayChange)}
-              </p>
+                {loading ? (
+                  <span
+                    className="animate-pulse"
+                    style={{
+                      display: "inline-block",
+                      width: 80,
+                      height: 20,
+                      backgroundColor: "rgba(255,255,255,0.07)",
+                      borderRadius: 4,
+                    }}
+                  />
+                ) : (
+                  <>
+                    {isDayPositive ? "▲" : "▼"}{" "}
+                    {formatCurrency(Math.abs(totalDayChange))}
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>
 
+        {/* ── MAIN TABBED CARD ── */}
         <div style={{ ...cardStyle, padding: "1rem" }}>
-          {/* ── TAB BAR ── */}
+          {/* Top tab bar */}
           <div
             style={{
               display: "flex",
-              gap: "8px",
-              marginBottom: "1rem",
-              borderBottom: "1px solid #1e293b",
-              paddingBottom: "10px",
-              overflowX: "auto",
               alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: "0.5rem",
+              marginBottom: "1rem",
             }}
           >
-            {["Holdings", "Watchlist", "News"].map((tab) => (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => setDashTab(tab)}
-                style={{
-                  background: dashTab === tab ? "#f97316" : "#1e293b",
-                  color: dashTab === tab ? "white" : "#94a3b8",
-                  borderRadius: "20px",
-                  padding: "6px 18px",
-                  fontSize: "13px",
-                  fontWeight: 600,
-                  border: "none",
-                  cursor: "pointer",
-                  whiteSpace: "nowrap",
-                  fontFamily: "inherit",
-                  transition: "background 0.15s ease, color 0.15s ease",
-                }}
-              >
-                {tab}
-              </button>
-            ))}
-
-            {/* Context action button — right aligned */}
-            <div style={{ marginLeft: "auto", flexShrink: 0 }}>
-              {dashTab === "Holdings" && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowAddForm((p) => !p);
-                    setLivePrice(null);
-                  }}
-                  style={{
-                    background: "#f97316",
-                    color: "white",
-                    borderRadius: "20px",
-                    padding: "6px 18px",
-                    fontSize: "13px",
-                    fontWeight: 600,
-                    border: "none",
-                    cursor: "pointer",
-                    whiteSpace: "nowrap",
-                    fontFamily: "inherit",
-                  }}
-                >
-                  + Add Holding
-                </button>
-              )}
-              {dashTab === "Watchlist" && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowWatchlistInput((p) => !p);
-                    setWatchInputError("");
-                  }}
-                  style={{
-                    background: "#1e293b",
-                    color: "#94a3b8",
-                    borderRadius: "20px",
-                    padding: "6px 18px",
-                    fontSize: "13px",
-                    fontWeight: 600,
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    cursor: "pointer",
-                    whiteSpace: "nowrap",
-                    fontFamily: "inherit",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = "#f97316";
-                    e.currentTarget.style.color = "white";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = "#1e293b";
-                    e.currentTarget.style.color = "#94a3b8";
-                  }}
-                >
-                  + Add
-                </button>
-              )}
-              {dashTab === "News" && (
-                <button
-                  type="button"
-                  onClick={() => fetchNews(newsCategory)}
-                  style={{
-                    background: "#1e293b",
-                    color: "#94a3b8",
-                    borderRadius: "20px",
-                    padding: "6px 18px",
-                    fontSize: "13px",
-                    fontWeight: 600,
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    cursor: "pointer",
-                    whiteSpace: "nowrap",
-                    fontFamily: "inherit",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = "#f97316";
-                    e.currentTarget.style.color = "white";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = "#1e293b";
-                    e.currentTarget.style.color = "#94a3b8";
-                  }}
-                >
-                  ↻ Refresh
-                </button>
+            <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+              {["Holdings", "Watchlist", "News"].map((tab) =>
+                tabPill(tab, dashTab === tab, () => setDashTab(tab)),
               )}
             </div>
+            <div>{contextBtn()}</div>
           </div>
 
           {/* ── HOLDINGS TAB ── */}
           {dashTab === "Holdings" && (
             <>
-              {showAddForm && (
-                <form
-                  onSubmit={onSubmitHolding}
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "0.7rem",
-                    marginBottom: "1rem",
-                  }}
-                >
-                  <div style={{ position: "relative" }}>
-                    <p
-                      style={{
-                        margin: "0 0 0.3rem",
-                        color: "#94a3b8",
-                        fontSize: "0.75rem",
-                        fontWeight: 600,
-                      }}
-                    >
-                      TICKER
-                    </p>
-                    <input
-                      name="ticker"
-                      type="text"
-                      placeholder="Search e.g. INFY, Infosys..."
-                      value={tickerQuery}
-                      autoComplete="off"
-                      onChange={(e) => {
-                        const val = e.target.value.toUpperCase();
-                        setTickerQuery(e.target.value);
-                        setFormData((p) => ({ ...p, ticker: val }));
-                        setShowTickerDrop(true);
-                      }}
-                      onBlur={() =>
-                        setTimeout(() => setShowTickerDrop(false), 150)
-                      }
-                      onFocus={() => {
-                        if (tickerQuery.length > 0) setShowTickerDrop(true);
-                      }}
-                      required
-                      style={{
-                        ...inputStyle,
-                        fontSize: "1rem",
-                        minHeight: "2.75rem",
-                      }}
-                    />
-
-                    {showTickerDrop && tickerSuggestions.length > 0 && (
-                      <div
-                        style={{
-                          position: "absolute",
-                          top: "calc(100% + 4px)",
-                          left: 0,
-                          right: 0,
-                          backgroundColor: "#0f172a",
-                          border: "1px solid rgba(255,255,255,0.15)",
-                          borderRadius: "0.75rem",
-                          overflow: "hidden",
-                          zIndex: 100,
-                          boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
-                        }}
-                      >
-                        {tickerSuggestions.map((t) => (
-                          <div
-                            key={t.symbol}
-                            onMouseDown={() => {
-                              const fullTicker = `${t.symbol}.NS`;
-                              setFormData((p) => ({
-                                ...p,
-                                ticker: fullTicker,
-                              }));
-                              setTickerQuery(t.symbol);
-                              setShowTickerDrop(false);
-                              fetchLivePrice(fullTicker);
-                            }}
-                            style={{
-                              padding: "0.7rem 1rem",
-                              cursor: "pointer",
-                              borderBottom: "1px solid rgba(255,255,255,0.06)",
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "center",
-                            }}
-                            onMouseEnter={(e) =>
-                              (e.currentTarget.style.backgroundColor =
-                                "rgba(249,115,22,0.1)")
-                            }
-                            onMouseLeave={(e) =>
-                              (e.currentTarget.style.backgroundColor =
-                                "transparent")
-                            }
-                          >
-                            <span
-                              style={{
-                                color: "#f97316",
-                                fontWeight: 700,
-                                fontSize: "0.9rem",
-                              }}
-                            >
-                              {t.symbol}
-                            </span>
-                            <span
-                              style={{ color: "#94a3b8", fontSize: "0.8rem" }}
-                            >
-                              {t.full}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div>
-                    <p
-                      style={{
-                        margin: "0 0 0.3rem",
-                        color: "#94a3b8",
-                        fontSize: "0.75rem",
-                        fontWeight: 600,
-                      }}
-                    >
-                      BUY DATE
-                    </p>
-                    <input
-                      name="buyDate"
-                      type="date"
-                      value={formData.buyDate}
-                      onChange={onChangeForm}
-                      required
-                      style={inputStyle}
-                    />
-                  </div>
-
-                  {(livePriceFetching || livePrice !== null) && (
-                    <div
-                      style={{
-                        padding: "0.75rem 0.9rem",
-                        borderRadius: "0.75rem",
-                        border: "1px solid rgba(249, 115, 22, 0.2)",
-                        backgroundColor: "rgba(249, 115, 22, 0.08)",
-                      }}
-                    >
-                      <p
-                        style={{
-                          margin: 0,
-                          color: "#f8fafc",
-                          fontSize: "0.8rem",
-                          fontWeight: 700,
-                        }}
-                      >
-                        Current market price:
-                      </p>
-                      <p
-                        style={{
-                          margin: "0.25rem 0 0",
-                          color: "#fdba74",
-                          fontSize: "1rem",
-                          fontWeight: 700,
-                        }}
-                      >
-                        {livePriceFetching
-                          ? "Fetching..."
-                          : formatCurrency(livePrice)}
-                      </p>
-                    </div>
-                  )}
-
-                  <div>
-                    <p
-                      style={{
-                        margin: "0 0 0.3rem",
-                        color: "#94a3b8",
-                        fontSize: "0.75rem",
-                        fontWeight: 600,
-                      }}
-                    >
-                      BUY PRICE (₹)
-                    </p>
-                    <input
-                      name="buyPrice"
-                      type="text"
-                      inputMode="decimal"
-                      placeholder="e.g. 1380.50"
-                      value={formData.buyPrice}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        if (/^\d*\.?\d*$/.test(val)) {
-                          setFormData((p) => ({ ...p, buyPrice: val }));
-                        }
-                      }}
-                      required
-                      style={{
-                        ...inputStyle,
-                        fontSize: "1rem",
-                        minHeight: "2.75rem",
-                      }}
-                    />
-                  </div>
-
-                  <div>
-                    <p
-                      style={{
-                        margin: "0 0 0.3rem",
-                        color: "#94a3b8",
-                        fontSize: "0.75rem",
-                        fontWeight: 600,
-                      }}
-                    >
-                      QUANTITY
-                    </p>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        border: "1px solid rgba(255,255,255,0.18)",
-                        borderRadius: "0.75rem",
-                        overflow: "hidden",
-                        backgroundColor: "#0f172a",
-                      }}
-                    >
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setFormData((p) => ({
-                            ...p,
-                            quantity: String(
-                              Math.max(1, Number(p.quantity) - 1),
-                            ),
-                          }))
-                        }
-                        style={{
-                          width: "3rem",
-                          height: "2.75rem",
-                          backgroundColor: "transparent",
-                          border: "none",
-                          borderRight: "1px solid rgba(255,255,255,0.18)",
-                          color: "#f97316",
-                          fontSize: "1.4rem",
-                          fontWeight: 700,
-                          cursor: "pointer",
-                          flexShrink: 0,
-                        }}
-                      >
-                        −
-                      </button>
-                      <input
-                        name="quantity"
-                        type="text"
-                        inputMode="numeric"
-                        placeholder="0"
-                        value={formData.quantity}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          if (/^\d*$/.test(val)) {
-                            setFormData((p) => ({ ...p, quantity: val }));
-                          }
-                        }}
-                        required
-                        style={{
-                          flex: 1,
-                          backgroundColor: "transparent",
-                          border: "none",
-                          padding: "0.7rem 0.5rem",
-                          color: "#e5e7eb",
-                          fontSize: "1rem",
-                          textAlign: "center",
-                          minWidth: 0,
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setFormData((p) => ({
-                            ...p,
-                            quantity: String(Number(p.quantity || 0) + 1),
-                          }))
-                        }
-                        style={{
-                          width: "3rem",
-                          height: "2.75rem",
-                          backgroundColor: "transparent",
-                          border: "none",
-                          borderLeft: "1px solid rgba(255,255,255,0.18)",
-                          color: "#f97316",
-                          fontSize: "1.4rem",
-                          fontWeight: 700,
-                          cursor: "pointer",
-                          flexShrink: 0,
-                        }}
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
-
+              {/* Sub-tab bar */}
+              <div
+                style={{
+                  display: "flex",
+                  gap: "0.4rem",
+                  marginBottom: "1rem",
+                  flexWrap: "wrap",
+                }}
+              >
+                {[
+                  {
+                    label: "Stocks",
+                    count: stockHoldings.length,
+                    accent: "#f97316",
+                  },
+                  {
+                    label: "Mutual Funds",
+                    count: mfHoldings.length,
+                    accent: "#8b5cf6",
+                  },
+                  { label: "FD", count: fdHoldings.length, accent: "#10b981" },
+                ].map(({ label, count, accent }) => (
                   <button
-                    type="submit"
-                    disabled={submitting}
+                    key={label}
+                    onClick={() => setHoldingsSubTab(label)}
                     style={{
-                      background: "#f97316",
-                      color: "white",
-                      borderRadius: "20px",
-                      padding: "6px 18px",
-                      fontSize: "13px",
-                      fontWeight: 600,
-                      border: "none",
-                      cursor: submitting ? "not-allowed" : "pointer",
-                      whiteSpace: "nowrap",
-                      fontFamily: "inherit",
-                      opacity: submitting ? 0.7 : 1,
+                      ...buttonBaseStyle,
+                      backgroundColor:
+                        holdingsSubTab === label ? accent : "#1e293b",
+                      color: holdingsSubTab === label ? "#fff" : "#94a3b8",
+                      border:
+                        holdingsSubTab === label
+                          ? "none"
+                          : "1px solid rgba(255,255,255,0.08)",
                     }}
                   >
-                    {submitting ? "Submitting..." : "Submit"}
+                    {label}
+                    <span
+                      style={{
+                        backgroundColor:
+                          holdingsSubTab === label
+                            ? "rgba(0,0,0,0.25)"
+                            : "rgba(255,255,255,0.08)",
+                        borderRadius: 10,
+                        padding: "1px 7px",
+                        fontSize: 11,
+                        marginLeft: 2,
+                      }}
+                    >
+                      {count}
+                    </span>
                   </button>
-                </form>
-              )}
-              {error && (
-                <p style={{ color: "#ef4444", marginTop: 0 }}>{error}</p>
-              )}
-              {loading ? (
-                <div style={{ display: "grid", gap: "0.75rem" }}>
-                  {[1, 2, 3].map((index) => (
-                    <div
-                      key={`skeleton-${index}`}
-                      className="animate-pulse"
+                ))}
+              </div>
+
+              {/* ── STOCKS ── */}
+              {holdingsSubTab === "Stocks" && (
+                <>
+                  {/* Add stock form */}
+                  {showAddForm && (
+                    <form
+                      onSubmit={onSubmitHolding}
                       style={{
-                        borderRadius: "0.9rem",
-                        border: "1px solid rgba(148, 163, 184, 0.25)",
-                        backgroundColor: "rgba(51, 65, 85, 0.35)",
-                        padding: "0.9rem",
+                        backgroundColor: "#0f172a",
+                        border: "1px solid rgba(255,255,255,0.1)",
+                        borderRadius: "0.75rem",
+                        padding: "1rem",
+                        marginBottom: "1rem",
                         display: "grid",
-                        gap: "0.55rem",
+                        gridTemplateColumns:
+                          "repeat(auto-fit, minmax(140px, 1fr))",
+                        gap: "0.75rem",
                       }}
                     >
-                      <div
-                        style={{
-                          height: "0.9rem",
-                          width: "32%",
-                          borderRadius: "0.5rem",
-                          backgroundColor: "#475569",
-                        }}
-                      />
-                      <div
-                        style={{
-                          height: "0.9rem",
-                          width: "56%",
-                          borderRadius: "0.5rem",
-                          backgroundColor: "#64748b",
-                        }}
-                      />
-                    </div>
-                  ))}
-                </div>
-              ) : holdings.length === 0 ? (
-                <div
-                  style={{
-                    display: "grid",
-                    placeItems: "center",
-                    padding: "2rem 1rem",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: "100%",
-                      maxWidth: "30rem",
-                      borderRadius: "1rem",
-                      border: "1px solid rgba(255, 255, 255, 0.08)",
-                      backgroundColor: "rgba(2, 6, 23, 0.55)",
-                      padding: "1.3rem 1rem",
-                      display: "grid",
-                      justifyItems: "center",
-                      gap: "0.65rem",
-                      textAlign: "center",
-                    }}
-                  >
-                    <p
-                      style={{
-                        margin: 0,
-                        color: "#ffffff",
-                        fontWeight: 700,
-                        fontSize: "1.05rem",
-                      }}
-                    >
-                      No holdings yet
-                    </p>
-                    <p style={{ margin: 0, color: "#94a3b8" }}>
-                      Add your first stock to get started
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setShowAddForm(true)}
-                      style={{
-                        background: "#f97316",
-                        color: "white",
-                        borderRadius: "20px",
-                        padding: "6px 18px",
-                        fontSize: "13px",
-                        fontWeight: 600,
-                        border: "none",
-                        cursor: "pointer",
-                        whiteSpace: "nowrap",
-                        letterSpacing: "0.3px",
-                        marginTop: "0.2rem",
-                      }}
-                    >
-                      + Add Holding
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div style={{ width: "100%", overflowX: "auto" }}>
-                  <table
-                    className="holdings-table"
-                    style={{ width: "100%", borderCollapse: "collapse" }}
-                  >
-                    <thead>
-                      <tr>
-                        {[
-                          "Ticker",
-                          "Qty",
-                          "Buy Price",
-                          "Current Price",
-                          "Invested",
-                          "Current Value",
-                          "P&L",
-                          "P&L%",
-                          "",
-                        ].map((title) => (
-                          <th
-                            key={title || "action"}
-                            className={
-                              title === "Invested" || title === "Current Value"
-                                ? "mobile-hide-col"
-                                : ""
-                            }
-                            style={{
-                              textAlign: title === "" ? "center" : "left",
-                              color: "#94a3b8",
-                              fontSize: "0.8rem",
-                              fontWeight: 700,
-                              padding: "0.75rem 0.6rem",
-                              borderBottom:
-                                "1px solid rgba(255, 255, 255, 0.08)",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            {title}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {holdings.map((holding) => {
-                        const invested =
-                          Number(holding.invested) ||
-                          (Number(holding.buyPrice) || 0) *
-                            (Number(holding.quantity) || 0);
-                        const currentValue =
-                          Number(holding.currentValue) ||
-                          (Number(holding.currentPrice) || 0) *
-                            (Number(holding.quantity) || 0);
-                        const pnl =
-                          Number(holding.pnl) || currentValue - invested;
-                        const pnlPercent =
-                          Number(holding.pnlPercent) ||
-                          (invested ? (pnl / invested) * 100 : 0);
-                        const isPositivePnl = pnl >= 0;
-
-                        return (
-                          <tr
-                            key={holding.id || holding._id}
-                            className="holding-row"
-                            title="Click for Stock Intel"
-                            onClick={() => {
-                              setSelectedTicker(holding.ticker);
-                              setDrawerOpen(true);
-                            }}
-                          >
-                            <td
-                              style={{
-                                padding: "0.8rem 0.6rem",
-                                color: "#f8fafc",
-                                fontWeight: 700,
-                              }}
-                            >
-                              {holding.ticker.replace(/\.NS$/i, "")}
-                            </td>
-                            <td
-                              style={{
-                                ...numberStyle,
-                                padding: "0.8rem 0.6rem",
-                              }}
-                            >
-                              {formatNumber(holding.quantity)}
-                            </td>
-                            <td
-                              style={{
-                                ...numberStyle,
-                                padding: "0.8rem 0.6rem",
-                              }}
-                            >
-                              {formatCurrency(holding.buyPrice)}
-                            </td>
-                            <td
-                              style={{
-                                ...numberStyle,
-                                padding: "0.8rem 0.6rem",
-                              }}
-                            >
-                              {formatCurrency(holding.currentPrice)}
-                            </td>
-                            <td
-                              className="mobile-hide-col"
-                              style={{
-                                ...numberStyle,
-                                padding: "0.8rem 0.6rem",
-                              }}
-                            >
-                              {formatCurrency(invested)}
-                            </td>
-                            <td
-                              className="mobile-hide-col"
-                              style={{
-                                ...numberStyle,
-                                padding: "0.8rem 0.6rem",
-                              }}
-                            >
-                              {formatCurrency(currentValue)}
-                            </td>
-                            <td
-                              style={{
-                                ...numberStyle,
-                                padding: "0.8rem 0.6rem",
-                                color: isPositivePnl ? "#22c55e" : "#ef4444",
-                              }}
-                            >
-                              {formatCurrency(pnl)}
-                            </td>
-                            <td
-                              style={{
-                                ...numberStyle,
-                                padding: "0.8rem 0.6rem",
-                                color: isPositivePnl ? "#22c55e" : "#ef4444",
-                              }}
-                            >
-                              {`${pnlPercent.toFixed(2)}%`}
-                            </td>
-                            <td
-                              style={{
-                                padding: "0.8rem 0.6rem",
-                                textAlign: "center",
-                              }}
-                            >
-                              <div
-                                style={{
-                                  display: "flex",
-                                  gap: "0.5rem",
-                                  justifyContent: "center",
-                                }}
-                              >
-                                <button
-                                  type="button"
-                                  aria-label={`Edit ${holding.ticker}`}
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    setEditTarget(holding);
-                                    setEditForm({
-                                      buyPrice: holding.buyPrice,
-                                      qty: holding.qty ?? holding.quantity,
-                                      buyDate: holding.buyDate,
-                                    });
-                                  }}
-                                  style={{
-                                    ...buttonBaseStyle,
-                                    backgroundColor: "#1f2937",
-                                    border:
-                                      "1px solid rgba(255, 255, 255, 0.12)",
-                                    width: "2.25rem",
-                                    height: "2.25rem",
-                                    padding: 0,
-                                    lineHeight: 1,
-                                  }}
-                                >
-                                  ✏
-                                </button>
-                                <button
-                                  type="button"
-                                  aria-label={`Delete ${holding.ticker}`}
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    setDeleteTarget(holding);
-                                  }}
-                                  style={{
-                                    ...buttonBaseStyle,
-                                    backgroundColor: "#1f2937",
-                                    border:
-                                      "1px solid rgba(255, 255, 255, 0.12)",
-                                    width: "2.25rem",
-                                    height: "2.25rem",
-                                    padding: 0,
-                                    lineHeight: 1,
-                                  }}
-                                >
-                                  🗑
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </>
-          )}
-
-          {/* ── WATCHLIST TAB ── */}
-          {dashTab === "Watchlist" && (
-            <>
-              {showWatchlistInput && (
-                <div
-                  style={{
-                    marginBottom: "0.9rem",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "0.5rem",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: "0.5rem",
-                      alignItems: "flex-start",
-                    }}
-                  >
-                    <div style={{ position: "relative", flex: 1 }}>
-                      <input
-                        type="text"
-                        placeholder="Search e.g. ZOMATO, Bajaj Finance..."
-                        value={watchInputTicker}
-                        autoComplete="off"
-                        onChange={(e) => {
-                          setWatchInputTicker(e.target.value.toUpperCase());
-                          setShowWatchTickerDrop(true);
-                          setWatchInputError("");
-                        }}
-                        onBlur={() =>
-                          setTimeout(() => setShowWatchTickerDrop(false), 150)
-                        }
-                        onFocus={() => {
-                          if (watchInputTicker.length > 0)
-                            setShowWatchTickerDrop(true);
-                        }}
-                        onKeyDown={(e) =>
-                          e.key === "Enter" && handleWatchlistAdd()
-                        }
-                        style={{
-                          ...inputStyle,
-                          fontSize: "0.9rem",
-                          width: "100%",
-                          boxSizing: "border-box",
-                        }}
-                      />
-
-                      {showWatchTickerDrop &&
-                        watchTickerSuggestions.length > 0 && (
+                      {/* Ticker */}
+                      <div style={{ position: "relative" }}>
+                        <label
+                          style={{
+                            fontSize: 11,
+                            color: "#64748b",
+                            display: "block",
+                            marginBottom: 4,
+                          }}
+                        >
+                          Ticker
+                        </label>
+                        <input
+                          style={inputStyle}
+                          placeholder="e.g. RELIANCE"
+                          value={tickerQuery}
+                          onChange={(e) => {
+                            setTickerQuery(e.target.value);
+                            setFormData((p) => ({
+                              ...p,
+                              ticker: e.target.value.toUpperCase(),
+                            }));
+                            setShowTickerDrop(true);
+                            setLivePrice(null);
+                          }}
+                          onFocus={() => setShowTickerDrop(true)}
+                          onBlur={() =>
+                            setTimeout(() => setShowTickerDrop(false), 150)
+                          }
+                          autoComplete="off"
+                        />
+                        {showTickerDrop && tickerSuggestions.length > 0 && (
                           <div
                             style={{
                               position: "absolute",
-                              top: "calc(100% + 4px)",
+                              top: "100%",
                               left: 0,
                               right: 0,
-                              backgroundColor: "#0f172a",
-                              border: "1px solid rgba(255,255,255,0.15)",
-                              borderRadius: "0.75rem",
+                              zIndex: 50,
+                              backgroundColor: "#1e293b",
+                              border: "1px solid rgba(255,255,255,0.1)",
+                              borderRadius: "0.5rem",
+                              marginTop: 2,
                               overflow: "hidden",
-                              zIndex: 200,
-                              boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
                             }}
                           >
-                            {watchTickerSuggestions.map((t) => (
+                            {tickerSuggestions.map((t) => (
                               <div
                                 key={t.symbol}
                                 onMouseDown={() => {
-                                  setWatchInputTicker(t.symbol);
-                                  setShowWatchTickerDrop(false);
+                                  setTickerQuery(t.symbol);
+                                  setFormData((p) => ({
+                                    ...p,
+                                    ticker: t.symbol,
+                                  }));
+                                  setShowTickerDrop(false);
+                                  fetchLivePrice(t.symbol);
                                 }}
                                 style={{
-                                  padding: "0.7rem 1rem",
+                                  padding: "0.5rem 0.75rem",
                                   cursor: "pointer",
+                                  fontSize: 13,
                                   borderBottom:
-                                    "1px solid rgba(255,255,255,0.06)",
-                                  display: "flex",
-                                  justifyContent: "space-between",
-                                  alignItems: "center",
+                                    "1px solid rgba(255,255,255,0.05)",
                                 }}
-                                onMouseEnter={(e) =>
-                                  (e.currentTarget.style.backgroundColor =
-                                    "rgba(249,115,22,0.1)")
-                                }
-                                onMouseLeave={(e) =>
-                                  (e.currentTarget.style.backgroundColor =
-                                    "transparent")
-                                }
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.backgroundColor =
+                                    "rgba(255,255,255,0.06)";
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.backgroundColor =
+                                    "transparent";
+                                }}
                               >
                                 <span
-                                  style={{
-                                    color: "#f97316",
-                                    fontWeight: 700,
-                                    fontSize: "0.9rem",
-                                  }}
+                                  style={{ color: "#f97316", fontWeight: 600 }}
                                 >
                                   {t.symbol}
                                 </span>
                                 <span
                                   style={{
-                                    color: "#94a3b8",
-                                    fontSize: "0.8rem",
+                                    color: "#64748b",
+                                    marginLeft: 8,
+                                    fontSize: 11,
                                   }}
                                 >
                                   {t.full}
@@ -1404,245 +1070,1645 @@ const DashboardPage = () => {
                             ))}
                           </div>
                         )}
-                    </div>
+                      </div>
 
-                    <button
-                      type="button"
-                      onClick={handleWatchlistAdd}
-                      disabled={watchInputLoading || !watchInputTicker.trim()}
-                      style={{
-                        background: "#f97316",
-                        color: "white",
-                        borderRadius: "20px",
-                        padding: "6px 18px",
-                        fontSize: "13px",
-                        fontWeight: 600,
-                        border: "none",
-                        whiteSpace: "nowrap",
-                        fontFamily: "inherit",
-                        opacity:
-                          watchInputLoading || !watchInputTicker.trim()
-                            ? 0.6
-                            : 1,
-                        cursor:
-                          watchInputLoading || !watchInputTicker.trim()
-                            ? "not-allowed"
-                            : "pointer",
-                      }}
-                    >
-                      {watchInputLoading ? "Adding..." : "Add"}
-                    </button>
+                      {/* Buy Date */}
+                      <div>
+                        <label
+                          style={{
+                            fontSize: 11,
+                            color: "#64748b",
+                            display: "block",
+                            marginBottom: 4,
+                          }}
+                        >
+                          Buy Date
+                        </label>
+                        <input
+                          type="date"
+                          name="buyDate"
+                          style={inputStyle}
+                          value={formData.buyDate}
+                          onChange={onChangeForm}
+                          required
+                        />
+                      </div>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowWatchlistInput(false);
-                        setWatchInputError("");
-                        setWatchInputTicker("");
-                        setShowWatchTickerDrop(false);
-                      }}
-                      style={{
-                        ...buttonBaseStyle,
-                        backgroundColor: "transparent",
-                        border: "1px solid rgba(255,255,255,0.12)",
-                        color: "#94a3b8",
-                        padding: "0.7rem 0.8rem",
-                        fontSize: "0.85rem",
-                      }}
-                    >
-                      ✕
-                    </button>
-                  </div>
-
-                  {watchInputError && (
-                    <p
-                      style={{
-                        margin: 0,
-                        color: "#ef4444",
-                        fontSize: "0.78rem",
-                      }}
-                    >
-                      {watchInputError}
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {watchlistLoading ? (
-                <div style={{ display: "grid", gap: "0.6rem" }}>
-                  {[1, 2].map((i) => (
-                    <div
-                      key={i}
-                      className="animate-pulse"
-                      style={{
-                        height: "3.2rem",
-                        borderRadius: "0.75rem",
-                        backgroundColor: "rgba(51,65,85,0.35)",
-                        border: "1px solid rgba(148,163,184,0.15)",
-                      }}
-                    />
-                  ))}
-                </div>
-              ) : watchlistError ? (
-                <p style={{ color: "#ef4444", fontSize: "0.85rem", margin: 0 }}>
-                  {watchlistError}{" "}
-                  <span
-                    onClick={fetchWatchlist}
-                    style={{
-                      color: "#f97316",
-                      cursor: "pointer",
-                      textDecoration: "underline",
-                    }}
-                  >
-                    Retry
-                  </span>
-                </p>
-              ) : watchlist.length === 0 ? (
-                <div style={{ textAlign: "center", padding: "1.5rem 1rem" }}>
-                  <p
-                    style={{ margin: 0, color: "#94a3b8", fontSize: "0.9rem" }}
-                  >
-                    No stocks in watchlist
-                  </p>
-                  <p
-                    style={{
-                      margin: "0.3rem 0 0",
-                      color: "#475569",
-                      fontSize: "0.8rem",
-                    }}
-                  >
-                    Add tickers you want to monitor
-                  </p>
-                </div>
-              ) : (
-                <div style={{ display: "grid", gap: "0.5rem" }}>
-                  {watchlist.map((item) => {
-                    const isPos = Number(item.changePct) >= 0;
-                    const badgeColor =
-                      item.sentimentBadge === "Bullish"
-                        ? { bg: "rgba(34,197,94,0.15)", color: "#22c55e" }
-                        : item.sentimentBadge === "Bearish"
-                          ? { bg: "rgba(239,68,68,0.15)", color: "#ef4444" }
-                          : { bg: "rgba(100,116,139,0.2)", color: "#94a3b8" };
-
-                    return (
-                      <div
-                        key={item.ticker}
-                        onClick={() => {
-                          setSelectedTicker(item.ticker);
-                          setDrawerOpen(true);
-                        }}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          padding: "0.7rem 0.85rem",
-                          borderRadius: "0.75rem",
-                          border: "1px solid rgba(255,255,255,0.07)",
-                          backgroundColor: "rgba(15,23,42,0.5)",
-                          cursor: "pointer",
-                          gap: "0.5rem",
-                        }}
-                        onMouseEnter={(e) =>
-                          (e.currentTarget.style.borderColor =
-                            "rgba(249,115,22,0.35)")
-                        }
-                        onMouseLeave={(e) =>
-                          (e.currentTarget.style.borderColor =
-                            "rgba(255,255,255,0.07)")
-                        }
-                      >
-                        <div style={{ minWidth: "5rem" }}>
-                          <p
-                            style={{
-                              margin: 0,
-                              color: "#f8fafc",
-                              fontWeight: 700,
-                              fontSize: "0.9rem",
-                            }}
-                          >
-                            {item.ticker.replace(/\.NS$/i, "")}
-                          </p>
-                        </div>
-
-                        <div style={{ flex: 1, textAlign: "center" }}>
-                          <p
-                            style={{
-                              ...numberStyle,
-                              margin: 0,
-                              color: "#f8fafc",
-                              fontSize: "0.95rem",
-                              fontWeight: 600,
-                            }}
-                          >
-                            {item.currentPrice
-                              ? formatCurrency(item.currentPrice)
-                              : "—"}
-                          </p>
-                          {item.changePct != null && (
-                            <p
+                      {/* Buy Price */}
+                      <div>
+                        <label
+                          style={{
+                            fontSize: 11,
+                            color: "#64748b",
+                            display: "block",
+                            marginBottom: 4,
+                          }}
+                        >
+                          Buy Price
+                          {livePriceFetching && (
+                            <span style={{ marginLeft: 6 }}>
+                              <span className="loader-spin" />
+                            </span>
+                          )}
+                          {livePrice && (
+                            <span
                               style={{
-                                margin: 0,
-                                fontSize: "0.75rem",
-                                color: isPos ? "#22c55e" : "#ef4444",
+                                marginLeft: 6,
+                                color: "#22c55e",
+                                fontSize: 11,
                               }}
                             >
-                              {isPos ? "▲" : "▼"}{" "}
-                              {Math.abs(Number(item.changePct)).toFixed(2)}%
-                            </p>
+                              live ₹{livePrice}
+                            </span>
+                          )}
+                        </label>
+                        <input
+                          type="number"
+                          name="buyPrice"
+                          style={inputStyle}
+                          placeholder="₹"
+                          value={formData.buyPrice}
+                          onChange={onChangeForm}
+                          required
+                          min="0"
+                          step="0.01"
+                        />
+                      </div>
+
+                      {/* Quantity */}
+                      <div>
+                        <label
+                          style={{
+                            fontSize: 11,
+                            color: "#64748b",
+                            display: "block",
+                            marginBottom: 4,
+                          }}
+                        >
+                          Qty
+                        </label>
+                        <div style={{ display: "flex", gap: 4 }}>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setFormData((p) => ({
+                                ...p,
+                                quantity: String(
+                                  Math.max(0, Number(p.quantity) - 1),
+                                ),
+                              }))
+                            }
+                            style={{
+                              ...buttonBaseStyle,
+                              padding: "6px 12px",
+                              backgroundColor: "#1e293b",
+                              color: "#94a3b8",
+                              borderRadius: "0.5rem",
+                            }}
+                          >
+                            −
+                          </button>
+                          <input
+                            type="number"
+                            name="quantity"
+                            style={{ ...inputStyle, textAlign: "center" }}
+                            value={formData.quantity}
+                            onChange={onChangeForm}
+                            required
+                            min="1"
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setFormData((p) => ({
+                                ...p,
+                                quantity: String(Number(p.quantity) + 1),
+                              }))
+                            }
+                            style={{
+                              ...buttonBaseStyle,
+                              padding: "6px 12px",
+                              backgroundColor: "#1e293b",
+                              color: "#94a3b8",
+                              borderRadius: "0.5rem",
+                            }}
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Submit */}
+                      <div style={{ display: "flex", alignItems: "flex-end" }}>
+                        <button
+                          type="submit"
+                          disabled={submitting}
+                          style={{
+                            ...buttonBaseStyle,
+                            backgroundColor: "#f97316",
+                            color: "#fff",
+                            width: "100%",
+                            justifyContent: "center",
+                            borderRadius: "0.75rem",
+                            padding: "0.55rem",
+                          }}
+                        >
+                          {submitting ? (
+                            <span className="loader-spin" />
+                          ) : (
+                            "Add"
+                          )}
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  {error && (
+                    <div
+                      style={{
+                        color: "#ef4444",
+                        fontSize: 13,
+                        marginBottom: "0.75rem",
+                      }}
+                    >
+                      {error}
+                    </div>
+                  )}
+
+                  {/* Table */}
+                  <div style={{ overflowX: "auto" }}>
+                    <table className="holdings-table">
+                      <thead>
+                        <tr>
+                          <th>Ticker</th>
+                          <th>Qty</th>
+                          <th>Buy Price</th>
+                          <th>Cur. Price</th>
+                          <th className="mobile-hide-col">Invested</th>
+                          <th className="mobile-hide-col">Cur. Value</th>
+                          <th>P&amp;L</th>
+                          <th>P&amp;L%</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {loading ? (
+                          [1, 2, 3].map(skeletonRow)
+                        ) : stockHoldings.length === 0 ? (
+                          <tr>
+                            <td
+                              colSpan={9}
+                              style={{
+                                textAlign: "center",
+                                padding: "2.5rem",
+                                color: "#64748b",
+                              }}
+                            >
+                              No stock holdings yet. Click &quot;+ Add
+                              Stock&quot; to get started.
+                            </td>
+                          </tr>
+                        ) : (
+                          stockHoldings.map((h) => (
+                            <tr
+                              key={h.id}
+                              className="holding-row"
+                              style={{ cursor: "pointer" }}
+                              onClick={(e) => {
+                                if (e.target.closest("button")) return;
+                                setSelectedTicker(h.ticker.replace(".NS", ""));
+                                setDrawerOpen(true);
+                              }}
+                            >
+                              <td style={{ fontWeight: 600, color: "#f97316" }}>
+                                {h.ticker.replace(".NS", "")}
+                              </td>
+                              <td style={{ color: "#f8fafc" }}>
+                                {formatNumber(h.quantity)}
+                              </td>
+                              <td style={{ color: "#94a3b8" }}>
+                                {formatCurrency(h.buyPrice)}
+                              </td>
+                              <td style={{ color: "#f8fafc" }}>
+                                {formatCurrency(h.currentPrice)}
+                              </td>
+                              <td
+                                className="mobile-hide-col"
+                                style={{ color: "#94a3b8" }}
+                              >
+                                {formatCurrency(h.invested)}
+                              </td>
+                              <td
+                                className="mobile-hide-col"
+                                style={{ color: "#f8fafc" }}
+                              >
+                                {formatCurrency(h.currentValue)}
+                              </td>
+                              <td
+                                style={{
+                                  color: pnlColor(h.pnl),
+                                  fontWeight: 600,
+                                }}
+                              >
+                                {formatCurrency(h.pnl)}
+                              </td>
+                              <td
+                                style={{
+                                  color: pnlColor(h.pnlPercent),
+                                  fontWeight: 600,
+                                }}
+                              >
+                                {(h.pnlPercent ?? 0).toFixed(2)}%
+                              </td>
+                              <td>
+                                <div style={{ display: "flex", gap: 4 }}>
+                                  <button
+                                    title="Edit"
+                                    onClick={() => {
+                                      setEditTarget(h);
+                                      setEditForm({
+                                        buyPrice: String(h.buyPrice),
+                                        qty: String(h.quantity),
+                                        buyDate: h.buyDate || "",
+                                      });
+                                      setEditError("");
+                                    }}
+                                    style={{
+                                      ...buttonBaseStyle,
+                                      padding: "4px 9px",
+                                      fontSize: 13,
+                                      backgroundColor: "rgba(255,255,255,0.07)",
+                                      color: "#94a3b8",
+                                      borderRadius: "0.5rem",
+                                    }}
+                                  >
+                                    ✏
+                                  </button>
+                                  <button
+                                    title="Delete"
+                                    onClick={() => setDeleteTarget(h)}
+                                    style={{
+                                      ...buttonBaseStyle,
+                                      padding: "4px 9px",
+                                      fontSize: 13,
+                                      backgroundColor: "rgba(239,68,68,0.12)",
+                                      color: "#ef4444",
+                                      borderRadius: "0.5rem",
+                                    }}
+                                  >
+                                    🗑
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+
+              {/* ── MUTUAL FUNDS ── */}
+              {holdingsSubTab === "Mutual Funds" && (
+                <>
+                  {showMfForm && (
+                    <div
+                      style={{
+                        backgroundColor: "#0f172a",
+                        border: "1px solid rgba(139,92,246,0.25)",
+                        borderRadius: "0.75rem",
+                        padding: "1rem",
+                        marginBottom: "1rem",
+                      }}
+                    >
+                      {/* MF Search */}
+                      <div
+                        style={{
+                          position: "relative",
+                          marginBottom: "0.75rem",
+                        }}
+                      >
+                        <label
+                          style={{
+                            fontSize: 11,
+                            color: "#64748b",
+                            display: "block",
+                            marginBottom: 4,
+                          }}
+                        >
+                          Search Mutual Fund
+                        </label>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <input
+                            style={inputStyle}
+                            placeholder="Type fund name or scheme code…"
+                            value={mfQuery}
+                            onChange={(e) => {
+                              setMfQuery(e.target.value);
+                              searchMf(e.target.value);
+                            }}
+                          />
+                          {mfSearching && (
+                            <span
+                              className="loader-spin"
+                              style={{ marginTop: 8 }}
+                            />
                           )}
                         </div>
+                        {mfResults.length > 0 && !selectedMf && (
+                          <div
+                            style={{
+                              position: "absolute",
+                              top: "100%",
+                              left: 0,
+                              right: 0,
+                              zIndex: 50,
+                              backgroundColor: "#1e293b",
+                              border: "1px solid rgba(255,255,255,0.1)",
+                              borderRadius: "0.5rem",
+                              marginTop: 2,
+                              maxHeight: 180,
+                              overflowY: "auto",
+                            }}
+                          >
+                            {mfResults.map((r) => (
+                              <div
+                                key={r.schemeCode}
+                                onClick={() => {
+                                  setSelectedMf(r);
+                                  setMfResults([]);
+                                  setMfQuery("");
+                                }}
+                                style={{
+                                  padding: "0.5rem 0.75rem",
+                                  cursor: "pointer",
+                                  fontSize: 13,
+                                  borderBottom:
+                                    "1px solid rgba(255,255,255,0.05)",
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.backgroundColor =
+                                    "rgba(255,255,255,0.06)";
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.backgroundColor =
+                                    "transparent";
+                                }}
+                              >
+                                <span
+                                  style={{ color: "#8b5cf6", fontWeight: 600 }}
+                                >
+                                  {r.schemeCode}
+                                </span>
+                                <span
+                                  style={{ color: "#94a3b8", marginLeft: 8 }}
+                                >
+                                  {r.schemeName}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
 
+                      {/* Selected MF chip */}
+                      {selectedMf && (
                         <div
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 8,
+                            backgroundColor: "rgba(139,92,246,0.15)",
+                            border: "1px solid rgba(139,92,246,0.3)",
+                            borderRadius: "0.5rem",
+                            padding: "5px 12px",
+                            marginBottom: "0.75rem",
+                            fontSize: 13,
+                          }}
+                        >
+                          <span style={{ color: "#8b5cf6", fontWeight: 600 }}>
+                            {selectedMf.schemeCode}
+                          </span>
+                          <span style={{ color: "#f8fafc" }}>
+                            {selectedMf.schemeName}
+                          </span>
+                          <button
+                            onClick={() => setSelectedMf(null)}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color: "#94a3b8",
+                              cursor: "pointer",
+                              fontSize: 14,
+                              padding: 0,
+                            }}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      )}
+
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns:
+                            "repeat(auto-fit, minmax(130px,1fr))",
+                          gap: "0.75rem",
+                          marginBottom: "0.75rem",
+                        }}
+                      >
+                        <div>
+                          <label
+                            style={{
+                              fontSize: 11,
+                              color: "#64748b",
+                              display: "block",
+                              marginBottom: 4,
+                            }}
+                          >
+                            Purchase Date
+                          </label>
+                          <input
+                            type="date"
+                            style={inputStyle}
+                            value={mfBuyDate}
+                            onChange={(e) => setMfBuyDate(e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label
+                            style={{
+                              fontSize: 11,
+                              color: "#64748b",
+                              display: "block",
+                              marginBottom: 4,
+                            }}
+                          >
+                            Purchase NAV (₹)
+                          </label>
+                          <input
+                            type="number"
+                            style={inputStyle}
+                            placeholder="NAV"
+                            value={mfBuyNav}
+                            onChange={(e) => setMfBuyNav(e.target.value)}
+                            min="0"
+                            step="0.01"
+                          />
+                        </div>
+                        <div>
+                          <label
+                            style={{
+                              fontSize: 11,
+                              color: "#64748b",
+                              display: "block",
+                              marginBottom: 4,
+                            }}
+                          >
+                            Units
+                          </label>
+                          <input
+                            type="number"
+                            style={inputStyle}
+                            placeholder="Units"
+                            value={mfUnits}
+                            onChange={(e) => setMfUnits(e.target.value)}
+                            min="0"
+                            step="0.001"
+                          />
+                        </div>
+                      </div>
+
+                      {mfError && (
+                        <div
+                          style={{
+                            color: "#ef4444",
+                            fontSize: 12,
+                            marginBottom: 8,
+                          }}
+                        >
+                          {mfError}
+                        </div>
+                      )}
+
+                      <button
+                        onClick={onSubmitMf}
+                        disabled={mfSubmitting}
+                        style={{
+                          ...buttonBaseStyle,
+                          backgroundColor: "#8b5cf6",
+                          color: "#fff",
+                          padding: "7px 22px",
+                        }}
+                      >
+                        {mfSubmitting ? (
+                          <span className="loader-spin" />
+                        ) : (
+                          "Add Fund"
+                        )}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* MF Cards */}
+                  {mfHoldings.length === 0 ? (
+                    <div
+                      style={{
+                        textAlign: "center",
+                        padding: "3rem",
+                        color: "#64748b",
+                      }}
+                    >
+                      <div style={{ fontSize: 40, marginBottom: 8 }}>🏦</div>
+                      No mutual funds yet. Click &quot;+ Add MF&quot; to get
+                      started.
+                    </div>
+                  ) : (
+                    <div style={{ display: "grid", gap: "0.75rem" }}>
+                      {mfHoldings.map((h) => (
+                        <div
+                          key={h.id}
+                          onClick={(e) => {
+                            if (e.target.closest("button")) return;
+                            openMfDrawer(h);
+                          }}
+                          style={{
+                            backgroundColor: "#0f172a",
+                            border: "1px solid rgba(139,92,246,0.2)",
+                            borderLeft: "3px solid #8b5cf6",
+                            borderRadius: "0.75rem",
+                            padding: "0.9rem 1rem",
+                            cursor: "pointer",
+                            transition: "border-color 0.15s",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.borderColor =
+                              "rgba(139,92,246,0.5)";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor =
+                              "rgba(139,92,246,0.2)";
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "flex-start",
+                              flexWrap: "wrap",
+                              gap: 6,
+                            }}
+                          >
+                            <div>
+                              <div
+                                style={{
+                                  fontWeight: 700,
+                                  color: "#f8fafc",
+                                  fontSize: 14,
+                                }}
+                              >
+                                {h.schemeName || h.ticker}
+                              </div>
+                              <div
+                                style={{
+                                  fontSize: 12,
+                                  color: "#64748b",
+                                  marginTop: 2,
+                                }}
+                              >
+                                {formatNumber(h.quantity)} units · NAV{" "}
+                                {formatCurrency(h.currentPrice)}
+                              </div>
+                            </div>
+                            <div
+                              style={{
+                                display: "flex",
+                                gap: 6,
+                                alignItems: "center",
+                              }}
+                            >
+                              <div style={{ textAlign: "right" }}>
+                                <div
+                                  style={{
+                                    fontSize: 15,
+                                    fontWeight: 700,
+                                    color: "#f8fafc",
+                                  }}
+                                >
+                                  {formatCurrency(h.currentValue)}
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: 12,
+                                    color: pnlColor(h.pnl),
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  {h.pnl >= 0 ? "+" : ""}
+                                  {formatCurrency(h.pnl)} (
+                                  {(h.pnlPercent ?? 0).toFixed(2)}%)
+                                </div>
+                              </div>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  gap: 4,
+                                }}
+                              >
+                                <button
+                                  title="Edit"
+                                  onClick={() => {
+                                    setEditTarget(h);
+                                    setEditForm({
+                                      buyPrice: String(h.buyPrice),
+                                      qty: String(h.quantity),
+                                      buyDate: h.buyDate || "",
+                                    });
+                                    setEditError("");
+                                  }}
+                                  style={{
+                                    ...buttonBaseStyle,
+                                    padding: "4px 9px",
+                                    fontSize: 12,
+                                    backgroundColor: "rgba(255,255,255,0.07)",
+                                    color: "#94a3b8",
+                                    borderRadius: "0.5rem",
+                                  }}
+                                >
+                                  ✏
+                                </button>
+                                <button
+                                  title="Delete"
+                                  onClick={() => setDeleteTarget(h)}
+                                  style={{
+                                    ...buttonBaseStyle,
+                                    padding: "4px 9px",
+                                    fontSize: 12,
+                                    backgroundColor: "rgba(239,68,68,0.12)",
+                                    color: "#ef4444",
+                                    borderRadius: "0.5rem",
+                                  }}
+                                >
+                                  🗑
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                          <div
+                            style={{
+                              marginTop: "0.5rem",
+                              display: "flex",
+                              gap: "1.5rem",
+                              fontSize: 12,
+                              color: "#64748b",
+                            }}
+                          >
+                            <span>
+                              Invested:{" "}
+                              <span style={{ color: "#94a3b8" }}>
+                                {formatCurrency(h.invested)}
+                              </span>
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* ── FD ── */}
+              {holdingsSubTab === "FD" && (
+                <>
+                  {showFdForm && (
+                    <div
+                      style={{
+                        backgroundColor: "#0f172a",
+                        border: "1px solid rgba(16,185,129,0.25)",
+                        borderRadius: "0.75rem",
+                        padding: "1rem",
+                        marginBottom: "1rem",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns:
+                            "repeat(auto-fit, minmax(130px,1fr))",
+                          gap: "0.75rem",
+                          marginBottom: "0.75rem",
+                        }}
+                      >
+                        <div>
+                          <label
+                            style={{
+                              fontSize: 11,
+                              color: "#64748b",
+                              display: "block",
+                              marginBottom: 4,
+                            }}
+                          >
+                            Bank / Institution
+                          </label>
+                          <input
+                            style={inputStyle}
+                            placeholder="e.g. SBI"
+                            value={fdBank}
+                            onChange={(e) => setFdBank(e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label
+                            style={{
+                              fontSize: 11,
+                              color: "#64748b",
+                              display: "block",
+                              marginBottom: 4,
+                            }}
+                          >
+                            Start Date
+                          </label>
+                          <input
+                            type="date"
+                            style={inputStyle}
+                            value={fdStartDate}
+                            onChange={(e) => setFdStartDate(e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label
+                            style={{
+                              fontSize: 11,
+                              color: "#64748b",
+                              display: "block",
+                              marginBottom: 4,
+                            }}
+                          >
+                            Principal (₹)
+                          </label>
+                          <input
+                            type="number"
+                            style={inputStyle}
+                            placeholder="₹"
+                            value={fdPrincipal}
+                            onChange={(e) => setFdPrincipal(e.target.value)}
+                            min="0"
+                          />
+                        </div>
+                        <div>
+                          <label
+                            style={{
+                              fontSize: 11,
+                              color: "#64748b",
+                              display: "block",
+                              marginBottom: 4,
+                            }}
+                          >
+                            Interest Rate (%)
+                          </label>
+                          <input
+                            type="number"
+                            style={inputStyle}
+                            placeholder="% p.a."
+                            value={fdRate}
+                            onChange={(e) => setFdRate(e.target.value)}
+                            min="0"
+                            step="0.01"
+                          />
+                        </div>
+                        <div>
+                          <label
+                            style={{
+                              fontSize: 11,
+                              color: "#64748b",
+                              display: "block",
+                              marginBottom: 4,
+                            }}
+                          >
+                            Maturity Date{" "}
+                            <span style={{ color: "#475569" }}>(optional)</span>
+                          </label>
+                          <input
+                            type="date"
+                            style={inputStyle}
+                            value={fdMaturityDate}
+                            onChange={(e) => setFdMaturityDate(e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      {fdError && (
+                        <div
+                          style={{
+                            color: "#ef4444",
+                            fontSize: 12,
+                            marginBottom: 8,
+                          }}
+                        >
+                          {fdError}
+                        </div>
+                      )}
+
+                      <button
+                        onClick={onSubmitFd}
+                        disabled={fdSubmitting}
+                        style={{
+                          ...buttonBaseStyle,
+                          backgroundColor: "#10b981",
+                          color: "#fff",
+                          padding: "7px 22px",
+                        }}
+                      >
+                        {fdSubmitting ? (
+                          <span className="loader-spin" />
+                        ) : (
+                          "Add FD"
+                        )}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* FD Cards */}
+                  {fdHoldings.length === 0 ? (
+                    <div
+                      style={{
+                        textAlign: "center",
+                        padding: "3rem",
+                        color: "#64748b",
+                      }}
+                    >
+                      <div style={{ fontSize: 40, marginBottom: 8 }}>💰</div>
+                      No FDs yet. Click &quot;+ Add FD&quot; to get started.
+                    </div>
+                  ) : (
+                    <div style={{ display: "grid", gap: "0.75rem" }}>
+                      {fdHoldings.map((h) => (
+                        <div
+                          key={h.id}
+                          style={{
+                            backgroundColor: "#0f172a",
+                            border: "1px solid rgba(16,185,129,0.2)",
+                            borderLeft: "3px solid #10b981",
+                            borderRadius: "0.75rem",
+                            padding: "0.9rem 1rem",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "flex-start",
+                              flexWrap: "wrap",
+                              gap: 6,
+                            }}
+                          >
+                            <div>
+                              <div
+                                style={{
+                                  fontWeight: 700,
+                                  color: "#f8fafc",
+                                  fontSize: 15,
+                                }}
+                              >
+                                {h.ticker}
+                              </div>
+                              <div
+                                style={{
+                                  fontSize: 12,
+                                  color: "#10b981",
+                                  marginTop: 2,
+                                }}
+                              >
+                                {h.fdRate ?? "—"}% p.a.
+                              </div>
+                            </div>
+                            <div
+                              style={{
+                                display: "flex",
+                                gap: 8,
+                                alignItems: "center",
+                              }}
+                            >
+                              <div style={{ textAlign: "right" }}>
+                                <div
+                                  style={{
+                                    fontSize: 15,
+                                    fontWeight: 700,
+                                    color: "#f8fafc",
+                                  }}
+                                >
+                                  {formatCurrency(h.currentValue)}
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: 12,
+                                    color: "#10b981",
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  +{formatCurrency(h.pnl)} interest
+                                </div>
+                              </div>
+                              <button
+                                title="Delete"
+                                onClick={() => setDeleteTarget(h)}
+                                style={{
+                                  ...buttonBaseStyle,
+                                  padding: "4px 9px",
+                                  fontSize: 12,
+                                  backgroundColor: "rgba(239,68,68,0.12)",
+                                  color: "#ef4444",
+                                  borderRadius: "0.5rem",
+                                }}
+                              >
+                                🗑
+                              </button>
+                            </div>
+                          </div>
+                          <div
+                            style={{
+                              marginTop: "0.5rem",
+                              display: "flex",
+                              gap: "1.5rem",
+                              fontSize: 12,
+                              color: "#64748b",
+                            }}
+                          >
+                            <span>
+                              Principal:{" "}
+                              <span style={{ color: "#94a3b8" }}>
+                                {formatCurrency(h.buyPrice)}
+                              </span>
+                            </span>
+                            {h.buyDate && (
+                              <span>
+                                From:{" "}
+                                <span style={{ color: "#94a3b8" }}>
+                                  {h.buyDate}
+                                </span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </>
+          )}
+
+          {/* ── WATCHLIST TAB ── */}
+          {dashTab === "Watchlist" && (
+            <>
+              <div
+                style={{
+                  display: "flex",
+                  gap: "6px",
+                  marginBottom: "0.85rem",
+                  alignItems: "center",
+                }}
+              >
+                {["Stocks", "Mutual Funds"].map((sub) => (
+                  <button
+                    key={sub}
+                    type="button"
+                    onClick={() => setWatchlistSubTab(sub)}
+                    style={{
+                      background:
+                        watchlistSubTab === sub ? "#f97316" : "#1e293b",
+                      color: watchlistSubTab === sub ? "white" : "#94a3b8",
+                      borderRadius: "20px",
+                      padding: "5px 14px",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      border: "none",
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    {sub}
+                  </button>
+                ))}
+              </div>
+
+              {watchlistSubTab === "Stocks" && (
+                <>
+                  {showWatchlistInput && (
+                    <div style={{ marginBottom: "1rem", position: "relative" }}>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <div style={{ flex: 1, position: "relative" }}>
+                          <input
+                            style={inputStyle}
+                            placeholder="Search NSE ticker…"
+                            value={watchInputTicker}
+                            onChange={(e) => {
+                              setWatchInputTicker(e.target.value);
+                              setShowWatchTickerDrop(true);
+                            }}
+                            onFocus={() => setShowWatchTickerDrop(true)}
+                            onBlur={() =>
+                              setTimeout(
+                                () => setShowWatchTickerDrop(false),
+                                150,
+                              )
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleWatchlistAdd();
+                              }
+                            }}
+                            autoFocus
+                          />
+                          {showWatchTickerDrop &&
+                            watchTickerSuggestions.length > 0 && (
+                              <div
+                                style={{
+                                  position: "absolute",
+                                  top: "100%",
+                                  left: 0,
+                                  right: 0,
+                                  zIndex: 50,
+                                  backgroundColor: "#1e293b",
+                                  border: "1px solid rgba(255,255,255,0.1)",
+                                  borderRadius: "0.5rem",
+                                  marginTop: 2,
+                                  overflow: "hidden",
+                                }}
+                              >
+                                {watchTickerSuggestions.map((t) => (
+                                  <div
+                                    key={t.symbol}
+                                    onMouseDown={() => {
+                                      setWatchInputTicker(t.symbol);
+                                      setShowWatchTickerDrop(false);
+                                    }}
+                                    style={{
+                                      padding: "0.5rem 0.75rem",
+                                      cursor: "pointer",
+                                      fontSize: 13,
+                                      borderBottom:
+                                        "1px solid rgba(255,255,255,0.05)",
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      e.currentTarget.style.backgroundColor =
+                                        "rgba(255,255,255,0.06)";
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.backgroundColor =
+                                        "transparent";
+                                    }}
+                                  >
+                                    <span
+                                      style={{
+                                        color: "#f97316",
+                                        fontWeight: 600,
+                                      }}
+                                    >
+                                      {t.symbol}
+                                    </span>
+                                    <span
+                                      style={{
+                                        color: "#64748b",
+                                        marginLeft: 8,
+                                        fontSize: 11,
+                                      }}
+                                    >
+                                      {t.full}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                        </div>
+                        <button
+                          onClick={handleWatchlistAdd}
+                          disabled={watchInputLoading}
+                          style={{
+                            ...buttonBaseStyle,
+                            backgroundColor: "#f97316",
+                            color: "#fff",
+                            borderRadius: "0.75rem",
+                            padding: "6px 16px",
+                          }}
+                        >
+                          {watchInputLoading ? (
+                            <span className="loader-spin" />
+                          ) : (
+                            "Add"
+                          )}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowWatchlistInput(false);
+                            setWatchInputTicker("");
+                            setWatchInputError("");
+                          }}
+                          style={{
+                            ...buttonBaseStyle,
+                            backgroundColor: "rgba(255,255,255,0.07)",
+                            color: "#94a3b8",
+                            borderRadius: "0.75rem",
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                      {watchInputError && (
+                        <div
+                          style={{
+                            color: "#ef4444",
+                            fontSize: 12,
+                            marginTop: 4,
+                          }}
+                        >
+                          {watchInputError}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {watchlistLoading ? (
+                    <div style={{ display: "grid", gap: "0.5rem" }}>
+                      {[1, 2, 3].map((i) => (
+                        <div
+                          key={i}
+                          className="animate-pulse"
+                          style={{
+                            height: 56,
+                            borderRadius: "0.75rem",
+                            backgroundColor: "rgba(255,255,255,0.05)",
+                          }}
+                        />
+                      ))}
+                    </div>
+                  ) : watchlistError ? (
+                    <div style={{ color: "#ef4444", fontSize: 13 }}>
+                      {watchlistError}
+                    </div>
+                  ) : watchlist.length === 0 ? (
+                    <div
+                      style={{
+                        textAlign: "center",
+                        padding: "3rem",
+                        color: "#64748b",
+                      }}
+                    >
+                      No watchlist items yet. Click &quot;+ Add&quot; to track a
+                      stock.
+                    </div>
+                  ) : (
+                    <div style={{ display: "grid", gap: "0.5rem" }}>
+                      {watchlist.map((item) => (
+                        <div
+                          key={item.ticker}
+                          onClick={() => {
+                            setSelectedTicker(item.ticker);
+                            setDrawerOpen(true);
+                          }}
                           style={{
                             display: "flex",
                             alignItems: "center",
+                            justifyContent: "space-between",
+                            padding: "0.7rem 0.85rem",
+                            borderRadius: "0.75rem",
+                            border: "1px solid rgba(255,255,255,0.07)",
+                            backgroundColor: "rgba(15,23,42,0.5)",
+                            cursor: "pointer",
                             gap: "0.5rem",
+                            marginBottom: "6px",
                           }}
+                          onMouseEnter={(e) =>
+                            (e.currentTarget.style.borderColor =
+                              "rgba(249,115,22,0.35)")
+                          }
+                          onMouseLeave={(e) =>
+                            (e.currentTarget.style.borderColor =
+                              "rgba(255,255,255,0.07)")
+                          }
                         >
-                          <span
+                          <div style={{ minWidth: "5rem" }}>
+                            <p
+                              style={{
+                                margin: 0,
+                                color: "#f8fafc",
+                                fontWeight: 700,
+                                fontSize: "0.9rem",
+                              }}
+                            >
+                              {item.ticker.replace(/\.NS$/i, "")}
+                            </p>
+                          </div>
+                          <div style={{ flex: 1, textAlign: "center" }}>
+                            <p
+                              style={{
+                                margin: 0,
+                                color: "#f8fafc",
+                                fontSize: "0.95rem",
+                                fontWeight: 600,
+                                fontFamily: "'Barlow Condensed', sans-serif",
+                              }}
+                            >
+                              {item.currentPrice
+                                ? formatCurrency(item.currentPrice)
+                                : "—"}
+                            </p>
+                            {item.changePct != null && (
+                              <p
+                                style={{
+                                  margin: 0,
+                                  fontSize: "0.75rem",
+                                  color:
+                                    Number(item.changePct) >= 0
+                                      ? "#22c55e"
+                                      : "#ef4444",
+                                }}
+                              >
+                                {Number(item.changePct) >= 0 ? "▲" : "▼"}{" "}
+                                {Math.abs(Number(item.changePct)).toFixed(2)}%
+                              </p>
+                            )}
+                          </div>
+                          <div
                             style={{
-                              fontSize: "0.7rem",
-                              fontWeight: 700,
-                              padding: "3px 8px",
-                              borderRadius: "20px",
-                              background: badgeColor.bg,
-                              color: badgeColor.color,
-                              whiteSpace: "nowrap",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.5rem",
                             }}
                           >
-                            {item.sentimentBadge || "Neutral"}
-                          </span>
+                            <span
+                              style={{
+                                fontSize: "0.7rem",
+                                fontWeight: 700,
+                                padding: "3px 8px",
+                                borderRadius: "20px",
+                                background:
+                                  item.sentimentBadge === "Bullish"
+                                    ? "rgba(34,197,94,0.15)"
+                                    : item.sentimentBadge === "Bearish"
+                                      ? "rgba(239,68,68,0.15)"
+                                      : "rgba(100,116,139,0.2)",
+                                color:
+                                  item.sentimentBadge === "Bullish"
+                                    ? "#22c55e"
+                                    : item.sentimentBadge === "Bearish"
+                                      ? "#ef4444"
+                                      : "#94a3b8",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {item.sentimentBadge || "Neutral"}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleWatchlistRemove(item.ticker);
+                              }}
+                              style={{
+                                background: "transparent",
+                                border: "none",
+                                cursor: "pointer",
+                                color: "#475569",
+                                fontSize: "0.9rem",
+                                padding: "2px 4px",
+                                lineHeight: 1,
+                              }}
+                              onMouseEnter={(e) =>
+                                (e.currentTarget.style.color = "#ef4444")
+                              }
+                              onMouseLeave={(e) =>
+                                (e.currentTarget.style.color = "#475569")
+                              }
+                            >
+                              🗑
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {watchlistSubTab === "Mutual Funds" && (
+                <>
+                  <div style={{ marginBottom: "0.85rem" }}>
+                    <div style={{ position: "relative" }}>
+                      <input
+                        type="text"
+                        placeholder="Search fund e.g. Mirae Asset, Axis..."
+                        value={watchMfQuery}
+                        onChange={(e) => {
+                          setWatchMfQuery(e.target.value);
+                          searchWatchMf(e.target.value);
+                        }}
+                        style={{ ...inputStyle, fontSize: "0.9rem" }}
+                      />
+                      {watchMfSearching && (
+                        <p
+                          style={{
+                            margin: "4px 0 0",
+                            color: "#94a3b8",
+                            fontSize: "0.72rem",
+                          }}
+                        >
+                          Searching...
+                        </p>
+                      )}
+                      {watchMfResults.length > 0 && !watchMfSelected && (
+                        <div
+                          style={{
+                            position: "absolute",
+                            top: "calc(100% + 4px)",
+                            left: 0,
+                            right: 0,
+                            backgroundColor: "#0f172a",
+                            border: "1px solid rgba(255,255,255,0.15)",
+                            borderRadius: "0.75rem",
+                            overflow: "hidden",
+                            zIndex: 200,
+                            boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+                            maxHeight: "180px",
+                            overflowY: "auto",
+                          }}
+                        >
+                          {watchMfResults.map((mf) => (
+                            <div
+                              key={mf.schemeCode}
+                              onMouseDown={() => {
+                                setWatchMfSelected(mf);
+                                setWatchMfQuery(mf.schemeName);
+                                setWatchMfResults([]);
+                              }}
+                              style={{
+                                padding: "0.65rem 1rem",
+                                cursor: "pointer",
+                                borderBottom:
+                                  "1px solid rgba(255,255,255,0.06)",
+                              }}
+                              onMouseEnter={(e) =>
+                                (e.currentTarget.style.backgroundColor =
+                                  "rgba(139,92,246,0.1)")
+                              }
+                              onMouseLeave={(e) =>
+                                (e.currentTarget.style.backgroundColor =
+                                  "transparent")
+                              }
+                            >
+                              <p
+                                style={{
+                                  margin: 0,
+                                  color: "#a78bfa",
+                                  fontWeight: 700,
+                                  fontSize: "0.78rem",
+                                }}
+                              >
+                                {mf.schemeCode}
+                              </p>
+                              <p
+                                style={{
+                                  margin: "2px 0 0",
+                                  color: "#94a3b8",
+                                  fontSize: "0.75rem",
+                                }}
+                              >
+                                {mf.schemeName}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {watchMfSelected && (
+                      <div
+                        style={{
+                          marginTop: "6px",
+                          padding: "8px 12px",
+                          borderRadius: "8px",
+                          background: "rgba(139,92,246,0.08)",
+                          border: "1px solid rgba(139,92,246,0.25)",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                        }}
+                      >
+                        <div>
+                          <p
+                            style={{
+                              margin: 0,
+                              color: "#a78bfa",
+                              fontSize: "0.72rem",
+                              fontWeight: 700,
+                            }}
+                          >
+                            {watchMfSelected.schemeCode}
+                          </p>
+                          <p
+                            style={{
+                              margin: 0,
+                              color: "#cbd5e1",
+                              fontSize: "0.72rem",
+                            }}
+                          >
+                            {watchMfSelected.schemeName}
+                          </p>
+                        </div>
+                        <div style={{ display: "flex", gap: "6px" }}>
                           <button
                             type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleWatchlistRemove(item.ticker);
+                            onClick={handleAddMfWatchlist}
+                            disabled={watchMfAdding}
+                            style={{
+                              background: "#8b5cf6",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "20px",
+                              padding: "5px 14px",
+                              fontSize: "12px",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              opacity: watchMfAdding ? 0.7 : 1,
+                              fontFamily: "inherit",
+                            }}
+                          >
+                            {watchMfAdding ? "Adding..." : "Add"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setWatchMfSelected(null);
+                              setWatchMfQuery("");
                             }}
                             style={{
                               background: "transparent",
                               border: "none",
+                              color: "#64748b",
                               cursor: "pointer",
-                              color: "#475569",
-                              fontSize: "0.9rem",
-                              padding: "2px 4px",
-                              borderRadius: "4px",
-                              lineHeight: 1,
+                              fontSize: "1rem",
                             }}
-                            onMouseEnter={(e) =>
-                              (e.currentTarget.style.color = "#ef4444")
-                            }
-                            onMouseLeave={(e) =>
-                              (e.currentTarget.style.color = "#475569")
-                            }
                           >
-                            🗑
+                            ✕
                           </button>
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
+                    )}
+                    {watchMfError && (
+                      <p
+                        style={{
+                          margin: "4px 0 0",
+                          color: "#ef4444",
+                          fontSize: "0.75rem",
+                        }}
+                      >
+                        {watchMfError}
+                      </p>
+                    )}
+                  </div>
+
+                  {watchlistLoading ? (
+                    <div style={{ display: "grid", gap: "0.6rem" }}>
+                      {[1, 2].map((i) => (
+                        <div
+                          key={i}
+                          className="animate-pulse"
+                          style={{
+                            height: "3rem",
+                            borderRadius: "0.75rem",
+                            backgroundColor: "rgba(51,65,85,0.35)",
+                          }}
+                        />
+                      ))}
+                    </div>
+                  ) : watchlist.filter((item) => {
+                      const code = item.ticker;
+                      return !code.endsWith(".NS") && !code.endsWith(".BO");
+                    }).length === 0 ? (
+                    <div
+                      style={{ textAlign: "center", padding: "1.5rem 1rem" }}
+                    >
+                      <p style={{ margin: 0, fontSize: "1.5rem" }}>🏦</p>
+                      <p
+                        style={{
+                          margin: "0.5rem 0 0",
+                          color: "#94a3b8",
+                          fontSize: "0.9rem",
+                        }}
+                      >
+                        No funds in watchlist
+                      </p>
+                      <p
+                        style={{
+                          margin: "0.3rem 0 0",
+                          color: "#475569",
+                          fontSize: "0.8rem",
+                        }}
+                      >
+                        Search and add mutual funds above
+                      </p>
+                    </div>
+                  ) : (
+                    <div style={{ display: "grid", gap: "0.5rem" }}>
+                      {watchlist
+                        .filter(
+                          (item) =>
+                            !item.ticker.endsWith(".NS") &&
+                            !item.ticker.endsWith(".BO"),
+                        )
+                        .map((item) => (
+                          <div
+                            key={item.ticker}
+                            onClick={() =>
+                              openMfDrawer({
+                                ticker: item.ticker,
+                                schemeName: item.ticker,
+                              })
+                            }
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              padding: "0.7rem 0.85rem",
+                              borderRadius: "0.75rem",
+                              border: "1px solid rgba(139,92,246,0.15)",
+                              backgroundColor: "rgba(15,23,42,0.5)",
+                              cursor: "pointer",
+                              gap: "0.5rem",
+                            }}
+                            onMouseEnter={(e) =>
+                              (e.currentTarget.style.borderColor =
+                                "rgba(139,92,246,0.4)")
+                            }
+                            onMouseLeave={(e) =>
+                              (e.currentTarget.style.borderColor =
+                                "rgba(139,92,246,0.15)")
+                            }
+                          >
+                            <div style={{ flex: 1 }}>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "6px",
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    fontSize: "9px",
+                                    fontWeight: 700,
+                                    background: "rgba(139,92,246,0.2)",
+                                    color: "#a78bfa",
+                                    borderRadius: "10px",
+                                    padding: "1px 6px",
+                                  }}
+                                >
+                                  MF
+                                </span>
+                                <p
+                                  style={{
+                                    margin: 0,
+                                    color: "#f8fafc",
+                                    fontWeight: 700,
+                                    fontSize: "0.85rem",
+                                  }}
+                                >
+                                  {item.ticker}
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleWatchlistRemove(item.ticker);
+                              }}
+                              style={{
+                                background: "transparent",
+                                border: "none",
+                                cursor: "pointer",
+                                color: "#475569",
+                                fontSize: "0.9rem",
+                                padding: "2px 4px",
+                                lineHeight: 1,
+                              }}
+                              onMouseEnter={(e) =>
+                                (e.currentTarget.style.color = "#ef4444")
+                              }
+                              onMouseLeave={(e) =>
+                                (e.currentTarget.style.color = "#475569")
+                              }
+                            >
+                              🗑
+                            </button>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </>
               )}
             </>
           )}
@@ -1650,13 +2716,13 @@ const DashboardPage = () => {
           {/* ── NEWS TAB ── */}
           {dashTab === "News" && (
             <>
+              {/* Category pills */}
               <div
                 style={{
                   display: "flex",
-                  gap: "6px",
-                  overflowX: "auto",
-                  paddingBottom: "8px",
-                  marginBottom: "12px",
+                  gap: "0.4rem",
+                  marginBottom: "1rem",
+                  flexWrap: "wrap",
                 }}
               >
                 {[
@@ -1670,325 +2736,290 @@ const DashboardPage = () => {
                 ].map((cat) => (
                   <button
                     key={cat}
-                    type="button"
                     onClick={() => {
                       setNewsCategory(cat);
+                      setNewsArticles([]);
                       fetchNews(cat);
                     }}
                     style={{
-                      background: newsCategory === cat ? "#f97316" : "#1e293b",
-                      color: newsCategory === cat ? "white" : "#94a3b8",
-                      borderRadius: "20px",
-                      padding: "4px 12px",
-                      fontSize: "11px",
-                      fontWeight: 600,
-                      border: "none",
-                      cursor: "pointer",
-                      whiteSpace: "nowrap",
-                      fontFamily: "inherit",
+                      ...buttonBaseStyle,
+                      backgroundColor:
+                        newsCategory === cat ? "#f97316" : "#1e293b",
+                      color: newsCategory === cat ? "#fff" : "#94a3b8",
+                      border:
+                        newsCategory === cat
+                          ? "none"
+                          : "1px solid rgba(255,255,255,0.08)",
                       textTransform: "capitalize",
                     }}
                   >
-                    {cat === "all"
-                      ? "All"
-                      : cat.charAt(0).toUpperCase() + cat.slice(1)}
+                    {cat}
                   </button>
                 ))}
               </div>
 
-              {newsLoading && (
-                <div style={{ display: "grid", gap: "0.6rem" }}>
-                  {[1, 2, 3].map((i) => (
+              {newsLoading ? (
+                <div style={{ display: "grid", gap: "0.5rem" }}>
+                  {[1, 2, 3, 4].map((i) => (
                     <div
                       key={i}
                       className="animate-pulse"
                       style={{
-                        height: "4rem",
+                        height: 70,
                         borderRadius: "0.75rem",
-                        backgroundColor: "rgba(51,65,85,0.35)",
-                        border: "1px solid rgba(148,163,184,0.15)",
+                        backgroundColor: "rgba(255,255,255,0.05)",
                       }}
                     />
                   ))}
                 </div>
-              )}
-
-              {!newsLoading && newsError && (
-                <p style={{ color: "#ef4444", fontSize: "0.85rem", margin: 0 }}>
-                  {newsError}{" "}
-                  <span
+              ) : newsError ? (
+                <div
+                  style={{
+                    textAlign: "center",
+                    padding: "2rem",
+                    color: "#64748b",
+                  }}
+                >
+                  <div style={{ color: "#ef4444", marginBottom: 12 }}>
+                    {newsError}
+                  </div>
+                  <button
                     onClick={() => fetchNews(newsCategory)}
                     style={{
-                      color: "#f97316",
-                      cursor: "pointer",
-                      textDecoration: "underline",
+                      ...buttonBaseStyle,
+                      backgroundColor: "#1e293b",
+                      color: "#94a3b8",
                     }}
                   >
                     Retry
-                  </span>
-                </p>
-              )}
-
-              {!newsLoading && !newsError && newsArticles.length === 0 && (
-                <p
+                  </button>
+                </div>
+              ) : newsArticles.length === 0 ? (
+                <div
                   style={{
-                    color: "#64748b",
-                    fontSize: "0.85rem",
                     textAlign: "center",
-                    padding: "1.5rem 0",
+                    padding: "3rem",
+                    color: "#64748b",
                   }}
                 >
-                  No news available. Click Refresh to load.
-                </p>
-              )}
-
-              {!newsLoading &&
-                newsArticles.map((article, idx) => (
-                  <div
-                    key={idx}
-                    onClick={() => window.open(article.link, "_blank")}
-                    style={{
-                      background: "rgba(15,23,42,0.5)",
-                      borderRadius: "0.75rem",
-                      border: "1px solid rgba(255,255,255,0.07)",
-                      padding: "0.75rem 0.9rem",
-                      marginBottom: "8px",
-                      cursor: "pointer",
-                    }}
-                    onMouseEnter={(e) =>
-                      (e.currentTarget.style.borderColor =
-                        "rgba(249,115,22,0.35)")
-                    }
-                    onMouseLeave={(e) =>
-                      (e.currentTarget.style.borderColor =
-                        "rgba(255,255,255,0.07)")
-                    }
-                  >
-                    <p
-                      style={{
-                        margin: 0,
-                        color: "#f8fafc",
-                        fontSize: "0.88rem",
-                        fontWeight: 600,
-                        lineHeight: 1.4,
-                      }}
-                    >
-                      {article.title}
-                    </p>
+                  No news articles found.
+                </div>
+              ) : (
+                <div style={{ display: "grid", gap: "0.5rem" }}>
+                  {newsArticles.map((article, i) => (
                     <div
+                      key={i}
+                      onClick={() =>
+                        article.url &&
+                        window.open(article.url, "_blank", "noreferrer")
+                      }
                       style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        marginTop: "0.35rem",
-                        gap: "0.5rem",
+                        backgroundColor: "#0f172a",
+                        border: "1px solid rgba(255,255,255,0.07)",
+                        borderRadius: "0.75rem",
+                        padding: "0.75rem 1rem",
+                        cursor: "pointer",
+                        transition: "border-color 0.15s",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor =
+                          "rgba(249,115,22,0.3)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor =
+                          "rgba(255,255,255,0.07)";
                       }}
                     >
-                      <span style={{ color: "#64748b", fontSize: "0.72rem" }}>
-                        {article.source || "News"}
-                      </span>
-                      <span style={{ color: "#475569", fontSize: "0.72rem" }}>
-                        {article.pubDate
-                          ? new Date(article.pubDate).toLocaleDateString(
-                              "en-IN",
-                              {
-                                day: "numeric",
-                                month: "short",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              },
-                            )
-                          : ""}
-                      </span>
+                      <div
+                        style={{
+                          fontWeight: 600,
+                          color: "#f8fafc",
+                          fontSize: 14,
+                          lineHeight: 1.4,
+                          marginBottom: 4,
+                        }}
+                      >
+                        {article.title}
+                      </div>
+                      <div style={{ fontSize: 12, color: "#64748b" }}>
+                        <span>{article.source}</span>
+                        {article.publishedAt && (
+                          <span style={{ marginLeft: 10 }}>
+                            {article.publishedAt}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+              )}
             </>
           )}
         </div>
       </div>
 
+      {/* ── DELETE MODAL ── */}
       {deleteTarget && (
         <div
           style={{
             position: "fixed",
             inset: 0,
-            zIndex: 50,
+            zIndex: 100,
+            backgroundColor: "rgba(0,0,0,0.7)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: "rgba(0,0,0,0.65)",
-            backdropFilter: "blur(4px)",
           }}
+          onClick={() => setDeleteTarget(null)}
         >
           <div
             style={{
-              backgroundColor: "#0f172a",
-              border: "1px solid rgba(255,255,255,0.1)",
-              borderRadius: "1rem",
+              ...cardStyle,
               padding: "1.5rem",
-              width: "100%",
-              maxWidth: "20rem",
-              textAlign: "center",
+              maxWidth: 360,
+              width: "90%",
+              margin: "0 1rem",
             }}
+            onClick={(e) => e.stopPropagation()}
           >
-            <p
+            <div
               style={{
-                margin: "0 0 0.25rem",
-                color: "#ffffff",
                 fontWeight: 700,
-                fontSize: "1.1rem",
+                fontSize: 16,
+                marginBottom: "0.5rem",
+                color: "#f8fafc",
               }}
             >
-              Remove holding?
-            </p>
-            <p
+              Confirm Delete
+            </div>
+            <div
               style={{
-                margin: "0 0 1.25rem",
+                fontSize: 14,
                 color: "#94a3b8",
-                fontSize: "0.9rem",
-                lineHeight: 1.5,
+                marginBottom: "1.25rem",
               }}
             >
-              This will permanently remove{" "}
-              <span style={{ color: "#fb923c", fontWeight: 700 }}>
-                {deleteTarget.ticker}
-              </span>{" "}
-              from your portfolio.
-            </p>
+              Remove{" "}
+              <strong style={{ color: "#f97316" }}>
+                {deleteTarget.assetType === "mutual_fund"
+                  ? deleteTarget.schemeName || deleteTarget.ticker
+                  : deleteTarget.ticker}
+              </strong>{" "}
+              from your portfolio?
+            </div>
             <div
               style={{
                 display: "flex",
-                gap: "0.7rem",
-                justifyContent: "center",
+                gap: "0.5rem",
+                justifyContent: "flex-end",
               }}
             >
               <button
                 onClick={() => setDeleteTarget(null)}
                 style={{
                   ...buttonBaseStyle,
-                  backgroundColor: "transparent",
-                  border: "1px solid rgba(255,255,255,0.15)",
-                  color: "#cbd5e1",
-                  padding: "0.55rem 1rem",
+                  backgroundColor: "#1e293b",
+                  color: "#94a3b8",
                 }}
               >
                 Cancel
               </button>
               <button
-                onClick={() => {
-                  handleDelete(deleteTarget.id);
-                  setDeleteTarget(null);
-                }}
+                onClick={() => handleDelete(deleteTarget.id)}
                 style={{
                   ...buttonBaseStyle,
-                  backgroundColor: "rgba(239,68,68,0.2)",
-                  border: "1px solid rgba(239,68,68,0.35)",
-                  color: "#fca5a5",
-                  padding: "0.55rem 1rem",
+                  backgroundColor: "#ef4444",
+                  color: "#fff",
                 }}
               >
-                Remove
+                Delete
               </button>
             </div>
           </div>
         </div>
       )}
 
+      {/* ── EDIT MODAL ── */}
       {editTarget && (
         <div
           style={{
             position: "fixed",
             inset: 0,
-            zIndex: 50,
+            zIndex: 100,
+            backgroundColor: "rgba(0,0,0,0.7)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: "rgba(0,0,0,0.65)",
-            backdropFilter: "blur(4px)",
           }}
+          onClick={() => setEditTarget(null)}
         >
           <div
             style={{
-              backgroundColor: "#0f172a",
-              border: "1px solid rgba(255,255,255,0.1)",
-              borderRadius: "1rem",
+              ...cardStyle,
               padding: "1.5rem",
-              width: "100%",
-              maxWidth: "20rem",
+              maxWidth: 380,
+              width: "90%",
+              margin: "0 1rem",
             }}
+            onClick={(e) => e.stopPropagation()}
           >
-            <p
+            <div
               style={{
-                margin: "0 0 1rem",
-                color: "#ffffff",
-                fontWeight: 600,
-                fontSize: "1.05rem",
+                fontWeight: 700,
+                fontSize: 16,
+                marginBottom: "1rem",
+                color: "#f8fafc",
               }}
             >
-              Edit {editTarget.ticker.replace(/\.NS$/i, "")}
-            </p>
+              Edit{" "}
+              {editTarget.assetType === "mutual_fund"
+                ? "Fund"
+                : editTarget.assetType === "fd"
+                  ? "FD"
+                  : "Holding"}
+            </div>
 
             <div
-              style={{ display: "grid", gap: "0.85rem", marginBottom: "1rem" }}
+              style={{ display: "grid", gap: "0.75rem", marginBottom: "1rem" }}
             >
-              {/* Buy Price */}
-              <div style={{ display: "grid", gap: "0" }}>
-                <p
+              <div>
+                <label
                   style={{
-                    margin: "0 0 0.3rem",
-                    color: "#94a3b8",
-                    fontSize: "0.75rem",
-                    fontWeight: 600,
+                    fontSize: 11,
+                    color: "#64748b",
+                    display: "block",
+                    marginBottom: 4,
                   }}
                 >
-                  BUY PRICE (₹)
-                </p>
+                  {editTarget.assetType === "mutual_fund"
+                    ? "Buy NAV (₹)"
+                    : "Buy Price (₹)"}
+                </label>
                 <input
-                  type="text"
-                  inputMode="decimal"
-                  placeholder="Buy Price (₹)"
+                  type="number"
+                  style={inputStyle}
                   value={editForm.buyPrice}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    if (/^\d*\.?\d*$/.test(val)) {
-                      setEditForm((p) => ({ ...p, buyPrice: val }));
-                    }
-                  }}
-                  style={{
-                    backgroundColor: "#1e293b",
-                    border: "1px solid rgba(255,255,255,0.1)",
-                    borderRadius: "0.75rem",
-                    padding: "0.7rem 0.85rem",
-                    color: "#ffffff",
-                    fontSize: "1rem",
-                    width: "100%",
-                    boxSizing: "border-box",
-                  }}
+                  onChange={(e) =>
+                    setEditForm((p) => ({ ...p, buyPrice: e.target.value }))
+                  }
+                  min="0"
+                  step="0.01"
                 />
               </div>
-
-              {/* Quantity Stepper */}
-              <div style={{ display: "grid", gap: "0" }}>
-                <p
+              <div>
+                <label
                   style={{
-                    margin: "0 0 0.3rem",
-                    color: "#94a3b8",
-                    fontSize: "0.75rem",
-                    fontWeight: 600,
+                    fontSize: 11,
+                    color: "#64748b",
+                    display: "block",
+                    marginBottom: 4,
                   }}
                 >
-                  QUANTITY
-                </p>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0",
-                    border: "1px solid rgba(255,255,255,0.1)",
-                    borderRadius: "0.75rem",
-                    overflow: "hidden",
-                  }}
-                >
+                  {editTarget.assetType === "mutual_fund"
+                    ? "Units"
+                    : "Quantity"}
+                </label>
+                <div style={{ display: "flex", gap: 4 }}>
                   <button
                     type="button"
                     onClick={() =>
@@ -1998,40 +3029,23 @@ const DashboardPage = () => {
                       }))
                     }
                     style={{
-                      width: "3rem",
-                      height: "2.75rem",
+                      ...buttonBaseStyle,
+                      padding: "6px 12px",
                       backgroundColor: "#1e293b",
-                      border: "none",
-                      borderRight: "1px solid rgba(255,255,255,0.1)",
-                      color: "#f97316",
-                      fontSize: "1.3rem",
-                      fontWeight: 700,
-                      cursor: "pointer",
-                      flexShrink: 0,
+                      color: "#94a3b8",
+                      borderRadius: "0.5rem",
                     }}
                   >
                     −
                   </button>
                   <input
-                    type="text"
-                    inputMode="numeric"
+                    type="number"
+                    style={{ ...inputStyle, textAlign: "center" }}
                     value={editForm.qty}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (/^\d*$/.test(val)) {
-                        setEditForm((p) => ({ ...p, qty: val }));
-                      }
-                    }}
-                    style={{
-                      flex: 1,
-                      backgroundColor: "#1e293b",
-                      border: "none",
-                      padding: "0.7rem 0.5rem",
-                      color: "#ffffff",
-                      fontSize: "1rem",
-                      textAlign: "center",
-                      minWidth: 0,
-                    }}
+                    onChange={(e) =>
+                      setEditForm((p) => ({ ...p, qty: e.target.value }))
+                    }
+                    min="1"
                   />
                   <button
                     type="button"
@@ -2042,164 +3056,563 @@ const DashboardPage = () => {
                       }))
                     }
                     style={{
-                      width: "3rem",
-                      height: "2.75rem",
+                      ...buttonBaseStyle,
+                      padding: "6px 12px",
                       backgroundColor: "#1e293b",
-                      border: "none",
-                      borderLeft: "1px solid rgba(255,255,255,0.1)",
-                      color: "#f97316",
-                      fontSize: "1.3rem",
-                      fontWeight: 700,
-                      cursor: "pointer",
-                      flexShrink: 0,
+                      color: "#94a3b8",
+                      borderRadius: "0.5rem",
                     }}
                   >
                     +
                   </button>
                 </div>
               </div>
-
-              {/* Buy Date */}
-              <div style={{ display: "grid", gap: "0" }}>
-                <p
+              <div>
+                <label
                   style={{
-                    margin: "0 0 0.3rem",
-                    color: "#94a3b8",
-                    fontSize: "0.75rem",
-                    fontWeight: 600,
+                    fontSize: 11,
+                    color: "#64748b",
+                    display: "block",
+                    marginBottom: 4,
                   }}
                 >
-                  BUY DATE
-                </p>
+                  Buy Date
+                </label>
                 <input
                   type="date"
+                  style={inputStyle}
                   value={editForm.buyDate}
                   onChange={(e) =>
                     setEditForm((p) => ({ ...p, buyDate: e.target.value }))
                   }
-                  style={{
-                    backgroundColor: "#1e293b",
-                    border: "1px solid rgba(255,255,255,0.1)",
-                    borderRadius: "0.75rem",
-                    padding: "0.7rem 0.85rem",
-                    color: "#ffffff",
-                    fontSize: "1rem",
-                    width: "100%",
-                    boxSizing: "border-box",
-                    minHeight: "2.75rem",
-                  }}
                 />
               </div>
             </div>
 
             {editError && (
-              <p
-                style={{
-                  margin: "0 0 0.75rem",
-                  color: "#f87171",
-                  fontSize: "0.82rem",
-                }}
-              >
+              <div style={{ color: "#ef4444", fontSize: 12, marginBottom: 8 }}>
                 {editError}
-              </p>
+              </div>
             )}
 
-            <div style={{ display: "flex", gap: "0.65rem" }}>
+            <div
+              style={{
+                display: "flex",
+                gap: "0.5rem",
+                justifyContent: "flex-end",
+              }}
+            >
               <button
-                type="button"
-                onClick={() => {
-                  setEditTarget(null);
-                  setEditError("");
-                }}
+                onClick={() => setEditTarget(null)}
                 style={{
-                  flex: 1,
-                  padding: "0.6rem",
-                  borderRadius: "0.75rem",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  backgroundColor: "transparent",
+                  ...buttonBaseStyle,
+                  backgroundColor: "#1e293b",
                   color: "#94a3b8",
-                  cursor: "pointer",
-                  fontWeight: 600,
                 }}
               >
                 Cancel
               </button>
               <button
-                type="button"
+                onClick={handleEditSave}
                 disabled={editSaving}
-                onClick={async () => {
-                  const buyPrice = Number(editForm.buyPrice);
-                  const quantity = Number(editForm.qty);
-
-                  if (!buyPrice || buyPrice <= 0) {
-                    setEditError("Enter a valid buy price.");
-                    return;
-                  }
-                  if (
-                    !quantity ||
-                    quantity <= 0 ||
-                    !Number.isInteger(quantity)
-                  ) {
-                    setEditError("Enter a valid whole number quantity.");
-                    return;
-                  }
-                  if (!editForm.buyDate) {
-                    setEditError("Select a buy date.");
-                    return;
-                  }
-
-                  setEditSaving(true);
-                  setEditError("");
-
-                  try {
-                    await api.put(
-                      `/api/holdings/${editTarget.id || editTarget._id}`,
-                      {
-                        ticker: editTarget.ticker,
-                        buyPrice: buyPrice,
-                        quantity: quantity,
-                        buyDate: editForm.buyDate,
-                      },
-                    );
-                    setEditTarget(null);
-                    fetchPortfolioData();
-                  } catch (err) {
-                    const msg =
-                      err?.response?.data?.detail ||
-                      "Unable to update. Try again.";
-                    setEditError(msg);
-                  } finally {
-                    setEditSaving(false);
-                  }
-                }}
                 style={{
-                  flex: 1,
-                  padding: "0.6rem",
-                  borderRadius: "0.75rem",
-                  border: "1px solid rgba(249,115,22,0.35)",
-                  backgroundColor: editSaving
-                    ? "rgba(249,115,22,0.1)"
-                    : "rgba(249,115,22,0.2)",
-                  color: "#f97316",
-                  cursor: editSaving ? "not-allowed" : "pointer",
-                  fontWeight: 700,
-                  opacity: editSaving ? 0.7 : 1,
+                  ...buttonBaseStyle,
+                  backgroundColor: "#f97316",
+                  color: "#fff",
                 }}
               >
-                {editSaving ? "Saving..." : "Save"}
+                {editSaving ? <span className="loader-spin" /> : "Save"}
               </button>
             </div>
           </div>
         </div>
       )}
 
+      {/* ── STOCK INTEL DRAWER ── */}
       <StockIntelDrawer
         ticker={selectedTicker}
         isOpen={drawerOpen}
         onClose={() => setDrawerOpen(false)}
       />
+
+      {/* ── MF INFO DRAWER ── */}
+      {mfDrawerOpen && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 100,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "flex-end",
+          }}
+        >
+          {/* Backdrop */}
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              background: "rgba(0,0,0,0.6)",
+            }}
+            onClick={() => setMfDrawerOpen(false)}
+          />
+          {/* Drawer panel */}
+          <div
+            className="drawer-slide"
+            style={{
+              position: "relative",
+              width: "100%",
+              maxHeight: "85vh",
+              backgroundColor: "#0f172a",
+              borderTop: "1px solid rgba(255,255,255,0.1)",
+              borderRadius: "1.25rem 1.25rem 0 0",
+              overflowY: "auto",
+              zIndex: 101,
+              padding: "1.25rem",
+              display: "flex",
+              flexDirection: "column",
+              gap: "1rem",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                marginBottom: "0.5rem",
+              }}
+            >
+              <div
+                style={{
+                  width: "2.5rem",
+                  height: "4px",
+                  backgroundColor: "rgba(255,255,255,0.2)",
+                  borderRadius: "2px",
+                }}
+              />
+            </div>
+            {/* Close button */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "1.25rem",
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: "0.1em",
+                  backgroundColor: "rgba(139,92,246,0.15)",
+                  color: "#8b5cf6",
+                  border: "1px solid rgba(139,92,246,0.3)",
+                  padding: "3px 10px",
+                  borderRadius: 20,
+                }}
+              >
+                MUTUAL FUND
+              </span>
+              <button
+                onClick={() => setMfDrawerOpen(false)}
+                style={{
+                  ...buttonBaseStyle,
+                  backgroundColor: "rgba(255,255,255,0.07)",
+                  color: "#94a3b8",
+                  borderRadius: "50%",
+                  padding: "5px 9px",
+                  fontSize: 16,
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {mfDrawerLoading ? (
+              <div style={{ display: "grid", gap: "0.75rem" }}>
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <div
+                    key={i}
+                    className="animate-pulse"
+                    style={{
+                      height: i === 1 ? 32 : 56,
+                      borderRadius: "0.75rem",
+                      backgroundColor: "rgba(255,255,255,0.06)",
+                    }}
+                  />
+                ))}
+              </div>
+            ) : !mfDrawerData || mfDrawerData.error ? (
+              <div
+                style={{
+                  textAlign: "center",
+                  padding: "3rem",
+                  color: "#64748b",
+                }}
+              >
+                Failed to load fund details.
+              </div>
+            ) : (
+              <>
+                {/* Header info */}
+                <div style={{ marginBottom: "1.25rem" }}>
+                  <div
+                    style={{
+                      fontSize: 17,
+                      fontWeight: 700,
+                      lineHeight: 1.3,
+                      marginBottom: 4,
+                    }}
+                  >
+                    {mfDrawerData.schemeName}
+                  </div>
+                  {mfDrawerData.fundHouse && (
+                    <div
+                      style={{
+                        fontSize: 13,
+                        color: "#94a3b8",
+                        marginBottom: 4,
+                      }}
+                    >
+                      {mfDrawerData.fundHouse}
+                    </div>
+                  )}
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {mfDrawerData.holding?.ticker && (
+                      <span
+                        style={{
+                          fontSize: 11,
+                          color: "#64748b",
+                          backgroundColor: "rgba(255,255,255,0.05)",
+                          padding: "2px 8px",
+                          borderRadius: 10,
+                        }}
+                      >
+                        {mfDrawerData.holding.ticker}
+                      </span>
+                    )}
+                    {mfDrawerData.schemeCategory && (
+                      <span
+                        style={{
+                          fontSize: 11,
+                          color: "#64748b",
+                          backgroundColor: "rgba(255,255,255,0.05)",
+                          padding: "2px 8px",
+                          borderRadius: 10,
+                        }}
+                      >
+                        {mfDrawerData.schemeCategory}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Investment card */}
+                <div
+                  style={{
+                    backgroundColor: "rgba(139,92,246,0.08)",
+                    border: "1px solid rgba(139,92,246,0.2)",
+                    borderRadius: "0.75rem",
+                    padding: "1rem",
+                    marginBottom: "1rem",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "0.75rem",
+                    }}
+                  >
+                    {[
+                      {
+                        label: "Invested",
+                        value: formatCurrency(mfDrawerData.holding?.invested),
+                      },
+                      {
+                        label: "Current Value",
+                        value: formatCurrency(
+                          mfDrawerData.holding?.currentValue,
+                        ),
+                      },
+                      {
+                        label: "Units",
+                        value: formatNumber(mfDrawerData.holding?.quantity),
+                      },
+                      {
+                        label: "P&L",
+                        value: `${formatCurrency(mfDrawerData.holding?.pnl)} (${(mfDrawerData.holding?.pnlPercent ?? 0).toFixed(2)}%)`,
+                        color: pnlColor(mfDrawerData.holding?.pnl ?? 0),
+                      },
+                    ].map(({ label, value, color }) => (
+                      <div key={label}>
+                        <div
+                          style={{
+                            fontSize: 11,
+                            color: "#64748b",
+                            marginBottom: 3,
+                          }}
+                        >
+                          {label}
+                        </div>
+                        <div
+                          style={{
+                            ...numberStyle,
+                            fontSize: 15,
+                            fontWeight: 700,
+                            color: color || "#f8fafc",
+                          }}
+                        >
+                          {value}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* NAV details */}
+                <div
+                  style={{
+                    backgroundColor: "#0f172a",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    borderRadius: "0.75rem",
+                    padding: "1rem",
+                    marginBottom: "1rem",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: "#64748b",
+                      marginBottom: "0.75rem",
+                    }}
+                  >
+                    NAV DETAILS
+                  </div>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "0.75rem",
+                    }}
+                  >
+                    <div>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: "#64748b",
+                          marginBottom: 3,
+                        }}
+                      >
+                        Current NAV
+                      </div>
+                      <div
+                        style={{
+                          ...numberStyle,
+                          fontSize: 18,
+                          fontWeight: 700,
+                          color: "#f97316",
+                        }}
+                      >
+                        ₹
+                        {mfDrawerData.currentNav ??
+                          mfDrawerData.holding?.currentPrice ??
+                          "—"}
+                      </div>
+                    </div>
+                    <div>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: "#64748b",
+                          marginBottom: 3,
+                        }}
+                      >
+                        Buy NAV
+                      </div>
+                      <div
+                        style={{
+                          ...numberStyle,
+                          fontSize: 16,
+                          fontWeight: 600,
+                          color: "#f8fafc",
+                        }}
+                      >
+                        ₹{mfDrawerData.holding?.buyPrice ?? "—"}
+                      </div>
+                    </div>
+                    <div>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: "#64748b",
+                          marginBottom: 3,
+                        }}
+                      >
+                        NAV Growth
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 14,
+                          fontWeight: 600,
+                          color: pnlColor(
+                            mfDrawerData.holding?.pnlPercent ?? 0,
+                          ),
+                        }}
+                      >
+                        {(mfDrawerData.holding?.pnlPercent ?? 0).toFixed(2)}%
+                      </div>
+                    </div>
+                    <div>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: "#64748b",
+                          marginBottom: 3,
+                        }}
+                      >
+                        Since
+                      </div>
+                      <div style={{ fontSize: 13, color: "#94a3b8" }}>
+                        {mfDrawerData.holding?.buyDate ?? "—"}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* NAV History sparkline */}
+                {mfDrawerData.navHistory &&
+                  mfDrawerData.navHistory.length > 0 &&
+                  (() => {
+                    const hist = mfDrawerData.navHistory.slice(-30);
+                    const navs = hist.map((h) => h.nav);
+                    const minNav = Math.min(...navs);
+                    const maxNav = Math.max(...navs);
+                    const range = maxNav - minNav || 1;
+                    return (
+                      <div
+                        style={{
+                          backgroundColor: "#0f172a",
+                          border: "1px solid rgba(255,255,255,0.08)",
+                          borderRadius: "0.75rem",
+                          padding: "1rem",
+                          marginBottom: "1rem",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: 12,
+                            fontWeight: 600,
+                            color: "#64748b",
+                            marginBottom: "0.75rem",
+                          }}
+                        >
+                          NAV HISTORY (30 days)
+                        </div>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "flex-end",
+                            gap: 2,
+                            height: 48,
+                          }}
+                        >
+                          {hist.map((h, i) => {
+                            const heightPct =
+                              ((h.nav - minNav) / range) * 80 + 20;
+                            const isLast = i === hist.length - 1;
+                            return (
+                              <div
+                                key={i}
+                                title={`${h.date}: ₹${h.nav}`}
+                                style={{
+                                  flex: 1,
+                                  height: `${heightPct}%`,
+                                  backgroundColor: isLast
+                                    ? "#f97316"
+                                    : "rgba(139,92,246,0.5)",
+                                  borderRadius: "2px 2px 0 0",
+                                  transition: "height 0.2s",
+                                }}
+                              />
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                {/* Historical returns */}
+                {mfDrawerData.returns && (
+                  <div
+                    style={{
+                      backgroundColor: "#0f172a",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      borderRadius: "0.75rem",
+                      padding: "1rem",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: "#64748b",
+                        marginBottom: "0.75rem",
+                      }}
+                    >
+                      HISTORICAL RETURNS
+                    </div>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(4,1fr)",
+                        gap: "0.5rem",
+                      }}
+                    >
+                      {["1W", "1M", "3M", "1Y"].map((period) => {
+                        const val = mfDrawerData.returns[period] ?? null;
+                        return (
+                          <div
+                            key={period}
+                            style={{
+                              backgroundColor: "rgba(255,255,255,0.04)",
+                              borderRadius: "0.5rem",
+                              padding: "0.6rem",
+                              textAlign: "center",
+                            }}
+                          >
+                            <div
+                              style={{
+                                fontSize: 11,
+                                color: "#64748b",
+                                marginBottom: 4,
+                              }}
+                            >
+                              {period}
+                            </div>
+                            <div
+                              style={{
+                                fontSize: 14,
+                                fontWeight: 700,
+                                color: val == null ? "#475569" : pnlColor(val),
+                              }}
+                            >
+                              {val == null
+                                ? "—"
+                                : `${val >= 0 ? "+" : ""}${val.toFixed(2)}%`}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
-};
-
-export default DashboardPage;
+}

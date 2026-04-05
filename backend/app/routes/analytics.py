@@ -60,6 +60,7 @@ async def _get_holdings_with_current_values(
             {
                 "ticker": holding.get("ticker", ""),
                 "currentValue": current_value,
+                "assetType": holding.get("assetType", "stock"),
             }
         )
 
@@ -70,6 +71,8 @@ async def _get_user_tickers(user_id, holdings_collection: AsyncIOMotorCollection
 
     tickers = []
     async for holding in holdings_collection.find({"userId": user_id}):
+        if holding.get("assetType", "stock") != "stock":
+            continue
         ticker = str(holding.get("ticker", "")).strip().upper()
         if ticker:
             tickers.append(ticker)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -37,6 +37,32 @@ DEMO_HOLDINGS = [
     # Auto + Steel (higher volatility)
     {"ticker": "BAJFINANCE.NS", "buyDate": "2023-07-01", "buyPrice": 6800, "quantity": 2},
     {"ticker": "TATASTEEL.NS", "buyDate": "2022-12-05", "buyPrice": 98, "quantity": 100},
+    # Mutual Funds
+    {
+        "ticker": "120503",
+        "buyDate": "2023-04-01",
+        "buyPrice": 45.23,
+        "quantity": 500,
+        "assetType": "mutual_fund",
+        "schemeName": "Mirae Asset Large Cap Fund - Direct Plan",
+    },
+    {
+        "ticker": "119598",
+        "buyDate": "2023-06-15",
+        "buyPrice": 89.10,
+        "quantity": 200,
+        "assetType": "mutual_fund",
+        "schemeName": "Axis Bluechip Fund - Direct Plan",
+    },
+    # Fixed Deposit
+    {
+        "ticker": "SBI FD",
+        "buyDate": "2023-09-01",
+        "buyPrice": 50000,
+        "quantity": 1,
+        "assetType": "fd",
+        "fdRate": 7.1,
+    },
 ]
 
 
@@ -79,17 +105,24 @@ async def main() -> None:
         await holdings_collection.delete_many({"userId": user_id})
 
         now = datetime.utcnow()
-        documents = [
-            {
+        documents = []
+        for item in DEMO_HOLDINGS:
+            doc = {
                 "userId": user_id,
                 "ticker": item["ticker"],
-                "buyDate": datetime.strptime(item["buyDate"], "%Y-%m-%d"),
+                "buyDate": datetime.strptime(item["buyDate"], "%Y-%m-%d").replace(tzinfo=timezone.utc),
                 "buyPrice": item["buyPrice"],
                 "quantity": item["quantity"],
+                "assetType": item.get("assetType", "stock"),
                 "createdAt": now,
             }
-            for item in DEMO_HOLDINGS
-        ]
+            if item.get("schemeName"):
+                doc["schemeName"] = item["schemeName"]
+            if item.get("fdRate"):
+                doc["fdRate"] = item["fdRate"]
+            if item.get("fdMaturityDate"):
+                doc["fdMaturityDate"] = item["fdMaturityDate"]
+            documents.append(doc)
 
         await holdings_collection.insert_many(documents)
         print("Seed complete ✓")

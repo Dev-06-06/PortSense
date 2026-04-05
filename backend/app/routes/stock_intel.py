@@ -58,6 +58,17 @@ def _to_float(value: Any, digits: int | None = None) -> float | None:
     return number
 
 
+def _rsi_zone(rsi_value: Any) -> str:
+    rsi = _to_float(rsi_value)
+    if rsi is None:
+        return "Neutral zone"
+    if rsi > 70:
+        return "Overbought (>70) — watch for reversal"
+    if rsi < 30:
+        return "Oversold (<30) — watch for bounce"
+    return "Neutral zone"
+
+
 def _safe_div(numerator: float | None, denominator: float | None) -> float | None:
     if numerator is None or denominator in (None, 0):
         return None
@@ -301,6 +312,7 @@ def _build_prompt(
     price = fast_data.get("price", "N/A")
     change_pct = fast_data.get("change_pct", "N/A")
     change_rs = fast_data.get("change_rs", "N/A")
+    rsi_value = _to_float(technicals.get("rsi"), digits=1)
     rsi_signal = technicals.get("rsi_signal", "N/A")
     macd_signal = technicals.get("macd_signal", "N/A")
     w52_high = fast_data.get("week52_high", "N/A")
@@ -346,11 +358,11 @@ Price Context:
 - Volume: {fast_data.get("volume_ratio", "N/A")}x average {"⚠ UNUSUAL" if fast_data.get("unusual_volume") else ""}
 
 Technical Signals:
-- RSI: {technicals.get("rsi", "N/A")} ({technicals.get("rsi_signal", "N/A")})
+    - RSI: {rsi_value if rsi_value is not None else 'N/A'} ({technicals.get("rsi_signal", "N/A")})
 - MACD: {technicals.get("macd_signal", "N/A")}
 - Moving Averages: {technicals.get("ma_signal", "N/A")}
 - Pattern: {technicals.get("pattern", "N/A")}
-- RSI Zone: {'Overbought (>70) — watch for reversal' if technicals.get('rsi', 50) > 70 else 'Oversold (<30) — watch for bounce' if technicals.get('rsi', 50) < 30 else 'Neutral zone'}
+    - RSI Zone: {_rsi_zone(technicals.get('rsi'))}
 
 News & Sentiment (FinBERT: {sentiment_badge}):
 {news_context_str}

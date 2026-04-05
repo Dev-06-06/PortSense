@@ -57,6 +57,7 @@ async def _get_user_holdings(user_id, holdings_collection: AsyncIOMotorCollectio
                 "buyDate": buy_date,
                 "currentPrice": current_price,
                 "currentValue": current_value,
+                "assetType": holding.get("assetType", "stock"),
             }
         )
 
@@ -77,6 +78,7 @@ async def rebalance_portfolio(
         str(holding.get("ticker", "")).strip().upper()
         for holding in enriched_holdings
         if str(holding.get("ticker", "")).strip()
+        and str(holding.get("assetType", "stock")).strip().lower() == "stock"
     ]
 
     sector_breakdown, portfolio_beta_data, correlation_data, benchmark_data = await asyncio.gather(
