@@ -1,5 +1,6 @@
 import asyncio
 import bisect
+import re
 import threading
 from collections import defaultdict
 from datetime import date, datetime, timedelta
@@ -28,6 +29,18 @@ ASSET_COLORS = {
     "fd": "#10b981",
     "indexFund": "#8b5cf6",
 }
+
+
+_NSE_BSE_TICKER_RE = re.compile(r"^[A-Z0-9\-_.]+\.(NS|BO)$")
+
+
+def _is_market_ticker(ticker: str) -> bool:
+    normalized = str(ticker or "").strip().upper()
+    if not normalized:
+        return False
+    if normalized.startswith("^"):
+        return True
+    return bool(_NSE_BSE_TICKER_RE.fullmatch(normalized))
 
 
 def _cache_get(cache_key: str):
@@ -252,17 +265,26 @@ async def get_alternative_comparison(
         earliest_date = events[0]["date"]
         today = date.today()
 
+        market_holdings = [
+            h for h in cleaned_holdings if _is_market_ticker(h["ticker"])
+        ]
         stock_info_tasks = [
             asyncio.to_thread(get_stock_info, h["ticker"])
-            for h in cleaned_holdings
+            for h in market_holdings
         ]
         stock_infos = await asyncio.gather(*stock_info_tasks, return_exceptions=True)
+        info_by_ticker = {
+            h["ticker"]: info
+            for h, info in zip(market_holdings, stock_infos)
+            if isinstance(info, dict)
+        }
 
         portfolio_current = 0.0
-        for holding, info in zip(cleaned_holdings, stock_infos):
+        for holding in cleaned_holdings:
             quantity = float(holding["quantity"])
             buy_price = float(holding["buyPrice"])
             current_price = buy_price
+            info = info_by_ticker.get(holding["ticker"])
             if isinstance(info, dict):
                 fetched = float(info.get("currentPrice", 0) or 0)
                 if fetched > 0:
@@ -310,7 +332,13 @@ async def get_alternative_comparison(
             alt_unit_events[key] = unit_events
             alt_current_values[key] = _value_from_units_on_date(unit_events, series, today)
 
-        unique_tickers = sorted({h["ticker"] for h in cleaned_holdings if h["ticker"]})
+        unique_tickers = sorted(
+            {
+                h["ticker"]
+                for h in cleaned_holdings
+                if h["ticker"] and _is_market_ticker(h["ticker"])
+            }
+        )
         ticker_history_tasks = [
             _fetch_price_history(ticker, earliest_date, today)
             for ticker in unique_tickers

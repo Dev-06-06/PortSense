@@ -136,132 +136,162 @@ def _extract_calendar_value(calendar: Any, keys: list[str]) -> Any:
     return None
 
 
-def _collect_fast_data(ticker: str) -> dict:
-    ticker_obj = yf.Ticker(ticker)
-    _raw_info = ticker_obj.info
-    info = _raw_info if isinstance(_raw_info, dict) else {}
-    ticker_info = info
-
-    history = ticker_obj.history(period="5d", interval="1d", auto_adjust=False)
-
-    current_price = _to_float(info.get("currentPrice"))
-    if current_price is None:
-        current_price = _to_float(info.get("regularMarketPrice"))
-
-    if current_price is None and not history.empty:
-        current_price = _to_float(history["Close"].iloc[-1])
-
-    previous_close = _to_float(info.get("regularMarketPreviousClose"))
-    if previous_close is None and len(history.index) >= 2:
-        previous_close = _to_float(history["Close"].iloc[-2])
-
-    change_rs = None
-    change_pct = None
-    if current_price is not None and previous_close not in (None, 0):
-        change_rs = round(current_price - previous_close, 2)
-        change_pct = round(((current_price - previous_close) / previous_close) * 100.0, 2)
-
-    volume = _to_float(info.get("volume"))
-    if volume is None:
-        volume = _to_float(info.get("regularMarketVolume"))
-
-    average_volume = _to_float(info.get("averageVolume"))
-    if average_volume is None:
-        average_volume = _to_float(info.get("averageVolume10days"))
-
-    volume_ratio = _safe_div(volume, average_volume)
-    if volume_ratio is not None:
-        volume_ratio = round(volume_ratio, 2)
-
-    calendar = ticker_obj.calendar
-
-    next_dividend_date = _format_date(
-        _extract_calendar_value(
-            calendar,
-            ["Dividend Date", "Ex-Dividend Date", "Next Dividend Date"],
-        )
-    )
-    next_dividend_amount = _to_float(
-        _extract_calendar_value(calendar, ["Dividend", "Dividend Value", "Dividend Amount"]),
-        digits=2,
-    )
-    if next_dividend_amount is None:
-        next_dividend_amount = _to_float(info.get("dividendRate"), digits=2)
-
-    earnings_date = _extract_calendar_value(
-        calendar,
-        [
-            "Earnings Date",
-            "Next Earnings Date",
-        ],
-    )
-    if isinstance(earnings_date, list):
-        earnings_date = earnings_date[0] if earnings_date else None
-    if hasattr(earnings_date, "isoformat"):
-        earnings_date = earnings_date.isoformat()
-    elif isinstance(earnings_date, list) and len(earnings_date) > 0:
-        item = earnings_date[0]
-        earnings_date = item.isoformat() if hasattr(item, "isoformat") else str(item)
-    else:
-        earnings_date = None
-    next_earnings = earnings_date
-
-    pe_ratio = round(ticker_info.get("trailingPE") or 0, 2)
-
-    raw = ticker_info.get("debtToEquity")
-    if raw is not None:
-        debt_equity = round(raw / 100, 2)
-    else:
-        debt_equity = "N/A"
-
-    revenue_growth = ticker_info.get("revenueGrowth")
-    if revenue_growth is not None:
-        revenue_growth = f"{round(float(revenue_growth) * 100, 1)}%"
-    else:
-        revenue_growth = "N/A"
-
-    profit_margins = ticker_info.get("profitMargins")
-    if profit_margins is not None:
-        profit_margins = f"{round(float(profit_margins) * 100, 1)}%"
-    else:
-        profit_margins = "N/A"
-
-    # Fallback chain for analyst_rating: handles both US and Indian stock key variations
-    analyst_rating = (
-        ticker_info.get("recommendationKey") or
-        ticker_info.get("averageAnalystRating") or
-        None
-    )
-    if analyst_rating:
-        analyst_rating = analyst_rating.replace("-", " ").title()
-    else:
-        analyst_rating = "N/A"
-    
-    recommendation = analyst_rating
-
+def _default_fast_data(ticker: str) -> dict:
     return {
-        "company_name": str(info.get("longName") or info.get("shortName") or ticker).strip(),
-        "sector": str(info.get("sector") or "Unknown").strip(),
-        "industry": str(info.get("industry") or "Unknown").strip(),
-        "price": current_price,
-        "change_pct": change_pct,
-        "change_rs": change_rs,
-        "volume": volume,
-        "average_volume": average_volume,
-        "volume_ratio": volume_ratio,
-        "unusual_volume": bool(volume_ratio and volume_ratio > 2.0),
-        "week52_high": _to_float(info.get("fiftyTwoWeekHigh")),
-        "week52_low": _to_float(info.get("fiftyTwoWeekLow")),
-        "market_cap": _to_float(info.get("marketCap")),
-        "pe_ratio": pe_ratio,
-        "debt_equity": debt_equity,
-        "revenue_growth": revenue_growth,
-        "profit_margins": profit_margins,
-        "recommendation": recommendation,
-        "next_dividend_date": next_dividend_date,
-        "next_dividend_amount": next_dividend_amount,
-        "next_earnings": next_earnings,
+        "company_name": ticker,
+        "sector": "Unknown",
+        "industry": "Unknown",
+        "price": None,
+        "change_pct": None,
+        "change_rs": None,
+        "volume": None,
+        "average_volume": None,
+        "volume_ratio": None,
+        "unusual_volume": False,
+        "week52_high": None,
+        "week52_low": None,
+        "market_cap": None,
+        "pe_ratio": 0.0,
+        "debt_equity": "N/A",
+        "revenue_growth": "N/A",
+        "profit_margins": "N/A",
+        "recommendation": "N/A",
+        "next_dividend_date": None,
+        "next_dividend_amount": None,
+        "next_earnings": None,
     }
+
+
+def _collect_fast_data(ticker: str) -> dict:
+    try:
+        ticker_obj = yf.Ticker(ticker)
+        _raw_info = ticker_obj.info
+        info = _raw_info if isinstance(_raw_info, dict) else {}
+        ticker_info = info
+
+        history = ticker_obj.history(period="5d", interval="1d", auto_adjust=False)
+
+        current_price = _to_float(info.get("currentPrice"))
+        if current_price is None:
+            current_price = _to_float(info.get("regularMarketPrice"))
+
+        if current_price is None and not history.empty:
+            current_price = _to_float(history["Close"].iloc[-1])
+
+        previous_close = _to_float(info.get("regularMarketPreviousClose"))
+        if previous_close is None and len(history.index) >= 2:
+            previous_close = _to_float(history["Close"].iloc[-2])
+
+        change_rs = None
+        change_pct = None
+        if current_price is not None and previous_close not in (None, 0):
+            change_rs = round(current_price - previous_close, 2)
+            change_pct = round(((current_price - previous_close) / previous_close) * 100.0, 2)
+
+        volume = _to_float(info.get("volume"))
+        if volume is None:
+            volume = _to_float(info.get("regularMarketVolume"))
+
+        average_volume = _to_float(info.get("averageVolume"))
+        if average_volume is None:
+            average_volume = _to_float(info.get("averageVolume10days"))
+
+        volume_ratio = _safe_div(volume, average_volume)
+        if volume_ratio is not None:
+            volume_ratio = round(volume_ratio, 2)
+
+        calendar = ticker_obj.calendar
+
+        next_dividend_date = _format_date(
+            _extract_calendar_value(
+                calendar,
+                ["Dividend Date", "Ex-Dividend Date", "Next Dividend Date"],
+            )
+        )
+        next_dividend_amount = _to_float(
+            _extract_calendar_value(calendar, ["Dividend", "Dividend Value", "Dividend Amount"]),
+            digits=2,
+        )
+        if next_dividend_amount is None:
+            next_dividend_amount = _to_float(info.get("dividendRate"), digits=2)
+
+        earnings_date = _extract_calendar_value(
+            calendar,
+            [
+                "Earnings Date",
+                "Next Earnings Date",
+            ],
+        )
+        if isinstance(earnings_date, list):
+            earnings_date = earnings_date[0] if earnings_date else None
+        if hasattr(earnings_date, "isoformat"):
+            earnings_date = earnings_date.isoformat()
+        elif isinstance(earnings_date, list) and len(earnings_date) > 0:
+            item = earnings_date[0]
+            earnings_date = item.isoformat() if hasattr(item, "isoformat") else str(item)
+        else:
+            earnings_date = None
+        next_earnings = earnings_date
+
+        pe_ratio = round(ticker_info.get("trailingPE") or 0, 2)
+
+        raw = ticker_info.get("debtToEquity")
+        if raw is not None:
+            debt_equity = round(raw / 100, 2)
+        else:
+            debt_equity = "N/A"
+
+        revenue_growth = ticker_info.get("revenueGrowth")
+        if revenue_growth is not None:
+            revenue_growth = f"{round(float(revenue_growth) * 100, 1)}%"
+        else:
+            revenue_growth = "N/A"
+
+        profit_margins = ticker_info.get("profitMargins")
+        if profit_margins is not None:
+            profit_margins = f"{round(float(profit_margins) * 100, 1)}%"
+        else:
+            profit_margins = "N/A"
+
+        # Fallback chain for analyst_rating: handles both US and Indian stock key variations
+        analyst_rating = (
+            ticker_info.get("recommendationKey") or
+            ticker_info.get("averageAnalystRating") or
+            None
+        )
+        if analyst_rating:
+            analyst_rating = analyst_rating.replace("-", " ").title()
+        else:
+            analyst_rating = "N/A"
+
+        recommendation = analyst_rating
+
+        return {
+            "company_name": str(info.get("longName") or info.get("shortName") or ticker).strip(),
+            "sector": str(info.get("sector") or "Unknown").strip(),
+            "industry": str(info.get("industry") or "Unknown").strip(),
+            "price": current_price,
+            "change_pct": change_pct,
+            "change_rs": change_rs,
+            "volume": volume,
+            "average_volume": average_volume,
+            "volume_ratio": volume_ratio,
+            "unusual_volume": bool(volume_ratio and volume_ratio > 2.0),
+            "week52_high": _to_float(info.get("fiftyTwoWeekHigh")),
+            "week52_low": _to_float(info.get("fiftyTwoWeekLow")),
+            "market_cap": _to_float(info.get("marketCap")),
+            "pe_ratio": pe_ratio,
+            "debt_equity": debt_equity,
+            "revenue_growth": revenue_growth,
+            "profit_margins": profit_margins,
+            "recommendation": recommendation,
+            "next_dividend_date": next_dividend_date,
+            "next_dividend_amount": next_dividend_amount,
+            "next_earnings": next_earnings,
+        }
+    except Exception as exc:
+        logger.warning("stock-intel fast data fetch failed for %s: %s", ticker, exc)
+        return _default_fast_data(ticker)
 
 
 def _build_sentiment(scored_headlines: list[dict]) -> tuple[str, float, list[str]]:
@@ -389,7 +419,7 @@ Fundamentals:
 - Revenue Growth: {fast_data.get("revenue_growth", "N/A")}
 - Profit Margin: {fast_data.get("profit_margins", "N/A")}
 - Analyst Rating: {fast_data.get("recommendation", "N/A")}
-- 52W Position: {'Near 52W High (top 10%)' if fast_data.get('change_pct') and w52_high and price > 0.9 * w52_high else 'Near 52W Low (bottom 10%)' if price < 1.1 * w52_low else 'Mid-range'}
+- 52W Position: {'Near 52W High (top 10%)' if (w52_high and price and price > 0.9 * w52_high) else 'Near 52W Low (bottom 10%)' if (w52_low and price and price < 1.1 * w52_low) else 'Mid-range'}
 {portfolio_line}
 
 Base action_signal on confluence: if 2+ of (RSI signal, MACD signal, FinBERT sentiment, analyst rating) agree → signal that direction. If conflicting → HOLD.
@@ -474,7 +504,16 @@ async def get_stock_intel(
     fast_data, technicals = await asyncio.gather(
         fast_data_task,
         technicals_task,
+        return_exceptions=True,
     )
+
+    if isinstance(fast_data, Exception):
+        logger.warning("stock-intel fast data task failed for %s: %s", normalized_ticker, fast_data)
+        fast_data = _default_fast_data(normalized_ticker)
+
+    if isinstance(technicals, Exception):
+        logger.warning("stock-intel technical task failed for %s: %s", normalized_ticker, technicals)
+        technicals = get_technical_indicators(normalized_ticker)
 
     user_holdings = await holdings_collection.find(
         {"userId": current_user.get("_id")}

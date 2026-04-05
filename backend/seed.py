@@ -39,20 +39,20 @@ DEMO_HOLDINGS = [
     {"ticker": "TATASTEEL.NS", "buyDate": "2022-12-05", "buyPrice": 98, "quantity": 100},
     # Mutual Funds
     {
-        "ticker": "120503",
+        "ticker": "119598",
         "buyDate": "2023-04-01",
-        "buyPrice": 45.23,
+        "buyPrice": 52.30,
         "quantity": 500,
         "assetType": "mutual_fund",
-        "schemeName": "Mirae Asset Large Cap Fund - Direct Plan",
+        "schemeName": "Axis Bluechip Fund - Direct Plan - Growth",
     },
     {
-        "ticker": "119598",
+        "ticker": "120503",
         "buyDate": "2023-06-15",
         "buyPrice": 89.10,
         "quantity": 200,
         "assetType": "mutual_fund",
-        "schemeName": "Axis Bluechip Fund - Direct Plan",
+        "schemeName": "Axis ELSS Tax Saver Fund - Direct Plan - Growth",
     },
     # Fixed Deposit
     {

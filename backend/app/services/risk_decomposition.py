@@ -1,10 +1,23 @@
 import logging
+import re
 
 import numpy as np
 import pandas as pd
 import yfinance as yf
 
 logger = logging.getLogger(__name__)
+
+
+_NSE_BSE_TICKER_RE = re.compile(r"^[A-Z0-9\-_.]+\.(NS|BO)$")
+
+
+def _is_yfinance_equity_ticker(ticker: str) -> bool:
+    normalized = str(ticker or "").strip().upper()
+    if not normalized:
+        return False
+    if normalized.startswith("^"):
+        return True
+    return bool(_NSE_BSE_TICKER_RE.fullmatch(normalized))
 
 
 def compute_risk_decomposition(holdings: list[dict]) -> dict:
@@ -24,6 +37,7 @@ def compute_risk_decomposition(holdings: list[dict]) -> dict:
         h
         for h in holdings
         if str(h.get("assetType", "stock")).strip().lower() == "stock"
+        and _is_yfinance_equity_ticker(str(h.get("ticker", "")).strip().upper())
     ]
     if not stock_holdings:
         return _empty_result("No stock holdings available")

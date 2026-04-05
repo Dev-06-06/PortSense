@@ -9,7 +9,7 @@ const shellStyle = {
   backgroundColor: "#0d1117",
   color: "#f8fafc",
   fontFamily: "'DM Sans', sans-serif",
-  padding: "1.25rem",
+  padding: "4rem 1.25rem 5rem 1.25rem",
 };
 
 const containerStyle = {
@@ -184,6 +184,8 @@ export default function DashboardPage() {
   const [mfResults, setMfResults] = useState([]);
   const [mfSearching, setMfSearching] = useState(false);
   const [selectedMf, setSelectedMf] = useState(null);
+  const [liveMfNav, setLiveMfNav] = useState(null);
+  const [liveMfNavFetching, setLiveMfNavFetching] = useState(false);
   const [mfBuyNav, setMfBuyNav] = useState("");
   const [mfUnits, setMfUnits] = useState("");
   const [mfBuyDate, setMfBuyDate] = useState("");
@@ -215,6 +217,7 @@ export default function DashboardPage() {
   const [watchMfSelected, setWatchMfSelected] = useState(null);
   const [watchMfAdding, setWatchMfAdding] = useState(false);
   const [watchMfError, setWatchMfError] = useState("");
+  const [mfNameCache, setMfNameCache] = useState({});
 
   // News
   const [newsArticles, setNewsArticles] = useState([]);
@@ -242,9 +245,18 @@ export default function DashboardPage() {
         ).slice(0, 6)
       : [];
 
-  const stockHoldings = holdings.filter(
-    (h) => !h.assetType || h.assetType === "stock",
-  );
+  const stockHoldings = holdings.filter((h) => {
+    const t = h.assetType;
+    if (t === "mutual_fund" || t === "fd") return false;
+    if (
+      !t &&
+      h.ticker &&
+      !h.ticker.endsWith(".NS") &&
+      !h.ticker.endsWith(".BO")
+    )
+      return false;
+    return true;
+  });
   const mfHoldings = holdings.filter((h) => h.assetType === "mutual_fund");
   const fdHoldings = holdings.filter((h) => h.assetType === "fd");
   const totalDayChange = holdings.reduce((s, h) => s + (h.dayChange || 0), 0);
@@ -381,6 +393,23 @@ export default function DashboardPage() {
       setLivePrice(null);
     } finally {
       setLivePriceFetching(false);
+    }
+  };
+
+  const fetchLiveMfNav = async (schemeCode) => {
+    if (!schemeCode) {
+      setLiveMfNav(null);
+      return;
+    }
+    setLiveMfNavFetching(true);
+    setLiveMfNav(null);
+    try {
+      const res = await api.get(`/api/holdings/mf-nav/${schemeCode}`);
+      setLiveMfNav(res.data?.currentNav || null);
+    } catch {
+      setLiveMfNav(null);
+    } finally {
+      setLiveMfNavFetching(false);
     }
   };
 
@@ -538,6 +567,24 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
+    const mfItems = watchlist.filter(
+      (item) => !item.ticker.endsWith(".NS") && !item.ticker.endsWith(".BO"),
+    );
+    mfItems.forEach(async (item) => {
+      if (mfNameCache[item.ticker]) return;
+      try {
+        const res = await api.get(`/api/holdings/mf-nav/${item.ticker}`);
+        setMfNameCache((prev) => ({
+          ...prev,
+          [item.ticker]: res.data.schemeName || item.ticker,
+        }));
+      } catch {
+        setMfNameCache((prev) => ({ ...prev, [item.ticker]: item.ticker }));
+      }
+    });
+  }, [watchlist]);
+
+  useEffect(() => {
     if (dashTab === "News" && newsArticles.length === 0) {
       fetchNews(newsCategory);
     }
@@ -596,6 +643,13 @@ export default function DashboardPage() {
               ...buttonBaseStyle,
               backgroundColor: "#f97316",
               color: "#fff",
+              borderRadius: "20px",
+              padding: "6px 18px",
+              fontSize: "13px",
+              fontWeight: 600,
+              border: "none",
+              cursor: "pointer",
+              fontFamily: "inherit",
             }}
             onClick={() => setShowAddForm((v) => !v)}
           >
@@ -609,6 +663,13 @@ export default function DashboardPage() {
               ...buttonBaseStyle,
               backgroundColor: "#8b5cf6",
               color: "#fff",
+              borderRadius: "20px",
+              padding: "6px 18px",
+              fontSize: "13px",
+              fontWeight: 600,
+              border: "none",
+              cursor: "pointer",
+              fontFamily: "inherit",
             }}
             onClick={() => setShowMfForm((v) => !v)}
           >
@@ -622,6 +683,13 @@ export default function DashboardPage() {
               ...buttonBaseStyle,
               backgroundColor: "#10b981",
               color: "#fff",
+              borderRadius: "20px",
+              padding: "6px 18px",
+              fontSize: "13px",
+              fontWeight: 600,
+              border: "none",
+              cursor: "pointer",
+              fontFamily: "inherit",
             }}
             onClick={() => setShowFdForm((v) => !v)}
           >
@@ -631,23 +699,59 @@ export default function DashboardPage() {
     }
     if (dashTab === "Watchlist")
       return (
-        <button
-          style={{
-            ...buttonBaseStyle,
-            backgroundColor: "transparent",
-            color: "#94a3b8",
-            border: "1px solid rgba(255,255,255,0.18)",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.color = "#f8fafc";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.color = "#94a3b8";
-          }}
-          onClick={() => setShowWatchlistInput((v) => !v)}
-        >
-          + Add
-        </button>
+        <>
+          {watchlistSubTab === "Stocks" && (
+            <button
+              style={{
+                ...buttonBaseStyle,
+                backgroundColor: "#1e293b",
+                color: "#f97316",
+                border: "1px solid rgba(249,115,22,0.3)",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = "#f97316";
+                e.currentTarget.style.color = "#ffffff";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = "#1e293b";
+                e.currentTarget.style.color = "#f97316";
+              }}
+              onClick={() => setShowWatchlistInput((v) => !v)}
+            >
+              + Add
+            </button>
+          )}
+          {watchlistSubTab === "Mutual Funds" && (
+            <button
+              type="button"
+              onClick={() => {
+                document.querySelector('input[placeholder*="Mirae"]')?.focus();
+              }}
+              style={{
+                background: "#1e293b",
+                color: "#a78bfa",
+                borderRadius: "20px",
+                padding: "6px 18px",
+                fontSize: "13px",
+                fontWeight: 600,
+                border: "1px solid rgba(139,92,246,0.3)",
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                fontFamily: "inherit",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "#8b5cf6";
+                e.currentTarget.style.color = "white";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "#1e293b";
+                e.currentTarget.style.color = "#a78bfa";
+              }}
+            >
+              + Add MF
+            </button>
+          )}
+        </>
       );
     if (dashTab === "News")
       return (
@@ -685,25 +789,24 @@ export default function DashboardPage() {
           grid-template-columns: repeat(4, 1fr);
           gap: 0.75rem;
         }
-        @media (max-width: 640px) {
           .summary-grid { grid-template-columns: repeat(2, 1fr); }
           .mobile-hide-col { display: none !important; }
         }
         .holdings-table {
           width: 100%;
           border-collapse: collapse;
-          font-size: 13px;
+          font-size: 15px;
         }
         .holdings-table th {
           text-align: left;
-          padding: 0.6rem;
+          padding: 0.75rem 0.75rem;
           color: #64748b;
           font-weight: 600;
           border-bottom: 1px solid rgba(255,255,255,0.07);
           white-space: nowrap;
         }
         .holding-row td {
-          padding: 0.7rem 0.6rem;
+          padding: 1rem 0.75rem;
           border-bottom: 1px solid rgba(255,255,255,0.04);
           white-space: nowrap;
         }
@@ -891,6 +994,8 @@ export default function DashboardPage() {
               flexWrap: "wrap",
               gap: "0.5rem",
               marginBottom: "1rem",
+              paddingBottom: "10px",
+              borderBottom: "1px solid #1e293b",
             }}
           >
             <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
@@ -1237,7 +1342,7 @@ export default function DashboardPage() {
 
                   {/* Table */}
                   <div style={{ overflowX: "auto" }}>
-                    <table className="holdings-table">
+                    <table className="holdings-table" style={{ width: "100%", borderCollapse: "collapse", minWidth: "600px" }}>
                       <thead>
                         <tr>
                           <th>Ticker</th>
@@ -1276,11 +1381,11 @@ export default function DashboardPage() {
                               style={{ cursor: "pointer" }}
                               onClick={(e) => {
                                 if (e.target.closest("button")) return;
-                                setSelectedTicker(h.ticker.replace(".NS", ""));
+                                setSelectedTicker(h.ticker);
                                 setDrawerOpen(true);
                               }}
                             >
-                              <td style={{ fontWeight: 600, color: "#f97316" }}>
+                              <td style={{ fontWeight: 700, color: "#f97316", fontSize: "15px" }}>
                                 {h.ticker.replace(".NS", "")}
                               </td>
                               <td style={{ color: "#f8fafc" }}>
@@ -1375,239 +1480,347 @@ export default function DashboardPage() {
                   {showMfForm && (
                     <div
                       style={{
-                        backgroundColor: "#0f172a",
-                        border: "1px solid rgba(139,92,246,0.25)",
-                        borderRadius: "0.75rem",
-                        padding: "1rem",
                         marginBottom: "1rem",
+                        padding: "1rem",
+                        background: "rgba(139,92,246,0.06)",
+                        borderRadius: "0.85rem",
+                        border: "1px solid rgba(139,92,246,0.2)",
+                        display: "flex",
+                        flexDirection: "column",
+                        overflow: "visible",
+                        gap: "0.7rem",
                       }}
                     >
-                      {/* MF Search */}
-                      <div
+                      <p
                         style={{
-                          position: "relative",
-                          marginBottom: "0.75rem",
+                          margin: 0,
+                          color: "#a78bfa",
+                          fontSize: "0.78rem",
+                          fontWeight: 700,
+                          letterSpacing: "0.08em",
                         }}
                       >
-                        <label
+                        ADD MUTUAL FUND
+                      </p>
+
+                      {/* Fund search */}
+                      <div style={{ position: "relative", overflow: "visible" }}>
+                        <p
                           style={{
-                            fontSize: 11,
-                            color: "#64748b",
-                            display: "block",
-                            marginBottom: 4,
+                            margin: "0 0 0.3rem",
+                            color: "#94a3b8",
+                            fontSize: "0.75rem",
+                            fontWeight: 600,
                           }}
                         >
-                          Search Mutual Fund
-                        </label>
-                        <div style={{ display: "flex", gap: 6 }}>
-                          <input
-                            style={inputStyle}
-                            placeholder="Type fund name or scheme code…"
-                            value={mfQuery}
-                            onChange={(e) => {
-                              setMfQuery(e.target.value);
-                              searchMf(e.target.value);
+                          SEARCH FUND
+                        </p>
+                        <input
+                          type="text"
+                          placeholder="e.g. Mirae Asset, Axis Bluechip..."
+                          value={mfQuery}
+                          onChange={(e) => {
+                            setMfQuery(e.target.value);
+                            searchMf(e.target.value);
+                          }}
+                          style={{ ...inputStyle, fontSize: "0.9rem" }}
+                        />
+                        {mfSearching && (
+                          <p
+                            style={{
+                              margin: "4px 0 0",
+                              color: "#94a3b8",
+                              fontSize: "0.72rem",
                             }}
-                          />
-                          {mfSearching && (
-                            <span
-                              className="loader-spin"
-                              style={{ marginTop: 8 }}
-                            />
-                          )}
-                        </div>
+                          >
+                            Searching...
+                          </p>
+                        )}
                         {mfResults.length > 0 && !selectedMf && (
                           <div
                             style={{
                               position: "absolute",
-                              top: "100%",
+                              top: "calc(100% + 4px)",
                               left: 0,
                               right: 0,
-                              zIndex: 50,
-                              backgroundColor: "#1e293b",
-                              border: "1px solid rgba(255,255,255,0.1)",
-                              borderRadius: "0.5rem",
-                              marginTop: 2,
-                              maxHeight: 180,
+                              backgroundColor: "#0f172a",
+                              border: "1px solid rgba(255,255,255,0.15)",
+                              borderRadius: "0.75rem",
+                              overflow: "hidden",
+                              zIndex: 500,
+                              boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+                              maxHeight: "180px",
                               overflowY: "auto",
                             }}
                           >
-                            {mfResults.map((r) => (
+                            {mfResults.map((mf) => (
                               <div
-                                key={r.schemeCode}
-                                onClick={() => {
-                                  setSelectedMf(r);
+                                key={mf.schemeCode}
+                                onMouseDown={() => {
+                                  setSelectedMf(mf);
+                                  fetchLiveMfNav(mf.schemeCode);
+                                  setMfQuery(mf.schemeName);
                                   setMfResults([]);
-                                  setMfQuery("");
                                 }}
                                 style={{
-                                  padding: "0.5rem 0.75rem",
+                                  padding: "0.65rem 1rem",
                                   cursor: "pointer",
-                                  fontSize: 13,
                                   borderBottom:
-                                    "1px solid rgba(255,255,255,0.05)",
+                                    "1px solid rgba(255,255,255,0.06)",
                                 }}
                                 onMouseEnter={(e) => {
                                   e.currentTarget.style.backgroundColor =
-                                    "rgba(255,255,255,0.06)";
+                                    "rgba(139,92,246,0.1)";
                                 }}
                                 onMouseLeave={(e) => {
                                   e.currentTarget.style.backgroundColor =
                                     "transparent";
                                 }}
                               >
-                                <span
-                                  style={{ color: "#8b5cf6", fontWeight: 600 }}
+                                <p
+                                  style={{
+                                    margin: 0,
+                                    color: "#a78bfa",
+                                    fontWeight: 700,
+                                    fontSize: "0.78rem",
+                                  }}
                                 >
-                                  {r.schemeCode}
-                                </span>
-                                <span
-                                  style={{ color: "#94a3b8", marginLeft: 8 }}
+                                  {mf.schemeCode}
+                                </p>
+                                <p
+                                  style={{
+                                    margin: "2px 0 0",
+                                    color: "#94a3b8",
+                                    fontSize: "0.75rem",
+                                  }}
                                 >
-                                  {r.schemeName}
-                                </span>
+                                  {mf.schemeName}
+                                </p>
                               </div>
                             ))}
                           </div>
                         )}
-                      </div>
-
-                      {/* Selected MF chip */}
-                      {selectedMf && (
-                        <div
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 8,
-                            backgroundColor: "rgba(139,92,246,0.15)",
-                            border: "1px solid rgba(139,92,246,0.3)",
-                            borderRadius: "0.5rem",
-                            padding: "5px 12px",
-                            marginBottom: "0.75rem",
-                            fontSize: 13,
-                          }}
-                        >
-                          <span style={{ color: "#8b5cf6", fontWeight: 600 }}>
-                            {selectedMf.schemeCode}
-                          </span>
-                          <span style={{ color: "#f8fafc" }}>
-                            {selectedMf.schemeName}
-                          </span>
-                          <button
-                            onClick={() => setSelectedMf(null)}
+                        {selectedMf && (
+                          <div
                             style={{
-                              background: "none",
-                              border: "none",
-                              color: "#94a3b8",
-                              cursor: "pointer",
-                              fontSize: 14,
-                              padding: 0,
+                              marginTop: "6px",
+                              padding: "8px 12px",
+                              borderRadius: "8px",
+                              background: "rgba(139,92,246,0.08)",
+                              border: "1px solid rgba(139,92,246,0.25)",
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
                             }}
                           >
-                            ✕
-                          </button>
-                        </div>
-                      )}
-
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns:
-                            "repeat(auto-fit, minmax(130px,1fr))",
-                          gap: "0.75rem",
-                          marginBottom: "0.75rem",
-                        }}
-                      >
-                        <div>
-                          <label
-                            style={{
-                              fontSize: 11,
-                              color: "#64748b",
-                              display: "block",
-                              marginBottom: 4,
-                            }}
-                          >
-                            Purchase Date
-                          </label>
-                          <input
-                            type="date"
-                            style={inputStyle}
-                            value={mfBuyDate}
-                            onChange={(e) => setMfBuyDate(e.target.value)}
-                          />
-                        </div>
-                        <div>
-                          <label
-                            style={{
-                              fontSize: 11,
-                              color: "#64748b",
-                              display: "block",
-                              marginBottom: 4,
-                            }}
-                          >
-                            Purchase NAV (₹)
-                          </label>
-                          <input
-                            type="number"
-                            style={inputStyle}
-                            placeholder="NAV"
-                            value={mfBuyNav}
-                            onChange={(e) => setMfBuyNav(e.target.value)}
-                            min="0"
-                            step="0.01"
-                          />
-                        </div>
-                        <div>
-                          <label
-                            style={{
-                              fontSize: 11,
-                              color: "#64748b",
-                              display: "block",
-                              marginBottom: 4,
-                            }}
-                          >
-                            Units
-                          </label>
-                          <input
-                            type="number"
-                            style={inputStyle}
-                            placeholder="Units"
-                            value={mfUnits}
-                            onChange={(e) => setMfUnits(e.target.value)}
-                            min="0"
-                            step="0.001"
-                          />
-                        </div>
-                      </div>
-
-                      {mfError && (
-                        <div
-                          style={{
-                            color: "#ef4444",
-                            fontSize: 12,
-                            marginBottom: 8,
-                          }}
-                        >
-                          {mfError}
-                        </div>
-                      )}
-
-                      <button
-                        onClick={onSubmitMf}
-                        disabled={mfSubmitting}
-                        style={{
-                          ...buttonBaseStyle,
-                          backgroundColor: "#8b5cf6",
-                          color: "#fff",
-                          padding: "7px 22px",
-                        }}
-                      >
-                        {mfSubmitting ? (
-                          <span className="loader-spin" />
-                        ) : (
-                          "Add Fund"
+                            <div>
+                              <p
+                                style={{
+                                  margin: 0,
+                                  color: "#a78bfa",
+                                  fontSize: "0.72rem",
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {selectedMf.schemeCode}
+                              </p>
+                              <p
+                                style={{
+                                  margin: 0,
+                                  color: "#cbd5e1",
+                                  fontSize: "0.72rem",
+                                }}
+                              >
+                                {selectedMf.schemeName}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedMf(null);
+                                setMfQuery("");
+                                setLiveMfNav(null);
+                              }}
+                              style={{
+                                background: "transparent",
+                                border: "none",
+                                color: "#64748b",
+                                cursor: "pointer",
+                              }}
+                            >
+                              ✕
+                            </button>
+                          </div>
                         )}
-                      </button>
+                      </div>
+
+                      {selectedMf && (
+                        <>
+                          {/* Purchase date */}
+                          <div>
+                            <p
+                              style={{
+                                margin: "0 0 0.3rem",
+                                color: "#94a3b8",
+                                fontSize: "0.75rem",
+                                fontWeight: 600,
+                              }}
+                            >
+                              PURCHASE DATE
+                            </p>
+                            <input
+                              type="date"
+                              value={mfBuyDate}
+                              onChange={(e) => setMfBuyDate(e.target.value)}
+                              style={inputStyle}
+                            />
+                          </div>
+
+                          {(liveMfNavFetching || liveMfNav !== null) && (
+                            <div
+                              style={{
+                                padding: "0.75rem 0.9rem",
+                                borderRadius: "0.75rem",
+                                border: "1px solid rgba(139,92,246,0.2)",
+                                backgroundColor: "rgba(139,92,246,0.08)",
+                              }}
+                            >
+                              <p
+                                style={{
+                                  margin: 0,
+                                  color: "#f8fafc",
+                                  fontSize: "0.8rem",
+                                  fontWeight: 700,
+                                }}
+                              >
+                                Current NAV:
+                              </p>
+                              <p
+                                style={{
+                                  margin: "0.25rem 0 0",
+                                  color: "#a78bfa",
+                                  fontSize: "1rem",
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {liveMfNavFetching
+                                  ? "Fetching..."
+                                  : `₹${liveMfNav?.toFixed(4)}`}
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Purchase NAV */}
+                          <div>
+                            <p
+                              style={{
+                                margin: "0 0 0.3rem",
+                                color: "#94a3b8",
+                                fontSize: "0.75rem",
+                                fontWeight: 600,
+                              }}
+                            >
+                              PURCHASE NAV (₹)
+                            </p>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              placeholder="e.g. 45.23"
+                              value={mfBuyNav}
+                              onChange={(e) => {
+                                if (/^\d*\.?\d*$/.test(e.target.value))
+                                  setMfBuyNav(e.target.value);
+                              }}
+                              style={{ ...inputStyle, fontSize: "1rem" }}
+                            />
+                          </div>
+
+                          {/* Units */}
+                          <div>
+                            <p
+                              style={{
+                                margin: "0 0 0.3rem",
+                                color: "#94a3b8",
+                                fontSize: "0.75rem",
+                                fontWeight: 600,
+                              }}
+                            >
+                              UNITS PURCHASED
+                            </p>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              placeholder="e.g. 500.123"
+                              value={mfUnits}
+                              onChange={(e) => {
+                                if (/^\d*\.?\d*$/.test(e.target.value))
+                                  setMfUnits(e.target.value);
+                              }}
+                              style={{ ...inputStyle, fontSize: "1rem" }}
+                            />
+                          </div>
+
+                          {mfError && (
+                            <p
+                              style={{
+                                margin: 0,
+                                color: "#ef4444",
+                                fontSize: "0.78rem",
+                              }}
+                            >
+                              {mfError}
+                            </p>
+                          )}
+
+                          <div style={{ display: "flex", gap: "0.5rem" }}>
+                            <button
+                              type="button"
+                              onClick={onSubmitMf}
+                              disabled={mfSubmitting}
+                              style={{
+                                flex: 1,
+                                background: "#8b5cf6",
+                                color: "white",
+                                borderRadius: "20px",
+                                padding: "8px 16px",
+                                fontSize: "13px",
+                                fontWeight: 600,
+                                border: "none",
+                                cursor: mfSubmitting ? "not-allowed" : "pointer",
+                                opacity: mfSubmitting ? 0.7 : 1,
+                                fontFamily: "inherit",
+                              }}
+                            >
+                              {mfSubmitting ? "Adding..." : "Add Fund"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowMfForm(false);
+                                setMfError("");
+                                setSelectedMf(null);
+                                setMfQuery("");
+                                setMfBuyNav("");
+                                setMfUnits("");
+                                setMfBuyDate("");
+                              }}
+                              style={{
+                                background: "transparent",
+                                color: "#94a3b8",
+                                borderRadius: "20px",
+                                padding: "8px 16px",
+                                fontSize: "13px",
+                                fontWeight: 600,
+                                border: "1px solid rgba(255,255,255,0.1)",
+                                cursor: "pointer",
+                                fontFamily: "inherit",
+                              }}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </div>
                   )}
 
@@ -2078,7 +2291,11 @@ export default function DashboardPage() {
                     onClick={() => setWatchlistSubTab(sub)}
                     style={{
                       background:
-                        watchlistSubTab === sub ? "#f97316" : "#1e293b",
+                        watchlistSubTab === sub
+                          ? sub === "Mutual Funds"
+                            ? "#8b5cf6"
+                            : "#f97316"
+                          : "#1e293b",
                       color: watchlistSubTab === sub ? "white" : "#94a3b8",
                       borderRadius: "20px",
                       padding: "5px 14px",
@@ -2622,12 +2839,38 @@ export default function DashboardPage() {
                         .map((item) => (
                           <div
                             key={item.ticker}
-                            onClick={() =>
-                              openMfDrawer({
-                                ticker: item.ticker,
-                                schemeName: item.ticker,
-                              })
-                            }
+                            onClick={() => {
+                              setMfDrawerOpen(true);
+                              setMfDrawerLoading(true);
+                              setMfDrawerData(null);
+                              api
+                                .get(`/api/holdings/mf-nav/${item.ticker}`)
+                                .then((res) =>
+                                  setMfDrawerData({
+                                    ...res.data,
+                                    holding: {
+                                      ticker: item.ticker,
+                                      schemeName:
+                                        res.data.schemeName || item.ticker,
+                                      invested: null,
+                                      currentValue: null,
+                                      pnl: null,
+                                      pnlPercent: null,
+                                      quantity: null,
+                                      currentPrice: res.data.currentNav,
+                                      buyPrice: null,
+                                      buyDate: null,
+                                    },
+                                  }),
+                                )
+                                .catch(() =>
+                                  setMfDrawerData({
+                                    error: true,
+                                    holding: { ticker: item.ticker },
+                                  }),
+                                )
+                                .finally(() => setMfDrawerLoading(false));
+                            }}
                             style={{
                               display: "flex",
                               alignItems: "center",
@@ -2676,7 +2919,7 @@ export default function DashboardPage() {
                                     fontSize: "0.85rem",
                                   }}
                                 >
-                                  {item.ticker}
+                                  {mfNameCache[item.ticker] || item.ticker}
                                 </p>
                               </div>
                             </div>
@@ -2841,13 +3084,43 @@ export default function DashboardPage() {
                       >
                         {article.title}
                       </div>
-                      <div style={{ fontSize: 12, color: "#64748b" }}>
-                        <span>{article.source}</span>
-                        {article.publishedAt && (
-                          <span style={{ marginLeft: 10 }}>
-                            {article.publishedAt}
-                          </span>
-                        )}
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          marginTop: "0.35rem",
+                          gap: "0.5rem",
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <span style={{ color: "#64748b", fontSize: "0.72rem" }}>
+                          {article.source || "News"}
+                        </span>
+                        <span style={{ color: "#475569", fontSize: "0.72rem" }}>
+                          {(article.pubDate || article.publishedAt)
+                            ? (() => {
+                                try {
+                                  const d = new Date(
+                                    article.pubDate || article.publishedAt,
+                                  );
+                                  if (isNaN(d.getTime())) {
+                                    return article.pubDate || article.publishedAt;
+                                  }
+                                  return d.toLocaleDateString("en-IN", {
+                                    day: "numeric",
+                                    month: "short",
+                                    year: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                    hour12: true,
+                                  });
+                                } catch {
+                                  return article.pubDate || article.publishedAt || "";
+                                }
+                              })()
+                            : ""}
+                        </span>
                       </div>
                     </div>
                   ))}
@@ -3168,7 +3441,7 @@ export default function DashboardPage() {
               borderRadius: "1.25rem 1.25rem 0 0",
               overflowY: "auto",
               zIndex: 101,
-              padding: "1.25rem",
+              padding: "1.25rem 1.25rem 5rem 1.25rem",
               display: "flex",
               flexDirection: "column",
               gap: "1rem",
@@ -3227,6 +3500,59 @@ export default function DashboardPage() {
                 ✕
               </button>
             </div>
+
+            {!mfDrawerLoading && !mfDrawerData?.error && (
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "0.85rem 1rem",
+                  background: "rgba(139,92,246,0.08)",
+                  borderRadius: "0.85rem",
+                  border: "1px solid rgba(139,92,246,0.2)",
+                  marginBottom: "1rem",
+                }}
+              >
+                <div>
+                  <p style={{ margin: 0, color: "#64748b", fontSize: "0.72rem" }}>
+                    Current NAV
+                  </p>
+                  <p
+                    style={{
+                      margin: "2px 0 0",
+                      color: "#a78bfa",
+                      fontWeight: 700,
+                      fontSize: "1.4rem",
+                      fontFamily: "'Barlow Condensed', sans-serif",
+                    }}
+                  >
+                    ₹{(mfDrawerData?.currentNav || 0).toFixed(4)}
+                  </p>
+                </div>
+                {mfDrawerData?.returns?.["1Y"] != null && (
+                  <div style={{ textAlign: "right" }}>
+                    <p style={{ margin: 0, color: "#64748b", fontSize: "0.72rem" }}>
+                      1Y Return
+                    </p>
+                    <p
+                      style={{
+                        margin: "2px 0 0",
+                        fontWeight: 700,
+                        fontSize: "1rem",
+                        color:
+                          mfDrawerData.returns["1Y"] >= 0
+                            ? "#22c55e"
+                            : "#ef4444",
+                      }}
+                    >
+                      {mfDrawerData.returns["1Y"] >= 0 ? "+" : ""}
+                      {mfDrawerData.returns["1Y"].toFixed(1)}%
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {mfDrawerLoading ? (
               <div style={{ display: "grid", gap: "0.75rem" }}>
@@ -3307,68 +3633,82 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                {/* Investment card */}
-                <div
-                  style={{
-                    backgroundColor: "rgba(139,92,246,0.08)",
-                    border: "1px solid rgba(139,92,246,0.2)",
-                    borderRadius: "0.75rem",
-                    padding: "1rem",
-                    marginBottom: "1rem",
-                  }}
-                >
+                {mfDrawerData?.holding?.invested != null && (
                   <div
                     style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 1fr",
-                      gap: "0.75rem",
+                      backgroundColor: "rgba(139,92,246,0.08)",
+                      border: "1px solid rgba(139,92,246,0.2)",
+                      borderRadius: "0.75rem",
+                      padding: "1rem",
+                      marginBottom: "1rem",
                     }}
                   >
-                    {[
-                      {
-                        label: "Invested",
-                        value: formatCurrency(mfDrawerData.holding?.invested),
-                      },
-                      {
-                        label: "Current Value",
-                        value: formatCurrency(
-                          mfDrawerData.holding?.currentValue,
-                        ),
-                      },
-                      {
-                        label: "Units",
-                        value: formatNumber(mfDrawerData.holding?.quantity),
-                      },
-                      {
-                        label: "P&L",
-                        value: `${formatCurrency(mfDrawerData.holding?.pnl)} (${(mfDrawerData.holding?.pnlPercent ?? 0).toFixed(2)}%)`,
-                        color: pnlColor(mfDrawerData.holding?.pnl ?? 0),
-                      },
-                    ].map(({ label, value, color }) => (
-                      <div key={label}>
-                        <div
-                          style={{
-                            fontSize: 11,
-                            color: "#64748b",
-                            marginBottom: 3,
-                          }}
-                        >
-                          {label}
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr",
+                        gap: "0.75rem",
+                      }}
+                    >
+                      {[
+                        {
+                          label: "Invested",
+                          value:
+                            mfDrawerData?.holding?.invested != null
+                              ? formatCurrency(mfDrawerData.holding.invested)
+                              : "Not in portfolio",
+                        },
+                        {
+                          label: "Current Value",
+                          value:
+                            mfDrawerData?.holding?.currentValue != null
+                              ? formatCurrency(mfDrawerData.holding.currentValue)
+                              : `₹— (NAV: ₹${mfDrawerData?.holding?.currentPrice?.toFixed(2)})`,
+                        },
+                        {
+                          label: "Units",
+                          value:
+                            mfDrawerData?.holding?.quantity != null
+                              ? mfDrawerData.holding.quantity
+                              : "—",
+                        },
+                        {
+                          label: "P&L",
+                          value:
+                            mfDrawerData?.holding?.pnl != null
+                              ? `${mfDrawerData.holding.pnl >= 0 ? "+" : ""}${formatCurrency(mfDrawerData.holding.pnl)}`
+                              : "—",
+                          color:
+                            mfDrawerData?.holding?.pnl != null
+                              ? pnlColor(mfDrawerData.holding.pnl)
+                              : "#f8fafc",
+                        },
+                      ].map(({ label, value, color }) => (
+                        <div key={label}>
+                          <div
+                            style={{
+                              fontSize: 11,
+                              color: "#64748b",
+                              marginBottom: 3,
+                            }}
+                          >
+                            {label}
+                          </div>
+                          <div
+                            style={{
+                              ...numberStyle,
+                              fontSize: 15,
+                              fontWeight: 700,
+                              color: color || "#f8fafc",
+                            }}
+                          >
+                            {value}
+                          </div>
                         </div>
-                        <div
-                          style={{
-                            ...numberStyle,
-                            fontSize: 15,
-                            fontWeight: 700,
-                            color: color || "#f8fafc",
-                          }}
-                        >
-                          {value}
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* NAV details */}
                 <div
@@ -3416,9 +3756,11 @@ export default function DashboardPage() {
                         }}
                       >
                         ₹
-                        {mfDrawerData.currentNav ??
-                          mfDrawerData.holding?.currentPrice ??
-                          "—"}
+                        {(
+                          mfDrawerData?.currentNav ||
+                          mfDrawerData?.holding?.currentPrice ||
+                          0
+                        ).toFixed(4)}
                       </div>
                     </div>
                     <div>
@@ -3482,9 +3824,48 @@ export default function DashboardPage() {
                 </div>
 
                 {/* NAV History sparkline */}
-                {mfDrawerData.navHistory &&
-                  mfDrawerData.navHistory.length > 0 &&
+                {mfDrawerData?.navHistory && mfDrawerData.navHistory.length > 0 ? (
                   (() => {
+                    const allZero = mfDrawerData.navHistory.every(
+                      (p) => parseFloat(p.nav) === 0,
+                    );
+                    if (allZero || (mfDrawerData.currentNav || 0) === 0) {
+                      return (
+                        <div
+                          style={{
+                            padding: "1rem",
+                            borderRadius: "0.85rem",
+                            background: "rgba(239,68,68,0.06)",
+                            border: "1px solid rgba(239,68,68,0.15)",
+                            textAlign: "center",
+                            marginBottom: "1rem",
+                          }}
+                        >
+                          <p style={{ margin: 0, fontSize: "1.2rem" }}>⚠️</p>
+                          <p
+                            style={{
+                              margin: "0.5rem 0 0",
+                              color: "#f87171",
+                              fontSize: "0.85rem",
+                              fontWeight: 600,
+                            }}
+                          >
+                            Fund Inactive / Matured
+                          </p>
+                          <p
+                            style={{
+                              margin: "0.3rem 0 0",
+                              color: "#64748b",
+                              fontSize: "0.75rem",
+                            }}
+                          >
+                            This fund has no active NAV data. It may be closed,
+                            matured, or merged into another scheme.
+                          </p>
+                        </div>
+                      );
+                    }
+
                     const hist = mfDrawerData.navHistory.slice(-30);
                     const navs = hist.map((h) => h.nav);
                     const minNav = Math.min(...navs);
@@ -3541,10 +3922,13 @@ export default function DashboardPage() {
                         </div>
                       </div>
                     );
-                  })()}
+                  })()
+                ) : null}
 
                 {/* Historical returns */}
-                {mfDrawerData.returns && (
+                {mfDrawerData?.returns &&
+                  Object.keys(mfDrawerData.returns).length > 0 &&
+                  Object.values(mfDrawerData.returns).some((v) => v !== 0) && (
                   <div
                     style={{
                       backgroundColor: "#0f172a",

@@ -600,47 +600,48 @@ const AnalyticsPage = () => {
                     {/* Pie Chart */}
                     <div
                       style={{
-                        display: "flex",
-                        justifyContent: "center",
                         marginBottom: "1rem",
                       }}
                     >
-                      <PieChart width={300} height={300}>
-                        <Pie
-                          data={sectors.map((s) => ({
-                            name: s.name || s.sector,
-                            value: s.weight || s.percentage,
-                          }))}
-                          dataKey="value"
-                          nameKey="name"
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={100}
-                          labelLine={false}
-                          label={({ name, percent }) =>
-                            `${name} ${(percent * 100).toFixed(1)}%`
-                          }
-                        >
-                          {sectors.map((_, index) => (
-                            <Cell
-                              key={`cell-${index}`}
-                              fill={SLICE_COLORS[index % SLICE_COLORS.length]}
-                            />
-                          ))}
-                        </Pie>
-                        <Tooltip
-                          formatter={(value) => [
-                            `${Number(value).toFixed(2)}%`,
-                            "Weight",
-                          ]}
-                          contentStyle={{
-                            border: "1px solid rgba(255,255,255,0.12)",
-                            borderRadius: "0.65rem",
-                            backgroundColor: "#111827",
-                            color: "#f8fafc",
-                          }}
-                        />
-                      </PieChart>
+                      <ResponsiveContainer width="100%" height={320}>
+                        <PieChart>
+                          <Pie
+                            data={sectors.map((s) => ({
+                              name: s.name || s.sector,
+                              value:
+                                Number(s.weight || s.percentage || 0) * 100,
+                            }))}
+                            dataKey="value"
+                            nameKey="name"
+                            cx="50%"
+                            cy="50%"
+                            outerRadius={90}
+                            labelLine={true}
+                            label={({ name, percent }) =>
+                              `${name} ${(percent * 100).toFixed(1)}%`
+                            }
+                          >
+                            {sectors.map((_, index) => (
+                              <Cell
+                                key={`cell-${index}`}
+                                fill={SLICE_COLORS[index % SLICE_COLORS.length]}
+                              />
+                            ))}
+                          </Pie>
+                          <Tooltip
+                            formatter={(value) => [
+                              `${Number(value).toFixed(2)}%`,
+                              "Weight",
+                            ]}
+                            contentStyle={{
+                              border: "1px solid rgba(255,255,255,0.12)",
+                              borderRadius: "0.65rem",
+                              backgroundColor: "#111827",
+                              color: "#f8fafc",
+                            }}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
                     </div>
 
                     {/* Concentration Warnings */}

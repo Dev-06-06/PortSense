@@ -1,4 +1,5 @@
 import asyncio
+import re
 import traceback
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -27,6 +28,18 @@ from app.services.stress_test import run_stress_test
 router = APIRouter()
 
 
+_NSE_BSE_TICKER_RE = re.compile(r"^[A-Z0-9\-_.]+\.(NS|BO)$")
+
+
+def _is_market_ticker(ticker: str) -> bool:
+    normalized = str(ticker or "").strip().upper()
+    if not normalized:
+        return False
+    if normalized.startswith("^"):
+        return True
+    return bool(_NSE_BSE_TICKER_RE.fullmatch(normalized))
+
+
 async def _get_holdings_with_current_values(
     user_id,
     holdings_collection: AsyncIOMotorCollection,
@@ -36,12 +49,20 @@ async def _get_holdings_with_current_values(
     async for holding in holdings_collection.find({"userId": user_id}):
         holdings.append(holding)
 
-    tickers = [holding.get("ticker", "") for holding in holdings]
-    stock_infos = await gather_in_threads_bounded(tickers, get_stock_info, limit=5)
+    tickers = [str(holding.get("ticker", "")).strip().upper() for holding in holdings]
+    market_tickers = [ticker for ticker in tickers if _is_market_ticker(ticker)]
+    stock_infos = await gather_in_threads_bounded(market_tickers, get_stock_info, limit=5)
+    stock_info_by_ticker = {
+        ticker: info
+        for ticker, info in zip(market_tickers, stock_infos)
+        if isinstance(info, dict)
+    }
 
     holdings_with_values = []
-    for holding, stock_info in zip(holdings, stock_infos):
+    for holding in holdings:
         buy_price = float(holding.get("buyPrice", 0) or 0)
+        ticker = str(holding.get("ticker", "")).strip().upper()
+        stock_info = stock_info_by_ticker.get(ticker, {})
         current_price = float((stock_info or {}).get("currentPrice") or buy_price)
 
         raw_quantity = holding.get("quantity", 0)
@@ -74,7 +95,7 @@ async def _get_user_tickers(user_id, holdings_collection: AsyncIOMotorCollection
         if holding.get("assetType", "stock") != "stock":
             continue
         ticker = str(holding.get("ticker", "")).strip().upper()
-        if ticker:
+        if _is_market_ticker(ticker):
             tickers.append(ticker)
 
     return tickers
@@ -272,7 +293,14 @@ async def get_stress_test(
         if not holdings_with_values:
             return {"scenarios": []}
 
-        tickers = [str(h.get("ticker", "")).strip().upper() for h in holdings_with_values]
+        tickers = [
+            str(h.get("ticker", "")).strip().upper()
+            for h in holdings_with_values
+            if _is_market_ticker(str(h.get("ticker", "")).strip().upper())
+        ]
+
+        if not tickers:
+            return {"scenarios": []}
 
         all_tickers = tickers + ["^NSEI"]
         raw = await asyncio.to_thread(

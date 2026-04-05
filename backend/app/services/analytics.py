@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 from datetime import date, timedelta
 from datetime import datetime
 from itertools import combinations
@@ -14,6 +15,18 @@ from app.config.db import get_database_from_client
 from app.services.gemini import get_gemini_response
 
 logger = logging.getLogger(__name__)
+
+
+_NSE_BSE_TICKER_RE = re.compile(r"^[A-Z0-9\-_.]+\.(NS|BO)$")
+
+
+def _is_yfinance_equity_ticker(ticker: str) -> bool:
+    normalized = str(ticker or "").strip().upper()
+    if not normalized:
+        return False
+    if normalized.startswith("^"):
+        return True
+    return bool(_NSE_BSE_TICKER_RE.fullmatch(normalized))
 
 
 CANONICAL_SECTORS = {
@@ -275,7 +288,6 @@ def invalidate_beta_cache(ticker: str = None):
 
 
 async def get_portfolio_beta(holdings: list) -> dict:
-    total_value = sum(float(holding.get("currentValue", 0.0)) for holding in holdings)
     valid_holdings = [
         {
             "ticker": str(holding.get("ticker", "")).strip().upper(),
@@ -283,18 +295,19 @@ async def get_portfolio_beta(holdings: list) -> dict:
             "assetType": str(holding.get("assetType", "stock")).strip().lower(),
         }
         for holding in holdings
-        if str(holding.get("ticker", "")).strip().upper()
+        if _is_yfinance_equity_ticker(str(holding.get("ticker", "")).strip().upper())
     ]
 
-    stock_holdings = []
-    for holding in valid_holdings:
-        if holding.get("assetType") in ("mutual_fund", "fd"):
-            continue
-        stock_holdings.append(holding)
+    # Only compute beta for stocks.
+    stock_only_holdings = [
+        holding for holding in valid_holdings if holding.get("assetType", "stock") == "stock"
+    ]
+
+    total_value = sum(float(holding.get("currentValue", 0.0)) for holding in stock_only_holdings)
 
     close_data = None
-    if stock_holdings:
-        all_tickers = [holding["ticker"] for holding in stock_holdings] + ["^NSEI"]
+    if stock_only_holdings:
+        all_tickers = [holding["ticker"] for holding in stock_only_holdings] + ["^NSEI"]
 
         raw = await asyncio.to_thread(
             yf.download,
@@ -311,16 +324,10 @@ async def get_portfolio_beta(holdings: list) -> dict:
             close_data = raw
 
     beta_results = []
-    for holding in valid_holdings:
+    for holding in stock_only_holdings:
         ticker = holding["ticker"]
-        asset_type = holding.get("assetType", "stock")
 
-        if asset_type == "mutual_fund":
-            # Use moderate market sensitivity for equity MFs.
-            beta = 0.8
-        elif asset_type == "fd":
-            beta = 0.0
-        elif ticker in _beta_cache:
+        if ticker in _beta_cache:
             beta = _beta_cache[ticker]
         else:
             beta = get_stock_beta(ticker, close_data) if close_data is not None else 1.0
@@ -329,7 +336,7 @@ async def get_portfolio_beta(holdings: list) -> dict:
     per_stock = []
     portfolio_beta = 0.0
 
-    for holding, beta in zip(valid_holdings, beta_results):
+    for holding, beta in zip(stock_only_holdings, beta_results):
         ticker = holding["ticker"]
         current_value = holding["currentValue"]
         weight = (current_value / total_value) if total_value > 0 else 0.0
@@ -371,7 +378,30 @@ async def compute_diversification(holdings: list, db_client=None) -> dict:
     Returns:
         Dictionary containing diversification scores and analysis
     """
-    sector_breakdown = await get_sector_breakdown(holdings, db_client=db_client)
+    holdings_for_diversification = []
+    for holding in holdings:
+        ticker = str(holding.get("ticker", "")).strip().upper()
+        if not ticker:
+            continue
+
+        current_value = float(holding.get("currentValue", 0.0) or 0.0)
+        if current_value <= 0:
+            quantity = float(holding.get("quantity", 0.0) or 0.0)
+            buy_price = float(holding.get("buyPrice", 0.0) or 0.0)
+            current_value = quantity * buy_price
+
+        holdings_for_diversification.append(
+            {
+                "ticker": ticker,
+                "currentValue": current_value,
+                "assetType": str(holding.get("assetType", "stock")).strip().lower(),
+            }
+        )
+
+    sector_breakdown = await get_sector_breakdown(
+        holdings_for_diversification,
+        db_client=db_client,
+    )
     diversification = get_diversification_score(holdings, sector_breakdown)
     sector_score = float(diversification.get("sectorScore", 0.0))
     size_score = float(diversification.get("sizeScore", 0.0))
@@ -405,7 +435,7 @@ def compute_correlation_score(holdings: list, close_data: pd.DataFrame = None) -
     normalized_tickers = [
         str(holding.get("ticker", "")).strip().upper()
         for holding in stock_holdings
-        if str(holding.get("ticker", "")).strip()
+        if _is_yfinance_equity_ticker(str(holding.get("ticker", "")).strip().upper())
     ]
     unique_tickers = list(dict.fromkeys(normalized_tickers))
 
@@ -521,21 +551,21 @@ def get_diversification_score(holdings: list, sector_breakdown: list) -> dict:
 
 def get_correlation_matrix(holdings_or_tickers: list) -> dict:
     if holdings_or_tickers and isinstance(holdings_or_tickers[0], dict):
-        stock_holdings = [
+        stock_only_holdings = [
             h
             for h in holdings_or_tickers
             if str(h.get("assetType", "stock")).strip().lower() == "stock"
         ]
         normalized_tickers = [
-            str(holding.get("ticker", "")).strip().upper()
-            for holding in stock_holdings
-            if str(holding.get("ticker", "")).strip()
+            str(h.get("ticker", "")).strip().upper()
+            for h in stock_only_holdings
+            if _is_yfinance_equity_ticker(str(h.get("ticker", "")).strip().upper())
         ]
     else:
         normalized_tickers = [
             str(ticker).strip().upper()
             for ticker in holdings_or_tickers
-            if str(ticker).strip()
+            if _is_yfinance_equity_ticker(str(ticker).strip().upper())
         ]
 
     unique_tickers = list(dict.fromkeys(normalized_tickers))
@@ -643,6 +673,8 @@ async def get_benchmark_comparison(holdings: list) -> dict:
             ticker = str(holding.get("ticker", "")).strip().upper()
             asset_type = str(holding.get("assetType", "stock")).strip().lower()
             if asset_type in ("mutual_fund", "fd"):
+                continue
+            if not _is_yfinance_equity_ticker(ticker):
                 continue
 
             quantity = float(holding.get("quantity", 0.0))

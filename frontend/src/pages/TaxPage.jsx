@@ -29,8 +29,57 @@ const numberStyle = {
   letterSpacing: "0.02em",
 };
 
-const FILTERS = ["All", "LTCG", "STCG"];
+const FILTERS = ["All", "LTCG", "STCG", "FD Interest"];
 const LTCG_EXEMPTION = 125000;
+
+const HOLDING_TYPE_VARIANTS = {
+  LTCG: "LTCG",
+  STCG: "STCG",
+  MF_LTCG: "MF LTCG",
+  MF_STCG: "MF STCG",
+  FD_INTEREST: "FD Interest",
+};
+
+const FILTER_HOLDING_TYPE_MAP = {
+  All: [
+    HOLDING_TYPE_VARIANTS.LTCG,
+    HOLDING_TYPE_VARIANTS.STCG,
+    HOLDING_TYPE_VARIANTS.MF_LTCG,
+    HOLDING_TYPE_VARIANTS.MF_STCG,
+    HOLDING_TYPE_VARIANTS.FD_INTEREST,
+  ],
+  LTCG: [HOLDING_TYPE_VARIANTS.LTCG, HOLDING_TYPE_VARIANTS.MF_LTCG],
+  STCG: [HOLDING_TYPE_VARIANTS.STCG, HOLDING_TYPE_VARIANTS.MF_STCG],
+  "FD Interest": [HOLDING_TYPE_VARIANTS.FD_INTEREST],
+};
+
+const HOLDING_TYPE_BADGE_MAP = {
+  [HOLDING_TYPE_VARIANTS.LTCG]: {
+    label: HOLDING_TYPE_VARIANTS.LTCG,
+    color: "#22c55e",
+    background: "rgba(34,197,94,0.12)",
+  },
+  [HOLDING_TYPE_VARIANTS.MF_LTCG]: {
+    label: HOLDING_TYPE_VARIANTS.MF_LTCG,
+    color: "#22c55e",
+    background: "rgba(34,197,94,0.12)",
+  },
+  [HOLDING_TYPE_VARIANTS.STCG]: {
+    label: HOLDING_TYPE_VARIANTS.STCG,
+    color: "#f59e0b",
+    background: "rgba(245,158,11,0.12)",
+  },
+  [HOLDING_TYPE_VARIANTS.MF_STCG]: {
+    label: HOLDING_TYPE_VARIANTS.MF_STCG,
+    color: "#f59e0b",
+    background: "rgba(245,158,11,0.12)",
+  },
+  [HOLDING_TYPE_VARIANTS.FD_INTEREST]: {
+    label: HOLDING_TYPE_VARIANTS.FD_INTEREST,
+    color: "#38bdf8",
+    background: "rgba(56,189,248,0.12)",
+  },
+};
 
 const formatCurrency = (value, digits = 2) =>
   new Intl.NumberFormat("en-IN", {
@@ -106,15 +155,20 @@ const TaxPage = () => {
     if (activeFilter === "All") {
       return holdings;
     }
-    return holdings.filter(
-      (item) => String(item?.holdingType || "").toUpperCase() === activeFilter,
+    const allowedTypes = FILTER_HOLDING_TYPE_MAP[activeFilter] || [];
+    return holdings.filter((item) =>
+      allowedTypes.includes(String(item?.holdingType || "").trim()),
     );
   }, [activeFilter, holdings]);
 
   const ltcgTax = useMemo(
     () =>
       holdings
-        .filter((item) => item?.holdingType === "LTCG")
+        .filter(
+          (item) =>
+            item?.holdingType === HOLDING_TYPE_VARIANTS.LTCG ||
+            item?.holdingType === HOLDING_TYPE_VARIANTS.MF_LTCG,
+        )
         .reduce((acc, item) => acc + (Number(item?.estimatedTax) || 0), 0),
     [holdings],
   );
@@ -122,7 +176,11 @@ const TaxPage = () => {
   const stcgTax = useMemo(
     () =>
       holdings
-        .filter((item) => item?.holdingType === "STCG")
+        .filter(
+          (item) =>
+            item?.holdingType === HOLDING_TYPE_VARIANTS.STCG ||
+            item?.holdingType === HOLDING_TYPE_VARIANTS.MF_STCG,
+        )
         .reduce((acc, item) => acc + (Number(item?.estimatedTax) || 0), 0),
     [holdings],
   );
@@ -133,6 +191,12 @@ const TaxPage = () => {
   const purchasingPowerLoss = presentValue - futureRealValue;
 
   const exemptionUsed = Number(summary.ltcgExemptionUsed) || 0;
+  const totalEstimatedTax = Number(summary.totalEstimatedTax) || 0;
+  const totalLTCGGain = Number(summary.totalLTCGGain) || 0;
+  const showLTCGExemptionBanner =
+    totalEstimatedTax === 0 &&
+    totalLTCGGain > 0 &&
+    exemptionUsed >= totalLTCGGain;
   const exemptionProgress = Math.max(
     0,
     Math.min(100, (exemptionUsed / LTCG_EXEMPTION) * 100),
@@ -273,14 +337,29 @@ const TaxPage = () => {
                     margin: "0.25rem 0 0",
                     fontSize: "1.5rem",
                     fontWeight: 700,
-                    color:
-                      Number(summary.totalEstimatedTax) > 0
-                        ? "#f97316"
-                        : "#fb7185",
+                    color: totalEstimatedTax > 0 ? "#f97316" : "#fb7185",
                   }}
                 >
                   {formatCurrency(summary.totalEstimatedTax)}
                 </p>
+                {showLTCGExemptionBanner && (
+                  <p
+                    style={{
+                      margin: "0.45rem 0 0",
+                      padding: "0.5rem 0.6rem",
+                      borderRadius: "0.5rem",
+                      border: "1px solid rgba(34, 197, 94, 0.28)",
+                      background: "rgba(34, 197, 94, 0.1)",
+                      color: "#86efac",
+                      fontSize: "0.74rem",
+                      lineHeight: 1.45,
+                    }}
+                  >
+                    Your total LTCG gains of {formatCurrency(totalLTCGGain, 0)}{" "}
+                    are within the ₹1.25L annual exemption limit. No LTCG tax is
+                    owed.
+                  </p>
+                )}
               </article>
 
               <article style={{ ...cardStyle, padding: "0.9rem" }}>
@@ -498,9 +577,17 @@ const TaxPage = () => {
                         const nominalReturn =
                           Number(item?.nominalReturnPct) || 0;
                         const realReturn = Number(item?.realReturnPct) || 0;
-                        const isLtcg =
-                          String(item?.holdingType || "").toUpperCase() ===
-                          "LTCG";
+                        const estimatedTax = Number(item?.estimatedTax) || 0;
+                        const holdingType = String(
+                          item?.holdingType || "",
+                        ).trim();
+                        const showLTCGExemptionLabel =
+                          estimatedTax === 0 && item?.isLTCG === true;
+                        const badge = HOLDING_TYPE_BADGE_MAP[holdingType] || {
+                          label: holdingType || "Unknown",
+                          color: "#94a3b8",
+                          background: "rgba(148,163,184,0.16)",
+                        };
                         const daysToLTCG = Number(item?.daysToLTCG) || 0;
 
                         let ltcgLabel = (
@@ -509,16 +596,34 @@ const TaxPage = () => {
                           </span>
                         );
 
-                        if (isLtcg || daysToLTCG <= 0) {
+                        if (
+                          holdingType === HOLDING_TYPE_VARIANTS.LTCG ||
+                          holdingType === HOLDING_TYPE_VARIANTS.MF_LTCG
+                        ) {
                           ltcgLabel = (
                             <span style={{ color: "#22c55e", fontWeight: 700 }}>
                               ✓ LTCG
                             </span>
                           );
-                        } else if (daysToLTCG < 30) {
+                        } else if (
+                          holdingType === HOLDING_TYPE_VARIANTS.STCG ||
+                          holdingType === HOLDING_TYPE_VARIANTS.MF_STCG
+                        ) {
+                          if (daysToLTCG < 30) {
+                            ltcgLabel = (
+                              <span
+                                style={{ color: "#f59e0b", fontWeight: 700 }}
+                              >
+                                {daysToLTCG} days
+                              </span>
+                            );
+                          }
+                        } else if (
+                          holdingType === HOLDING_TYPE_VARIANTS.FD_INTEREST
+                        ) {
                           ltcgLabel = (
-                            <span style={{ color: "#f59e0b", fontWeight: 700 }}>
-                              {daysToLTCG} days
+                            <span style={{ color: "#38bdf8", fontWeight: 700 }}>
+                              Not applicable
                             </span>
                           );
                         }
@@ -526,14 +631,54 @@ const TaxPage = () => {
                         return (
                           <tr key={`${item.ticker}-${item.buyDate || "na"}`}>
                             <td>
-                              <span
-                                style={{ color: "#f8fafc", fontWeight: 700 }}
+                              <div
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "6px",
+                                }}
                               >
-                                {String(item?.ticker || "-").replace(
-                                  /\.NS$/i,
-                                  "",
+                                {item?.assetType === "mutual_fund" && (
+                                  <span
+                                    style={{
+                                      fontSize: "9px",
+                                      fontWeight: 700,
+                                      background: "rgba(139,92,246,0.2)",
+                                      color: "#a78bfa",
+                                      borderRadius: "10px",
+                                      padding: "1px 6px",
+                                    }}
+                                  >
+                                    MF
+                                  </span>
                                 )}
-                              </span>
+                                {item?.assetType === "fd" && (
+                                  <span
+                                    style={{
+                                      fontSize: "9px",
+                                      fontWeight: 700,
+                                      background: "rgba(16,185,129,0.2)",
+                                      color: "#34d399",
+                                      borderRadius: "10px",
+                                      padding: "1px 6px",
+                                    }}
+                                  >
+                                    FD
+                                  </span>
+                                )}
+                                <span
+                                  style={{ color: "#f8fafc", fontWeight: 700 }}
+                                >
+                                  {(item?.displayName || item?.ticker || "-")
+                                    .length > 30
+                                    ? (
+                                        item?.displayName ||
+                                        item?.ticker ||
+                                        "-"
+                                      ).substring(0, 30) + "..."
+                                    : item?.displayName || item?.ticker || "-"}
+                                </span>
+                              </div>
                             </td>
                             <td>{Number(item?.holdingDays) || 0} days</td>
                             <td>
@@ -544,13 +689,11 @@ const TaxPage = () => {
                                   borderRadius: "999px",
                                   fontSize: "0.72rem",
                                   fontWeight: 700,
-                                  color: isLtcg ? "#22c55e" : "#f59e0b",
-                                  background: isLtcg
-                                    ? "rgba(34,197,94,0.12)"
-                                    : "rgba(245,158,11,0.12)",
+                                  color: badge.color,
+                                  background: badge.background,
                                 }}
                               >
-                                {isLtcg ? "LTCG" : "STCG"}
+                                {badge.label}
                               </span>
                             </td>
                             <td
@@ -583,7 +726,28 @@ const TaxPage = () => {
                               </span>
                             </td>
                             <td style={{ color: "#fb7185", fontWeight: 700 }}>
-                              {formatCurrency(item?.estimatedTax)}
+                              {showLTCGExemptionLabel ? (
+                                <span
+                                  style={{
+                                    color: "#94a3b8",
+                                    fontSize: "0.75rem",
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  Covered under ₹1.25L exemption
+                                </span>
+                              ) : item?.taxNote ? (
+                                <span
+                                  style={{
+                                    color: "#f59e0b",
+                                    fontSize: "0.75rem",
+                                  }}
+                                >
+                                  {item.taxNote}
+                                </span>
+                              ) : (
+                                formatCurrency(estimatedTax)
+                              )}
                             </td>
                             <td>{ltcgLabel}</td>
                           </tr>

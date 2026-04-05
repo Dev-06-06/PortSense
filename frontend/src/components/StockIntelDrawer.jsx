@@ -355,6 +355,7 @@ const StockIntelDrawer = ({ ticker, isOpen, onClose }) => {
         .intel-scroll {
           overflow-y: auto;
           padding: 1rem;
+          padding-bottom: 5rem;
           display: grid;
           gap: 0.85rem;
         }
