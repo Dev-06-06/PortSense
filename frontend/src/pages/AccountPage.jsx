@@ -246,7 +246,27 @@ const AccountPage = () => {
       `}</style>
 
       <div style={containerStyle}>
-        <div style={{ ...cardStyle, padding: "1rem" }}>
+        <div style={{ ...cardStyle, padding: "1rem", position: "relative" }}>
+          <button
+            type="button"
+            onClick={onLogout}
+            style={{
+              position: "absolute",
+              top: "1rem",
+              right: "1rem",
+              backgroundColor: "rgba(239,68,68,0.1)",
+              border: "1px solid rgba(239,68,68,0.3)",
+              color: "#f87171",
+              borderRadius: "20px",
+              padding: "5px 14px",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            Sign Out
+          </button>
+
           <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
             <div
               style={{
@@ -648,24 +668,6 @@ const AccountPage = () => {
             </p>
           )}
         </div>
-
-        <button
-          type="button"
-          onClick={onLogout}
-          style={{
-            width: "100%",
-            borderRadius: "1rem",
-            border: "1px solid rgba(239, 68, 68, 0.4)",
-            background: "transparent",
-            color: "#f87171",
-            padding: "0.85rem 1rem",
-            fontSize: "0.95rem",
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
-          Sign Out
-        </button>
 
         {loading && (
           <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.9rem" }}>

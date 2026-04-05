@@ -1,6 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "../services/api";
 import StockIntelDrawer from "../components/StockIntelDrawer";
+import useSwipe from "../hooks/useSwipe";
+import { useAuth } from "../context/AuthContext";
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
@@ -78,6 +81,9 @@ const EMPTY_SUMMARY = {
   totalPnlPercent: 0,
 };
 
+const HOLDINGS_TABS = ["Stocks", "Mutual Funds", "FD"];
+const WATCHLIST_TABS = ["Stocks", "Mutual Funds"];
+
 const NSE_TICKERS = [
   { symbol: "RELIANCE", full: "Reliance Industries" },
   { symbol: "INFY", full: "Infosys" },
@@ -134,6 +140,10 @@ const NSE_TICKERS = [
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
+  const navigate = useNavigate();
+  const { user, logout, username } = useAuth();
+  const displayName = username || "Investor";
+
   // Holdings
   const [holdings, setHoldings] = useState([]);
   const [summary, setSummary] = useState(EMPTY_SUMMARY);
@@ -177,6 +187,8 @@ export default function DashboardPage() {
   const [dashTab, setDashTab] = useState("Holdings");
   const [holdingsSubTab, setHoldingsSubTab] = useState("Stocks");
   const [watchlistSubTab, setWatchlistSubTab] = useState("Stocks");
+  const holdingsSwipeRef = useRef(null);
+  const watchlistSwipeRef = useRef(null);
 
   // MF form
   const [showMfForm, setShowMfForm] = useState(false);
@@ -617,6 +629,45 @@ export default function DashboardPage() {
 
   const pnlColor = (v) => (v >= 0 ? "#22c55e" : "#ef4444");
 
+  const handleHoldingsSwipeLeft = () => {
+    setHoldingsSubTab((prev) => {
+      const currentIndex = HOLDINGS_TABS.indexOf(prev);
+      if (currentIndex === -1 || currentIndex >= HOLDINGS_TABS.length - 1) {
+        return prev;
+      }
+      return HOLDINGS_TABS[currentIndex + 1];
+    });
+  };
+
+  const handleHoldingsSwipeRight = () => {
+    setHoldingsSubTab((prev) => {
+      const currentIndex = HOLDINGS_TABS.indexOf(prev);
+      if (currentIndex <= 0) {
+        return prev;
+      }
+      return HOLDINGS_TABS[currentIndex - 1];
+    });
+  };
+
+  const handleWatchlistSwipeLeft = () => {
+    if (watchlistSubTab === "Stocks") {
+      setWatchlistSubTab("Mutual Funds");
+    }
+  };
+
+  const handleWatchlistSwipeRight = () => {
+    if (watchlistSubTab === "Mutual Funds") {
+      setWatchlistSubTab("Stocks");
+    }
+  };
+
+  useSwipe(holdingsSwipeRef, handleHoldingsSwipeLeft, handleHoldingsSwipeRight);
+  useSwipe(
+    watchlistSwipeRef,
+    handleWatchlistSwipeLeft,
+    handleWatchlistSwipeRight,
+  );
+
   // Tab pill
   const tabPill = (label, active, onClick, accent = "#f97316") => (
     <button
@@ -789,8 +840,14 @@ export default function DashboardPage() {
           grid-template-columns: repeat(4, 1fr);
           gap: 0.75rem;
         }
+        @media (max-width: 640px) {
           .summary-grid { grid-template-columns: repeat(2, 1fr); }
           .mobile-hide-col { display: none !important; }
+          .pnl-arrow { display: none; }
+          .pnl-sign { display: inline; }
+        }
+        @media (min-width: 641px) {
+          .pnl-sign { display: none; }
         }
         .holdings-table {
           width: 100%;
@@ -841,6 +898,45 @@ export default function DashboardPage() {
       <div style={containerStyle}>
         {/* ── SUMMARY CARD ── */}
         <div style={{ ...cardStyle, padding: "1rem" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "1rem",
+              marginBottom: "1rem",
+            }}
+          >
+            <div
+              style={{
+                fontSize: 18,
+                fontWeight: 700,
+                color: "#f8fafc",
+                fontFamily: "Barlow Condensed",
+              }}
+            >
+              {displayName}'s Portfolio
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                logout();
+                navigate("/", { replace: true });
+              }}
+              style={{
+                backgroundColor: "rgba(239,68,68,0.1)",
+                border: "1px solid rgba(239,68,68,0.3)",
+                color: "#f87171",
+                borderRadius: "20px",
+                padding: "5px 14px",
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              Sign Out
+            </button>
+          </div>
           <div className="summary-grid">
             {/* Total Invested */}
             <div style={{ padding: "0.5rem 0.25rem" }}>
@@ -974,7 +1070,12 @@ export default function DashboardPage() {
                   />
                 ) : (
                   <>
-                    {isDayPositive ? "▲" : "▼"}{" "}
+                    <span className="pnl-arrow">
+                      {isDayPositive ? "▲" : "▼"}
+                    </span>{" "}
+                    <span className="pnl-sign">
+                      {isDayPositive ? "+" : "−"}
+                    </span>{" "}
                     {formatCurrency(Math.abs(totalDayChange))}
                   </>
                 )}
@@ -1064,369 +1165,908 @@ export default function DashboardPage() {
                 ))}
               </div>
 
-              {/* ── STOCKS ── */}
-              {holdingsSubTab === "Stocks" && (
-                <>
-                  {/* Add stock form */}
-                  {showAddForm && (
-                    <form
-                      onSubmit={onSubmitHolding}
-                      style={{
-                        backgroundColor: "#0f172a",
-                        border: "1px solid rgba(255,255,255,0.1)",
-                        borderRadius: "0.75rem",
-                        padding: "1rem",
-                        marginBottom: "1rem",
-                        display: "grid",
-                        gridTemplateColumns:
-                          "repeat(auto-fit, minmax(140px, 1fr))",
-                        gap: "0.75rem",
-                      }}
-                    >
-                      {/* Ticker */}
-                      <div style={{ position: "relative" }}>
-                        <label
-                          style={{
-                            fontSize: 11,
-                            color: "#64748b",
-                            display: "block",
-                            marginBottom: 4,
-                          }}
-                        >
-                          Ticker
-                        </label>
-                        <input
-                          style={inputStyle}
-                          placeholder="e.g. RELIANCE"
-                          value={tickerQuery}
-                          onChange={(e) => {
-                            setTickerQuery(e.target.value);
-                            setFormData((p) => ({
-                              ...p,
-                              ticker: e.target.value.toUpperCase(),
-                            }));
-                            setShowTickerDrop(true);
-                            setLivePrice(null);
-                          }}
-                          onFocus={() => setShowTickerDrop(true)}
-                          onBlur={() =>
-                            setTimeout(() => setShowTickerDrop(false), 150)
-                          }
-                          autoComplete="off"
-                        />
-                        {showTickerDrop && tickerSuggestions.length > 0 && (
-                          <div
+              <div ref={holdingsSwipeRef} style={{ touchAction: "pan-y" }}>
+                {/* ── STOCKS ── */}
+                {holdingsSubTab === "Stocks" && (
+                  <>
+                    {/* Add stock form */}
+                    {showAddForm && (
+                      <form
+                        onSubmit={onSubmitHolding}
+                        style={{
+                          backgroundColor: "#0f172a",
+                          border: "1px solid rgba(255,255,255,0.1)",
+                          borderRadius: "0.75rem",
+                          padding: "1rem",
+                          marginBottom: "1rem",
+                          display: "grid",
+                          gridTemplateColumns:
+                            "repeat(auto-fit, minmax(140px, 1fr))",
+                          gap: "0.75rem",
+                        }}
+                      >
+                        {/* Ticker */}
+                        <div style={{ position: "relative" }}>
+                          <label
                             style={{
-                              position: "absolute",
-                              top: "100%",
-                              left: 0,
-                              right: 0,
-                              zIndex: 50,
-                              backgroundColor: "#1e293b",
-                              border: "1px solid rgba(255,255,255,0.1)",
-                              borderRadius: "0.5rem",
-                              marginTop: 2,
-                              overflow: "hidden",
+                              fontSize: 11,
+                              color: "#64748b",
+                              display: "block",
+                              marginBottom: 4,
                             }}
                           >
-                            {tickerSuggestions.map((t) => (
-                              <div
-                                key={t.symbol}
-                                onMouseDown={() => {
-                                  setTickerQuery(t.symbol);
-                                  setFormData((p) => ({
-                                    ...p,
-                                    ticker: t.symbol,
-                                  }));
-                                  setShowTickerDrop(false);
-                                  fetchLivePrice(t.symbol);
-                                }}
-                                style={{
-                                  padding: "0.5rem 0.75rem",
-                                  cursor: "pointer",
-                                  fontSize: 13,
-                                  borderBottom:
-                                    "1px solid rgba(255,255,255,0.05)",
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.backgroundColor =
-                                    "rgba(255,255,255,0.06)";
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.backgroundColor =
-                                    "transparent";
-                                }}
-                              >
-                                <span
-                                  style={{ color: "#f97316", fontWeight: 600 }}
-                                >
-                                  {t.symbol}
-                                </span>
-                                <span
+                            Ticker
+                          </label>
+                          <input
+                            style={inputStyle}
+                            placeholder="e.g. RELIANCE"
+                            value={tickerQuery}
+                            onChange={(e) => {
+                              setTickerQuery(e.target.value);
+                              setFormData((p) => ({
+                                ...p,
+                                ticker: e.target.value.toUpperCase(),
+                              }));
+                              setShowTickerDrop(true);
+                              setLivePrice(null);
+                            }}
+                            onFocus={() => setShowTickerDrop(true)}
+                            onBlur={() =>
+                              setTimeout(() => setShowTickerDrop(false), 150)
+                            }
+                            autoComplete="off"
+                          />
+                          {showTickerDrop && tickerSuggestions.length > 0 && (
+                            <div
+                              style={{
+                                position: "absolute",
+                                top: "100%",
+                                left: 0,
+                                right: 0,
+                                zIndex: 50,
+                                backgroundColor: "#1e293b",
+                                border: "1px solid rgba(255,255,255,0.1)",
+                                borderRadius: "0.5rem",
+                                marginTop: 2,
+                                overflow: "hidden",
+                              }}
+                            >
+                              {tickerSuggestions.map((t) => (
+                                <div
+                                  key={t.symbol}
+                                  onMouseDown={() => {
+                                    setTickerQuery(t.symbol);
+                                    setFormData((p) => ({
+                                      ...p,
+                                      ticker: t.symbol,
+                                    }));
+                                    setShowTickerDrop(false);
+                                    fetchLivePrice(t.symbol);
+                                  }}
                                   style={{
-                                    color: "#64748b",
-                                    marginLeft: 8,
-                                    fontSize: 11,
+                                    padding: "0.5rem 0.75rem",
+                                    cursor: "pointer",
+                                    fontSize: 13,
+                                    borderBottom:
+                                      "1px solid rgba(255,255,255,0.05)",
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.backgroundColor =
+                                      "rgba(255,255,255,0.06)";
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.backgroundColor =
+                                      "transparent";
                                   }}
                                 >
-                                  {t.full}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Buy Date */}
-                      <div>
-                        <label
-                          style={{
-                            fontSize: 11,
-                            color: "#64748b",
-                            display: "block",
-                            marginBottom: 4,
-                          }}
-                        >
-                          Buy Date
-                        </label>
-                        <input
-                          type="date"
-                          name="buyDate"
-                          style={inputStyle}
-                          value={formData.buyDate}
-                          onChange={onChangeForm}
-                          required
-                        />
-                      </div>
-
-                      {/* Buy Price */}
-                      <div>
-                        <label
-                          style={{
-                            fontSize: 11,
-                            color: "#64748b",
-                            display: "block",
-                            marginBottom: 4,
-                          }}
-                        >
-                          Buy Price
-                          {livePriceFetching && (
-                            <span style={{ marginLeft: 6 }}>
-                              <span className="loader-spin" />
-                            </span>
+                                  <span
+                                    style={{
+                                      color: "#f97316",
+                                      fontWeight: 600,
+                                    }}
+                                  >
+                                    {t.symbol}
+                                  </span>
+                                  <span
+                                    style={{
+                                      color: "#64748b",
+                                      marginLeft: 8,
+                                      fontSize: 11,
+                                    }}
+                                  >
+                                    {t.full}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
                           )}
-                          {livePrice && (
-                            <span
-                              style={{
-                                marginLeft: 6,
-                                color: "#22c55e",
-                                fontSize: 11,
-                              }}
-                            >
-                              live ₹{livePrice}
-                            </span>
-                          )}
-                        </label>
-                        <input
-                          type="number"
-                          name="buyPrice"
-                          style={inputStyle}
-                          placeholder="₹"
-                          value={formData.buyPrice}
-                          onChange={onChangeForm}
-                          required
-                          min="0"
-                          step="0.01"
-                        />
-                      </div>
+                        </div>
 
-                      {/* Quantity */}
-                      <div>
-                        <label
-                          style={{
-                            fontSize: 11,
-                            color: "#64748b",
-                            display: "block",
-                            marginBottom: 4,
-                          }}
-                        >
-                          Qty
-                        </label>
-                        <div style={{ display: "flex", gap: 4 }}>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setFormData((p) => ({
-                                ...p,
-                                quantity: String(
-                                  Math.max(0, Number(p.quantity) - 1),
-                                ),
-                              }))
-                            }
+                        {/* Buy Date */}
+                        <div>
+                          <label
                             style={{
-                              ...buttonBaseStyle,
-                              padding: "6px 12px",
-                              backgroundColor: "#1e293b",
-                              color: "#94a3b8",
-                              borderRadius: "0.5rem",
+                              fontSize: 11,
+                              color: "#64748b",
+                              display: "block",
+                              marginBottom: 4,
                             }}
                           >
-                            −
-                          </button>
+                            Buy Date
+                          </label>
                           <input
-                            type="number"
-                            name="quantity"
-                            style={{ ...inputStyle, textAlign: "center" }}
-                            value={formData.quantity}
+                            type="date"
+                            name="buyDate"
+                            style={inputStyle}
+                            value={formData.buyDate}
                             onChange={onChangeForm}
                             required
-                            min="1"
                           />
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setFormData((p) => ({
-                                ...p,
-                                quantity: String(Number(p.quantity) + 1),
-                              }))
-                            }
+                        </div>
+
+                        {/* Buy Price */}
+                        <div>
+                          <label
                             style={{
-                              ...buttonBaseStyle,
-                              padding: "6px 12px",
-                              backgroundColor: "#1e293b",
-                              color: "#94a3b8",
-                              borderRadius: "0.5rem",
+                              fontSize: 11,
+                              color: "#64748b",
+                              display: "block",
+                              marginBottom: 4,
                             }}
                           >
-                            +
+                            Buy Price
+                            {livePriceFetching && (
+                              <span style={{ marginLeft: 6 }}>
+                                <span className="loader-spin" />
+                              </span>
+                            )}
+                            {livePrice && (
+                              <span
+                                style={{
+                                  marginLeft: 6,
+                                  color: "#22c55e",
+                                  fontSize: 11,
+                                }}
+                              >
+                                live ₹{livePrice}
+                              </span>
+                            )}
+                          </label>
+                          <input
+                            type="number"
+                            name="buyPrice"
+                            style={inputStyle}
+                            placeholder="₹"
+                            value={formData.buyPrice}
+                            onChange={onChangeForm}
+                            required
+                            min="0"
+                            step="0.01"
+                          />
+                        </div>
+
+                        {/* Quantity */}
+                        <div>
+                          <label
+                            style={{
+                              fontSize: 11,
+                              color: "#64748b",
+                              display: "block",
+                              marginBottom: 4,
+                            }}
+                          >
+                            Qty
+                          </label>
+                          <div style={{ display: "flex", gap: 4 }}>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setFormData((p) => ({
+                                  ...p,
+                                  quantity: String(
+                                    Math.max(0, Number(p.quantity) - 1),
+                                  ),
+                                }))
+                              }
+                              style={{
+                                ...buttonBaseStyle,
+                                padding: "6px 12px",
+                                backgroundColor: "#1e293b",
+                                color: "#94a3b8",
+                                borderRadius: "0.5rem",
+                              }}
+                            >
+                              −
+                            </button>
+                            <input
+                              type="number"
+                              name="quantity"
+                              style={{ ...inputStyle, textAlign: "center" }}
+                              value={formData.quantity}
+                              onChange={onChangeForm}
+                              required
+                              min="1"
+                            />
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setFormData((p) => ({
+                                  ...p,
+                                  quantity: String(Number(p.quantity) + 1),
+                                }))
+                              }
+                              style={{
+                                ...buttonBaseStyle,
+                                padding: "6px 12px",
+                                backgroundColor: "#1e293b",
+                                color: "#94a3b8",
+                                borderRadius: "0.5rem",
+                              }}
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Submit */}
+                        <div
+                          style={{ display: "flex", alignItems: "flex-end" }}
+                        >
+                          <button
+                            type="submit"
+                            disabled={submitting}
+                            style={{
+                              ...buttonBaseStyle,
+                              backgroundColor: "#f97316",
+                              color: "#fff",
+                              width: "100%",
+                              justifyContent: "center",
+                              borderRadius: "0.75rem",
+                              padding: "0.55rem",
+                            }}
+                          >
+                            {submitting ? (
+                              <span className="loader-spin" />
+                            ) : (
+                              "Add"
+                            )}
                           </button>
                         </div>
-                      </div>
+                      </form>
+                    )}
 
-                      {/* Submit */}
-                      <div style={{ display: "flex", alignItems: "flex-end" }}>
-                        <button
-                          type="submit"
-                          disabled={submitting}
+                    {error && (
+                      <div
+                        style={{
+                          color: "#ef4444",
+                          fontSize: 13,
+                          marginBottom: "0.75rem",
+                        }}
+                      >
+                        {error}
+                      </div>
+                    )}
+
+                    {/* Table */}
+                    <div style={{ overflowX: "auto" }}>
+                      <table
+                        className="holdings-table"
+                        style={{
+                          width: "100%",
+                          borderCollapse: "collapse",
+                          minWidth: "600px",
+                        }}
+                      >
+                        <thead>
+                          <tr>
+                            <th>Ticker</th>
+                            <th>Qty</th>
+                            <th>Buy Price</th>
+                            <th>Cur. Price</th>
+                            <th className="mobile-hide-col">Invested</th>
+                            <th className="mobile-hide-col">Cur. Value</th>
+                            <th>P&amp;L</th>
+                            <th>P&amp;L%</th>
+                            <th></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {loading ? (
+                            [1, 2, 3].map(skeletonRow)
+                          ) : stockHoldings.length === 0 ? (
+                            <tr>
+                              <td
+                                colSpan={9}
+                                style={{
+                                  textAlign: "center",
+                                  padding: "2.5rem",
+                                  color: "#64748b",
+                                }}
+                              >
+                                No stock holdings yet. Click &quot;+ Add
+                                Stock&quot; to get started.
+                              </td>
+                            </tr>
+                          ) : (
+                            stockHoldings.map((h) => (
+                              <tr
+                                key={h.id}
+                                className="holding-row"
+                                style={{ cursor: "pointer" }}
+                                onClick={(e) => {
+                                  if (e.target.closest("button")) return;
+                                  setSelectedTicker(h.ticker);
+                                  setDrawerOpen(true);
+                                }}
+                              >
+                                <td
+                                  style={{
+                                    fontWeight: 700,
+                                    color: "#f97316",
+                                    fontSize: "15px",
+                                  }}
+                                >
+                                  {h.ticker.replace(".NS", "")}
+                                </td>
+                                <td style={{ color: "#f8fafc" }}>
+                                  {formatNumber(h.quantity)}
+                                </td>
+                                <td style={{ color: "#94a3b8" }}>
+                                  {formatCurrency(h.buyPrice)}
+                                </td>
+                                <td style={{ color: "#f8fafc" }}>
+                                  {formatCurrency(h.currentPrice)}
+                                </td>
+                                <td
+                                  className="mobile-hide-col"
+                                  style={{ color: "#94a3b8" }}
+                                >
+                                  {formatCurrency(h.invested)}
+                                </td>
+                                <td
+                                  className="mobile-hide-col"
+                                  style={{ color: "#f8fafc" }}
+                                >
+                                  {formatCurrency(h.currentValue)}
+                                </td>
+                                <td
+                                  style={{
+                                    color: pnlColor(h.pnl),
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  <span className="pnl-arrow">
+                                    {h.pnl >= 0 ? "▲" : "▼"}
+                                  </span>{" "}
+                                  <span className="pnl-sign">
+                                    {h.pnl >= 0 ? "+" : "−"}
+                                  </span>{" "}
+                                  {formatCurrency(Math.abs(h.pnl ?? 0))}
+                                </td>
+                                <td
+                                  style={{
+                                    color: pnlColor(h.pnlPercent),
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  <span className="pnl-arrow">
+                                    {(h.pnlPercent ?? 0) >= 0 ? "▲" : "▼"}
+                                  </span>{" "}
+                                  <span className="pnl-sign">
+                                    {(h.pnlPercent ?? 0) >= 0 ? "+" : "−"}
+                                  </span>{" "}
+                                  {Math.abs(h.pnlPercent ?? 0).toFixed(2)}%
+                                </td>
+                                <td>
+                                  <div style={{ display: "flex", gap: 4 }}>
+                                    <button
+                                      title="Edit"
+                                      onClick={() => {
+                                        setEditTarget(h);
+                                        setEditForm({
+                                          buyPrice: String(h.buyPrice),
+                                          qty: String(h.quantity),
+                                          buyDate: h.buyDate || "",
+                                        });
+                                        setEditError("");
+                                      }}
+                                      style={{
+                                        ...buttonBaseStyle,
+                                        padding: "4px 9px",
+                                        fontSize: 13,
+                                        backgroundColor:
+                                          "rgba(255,255,255,0.07)",
+                                        color: "#94a3b8",
+                                        borderRadius: "0.5rem",
+                                      }}
+                                    >
+                                      ✏
+                                    </button>
+                                    <button
+                                      title="Delete"
+                                      onClick={() => setDeleteTarget(h)}
+                                      style={{
+                                        ...buttonBaseStyle,
+                                        padding: "4px 9px",
+                                        fontSize: 13,
+                                        backgroundColor: "rgba(239,68,68,0.12)",
+                                        color: "#ef4444",
+                                        borderRadius: "0.5rem",
+                                      }}
+                                    >
+                                      🗑
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+
+                {/* ── MUTUAL FUNDS ── */}
+                {holdingsSubTab === "Mutual Funds" && (
+                  <>
+                    {showMfForm && (
+                      <div
+                        style={{
+                          marginBottom: "1rem",
+                          padding: "1rem",
+                          background: "rgba(139,92,246,0.06)",
+                          borderRadius: "0.85rem",
+                          border: "1px solid rgba(139,92,246,0.2)",
+                          display: "flex",
+                          flexDirection: "column",
+                          overflow: "visible",
+                          gap: "0.7rem",
+                        }}
+                      >
+                        <p
                           style={{
-                            ...buttonBaseStyle,
-                            backgroundColor: "#f97316",
-                            color: "#fff",
-                            width: "100%",
-                            justifyContent: "center",
-                            borderRadius: "0.75rem",
-                            padding: "0.55rem",
+                            margin: 0,
+                            color: "#a78bfa",
+                            fontSize: "0.78rem",
+                            fontWeight: 700,
+                            letterSpacing: "0.08em",
                           }}
                         >
-                          {submitting ? (
-                            <span className="loader-spin" />
-                          ) : (
-                            "Add"
-                          )}
-                        </button>
-                      </div>
-                    </form>
-                  )}
+                          ADD MUTUAL FUND
+                        </p>
 
-                  {error && (
-                    <div
-                      style={{
-                        color: "#ef4444",
-                        fontSize: 13,
-                        marginBottom: "0.75rem",
-                      }}
-                    >
-                      {error}
-                    </div>
-                  )}
-
-                  {/* Table */}
-                  <div style={{ overflowX: "auto" }}>
-                    <table className="holdings-table" style={{ width: "100%", borderCollapse: "collapse", minWidth: "600px" }}>
-                      <thead>
-                        <tr>
-                          <th>Ticker</th>
-                          <th>Qty</th>
-                          <th>Buy Price</th>
-                          <th>Cur. Price</th>
-                          <th className="mobile-hide-col">Invested</th>
-                          <th className="mobile-hide-col">Cur. Value</th>
-                          <th>P&amp;L</th>
-                          <th>P&amp;L%</th>
-                          <th></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {loading ? (
-                          [1, 2, 3].map(skeletonRow)
-                        ) : stockHoldings.length === 0 ? (
-                          <tr>
-                            <td
-                              colSpan={9}
+                        {/* Fund search */}
+                        <div
+                          style={{ position: "relative", overflow: "visible" }}
+                        >
+                          <p
+                            style={{
+                              margin: "0 0 0.3rem",
+                              color: "#94a3b8",
+                              fontSize: "0.75rem",
+                              fontWeight: 600,
+                            }}
+                          >
+                            SEARCH FUND
+                          </p>
+                          <input
+                            type="text"
+                            placeholder="e.g. Mirae Asset, Axis Bluechip..."
+                            value={mfQuery}
+                            onChange={(e) => {
+                              setMfQuery(e.target.value);
+                              searchMf(e.target.value);
+                            }}
+                            style={{ ...inputStyle, fontSize: "0.9rem" }}
+                          />
+                          {mfSearching && (
+                            <p
                               style={{
-                                textAlign: "center",
-                                padding: "2.5rem",
-                                color: "#64748b",
+                                margin: "4px 0 0",
+                                color: "#94a3b8",
+                                fontSize: "0.72rem",
                               }}
                             >
-                              No stock holdings yet. Click &quot;+ Add
-                              Stock&quot; to get started.
-                            </td>
-                          </tr>
-                        ) : (
-                          stockHoldings.map((h) => (
-                            <tr
-                              key={h.id}
-                              className="holding-row"
-                              style={{ cursor: "pointer" }}
-                              onClick={(e) => {
-                                if (e.target.closest("button")) return;
-                                setSelectedTicker(h.ticker);
-                                setDrawerOpen(true);
+                              Searching...
+                            </p>
+                          )}
+                          {mfResults.length > 0 && !selectedMf && (
+                            <div
+                              style={{
+                                position: "absolute",
+                                top: "calc(100% + 4px)",
+                                left: 0,
+                                right: 0,
+                                backgroundColor: "#0f172a",
+                                border: "1px solid rgba(255,255,255,0.15)",
+                                borderRadius: "0.75rem",
+                                overflow: "hidden",
+                                zIndex: 500,
+                                boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+                                maxHeight: "180px",
+                                overflowY: "auto",
                               }}
                             >
-                              <td style={{ fontWeight: 700, color: "#f97316", fontSize: "15px" }}>
-                                {h.ticker.replace(".NS", "")}
-                              </td>
-                              <td style={{ color: "#f8fafc" }}>
-                                {formatNumber(h.quantity)}
-                              </td>
-                              <td style={{ color: "#94a3b8" }}>
-                                {formatCurrency(h.buyPrice)}
-                              </td>
-                              <td style={{ color: "#f8fafc" }}>
-                                {formatCurrency(h.currentPrice)}
-                              </td>
-                              <td
-                                className="mobile-hide-col"
-                                style={{ color: "#94a3b8" }}
-                              >
-                                {formatCurrency(h.invested)}
-                              </td>
-                              <td
-                                className="mobile-hide-col"
-                                style={{ color: "#f8fafc" }}
-                              >
-                                {formatCurrency(h.currentValue)}
-                              </td>
-                              <td
+                              {mfResults.map((mf) => (
+                                <div
+                                  key={mf.schemeCode}
+                                  onMouseDown={() => {
+                                    setSelectedMf(mf);
+                                    fetchLiveMfNav(mf.schemeCode);
+                                    setMfQuery(mf.schemeName);
+                                    setMfResults([]);
+                                  }}
+                                  style={{
+                                    padding: "0.65rem 1rem",
+                                    cursor: "pointer",
+                                    borderBottom:
+                                      "1px solid rgba(255,255,255,0.06)",
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.backgroundColor =
+                                      "rgba(139,92,246,0.1)";
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.backgroundColor =
+                                      "transparent";
+                                  }}
+                                >
+                                  <p
+                                    style={{
+                                      margin: 0,
+                                      color: "#a78bfa",
+                                      fontWeight: 700,
+                                      fontSize: "0.78rem",
+                                    }}
+                                  >
+                                    {mf.schemeCode}
+                                  </p>
+                                  <p
+                                    style={{
+                                      margin: "2px 0 0",
+                                      color: "#94a3b8",
+                                      fontSize: "0.75rem",
+                                    }}
+                                  >
+                                    {mf.schemeName}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {selectedMf && (
+                            <div
+                              style={{
+                                marginTop: "6px",
+                                padding: "8px 12px",
+                                borderRadius: "8px",
+                                background: "rgba(139,92,246,0.08)",
+                                border: "1px solid rgba(139,92,246,0.25)",
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                              }}
+                            >
+                              <div>
+                                <p
+                                  style={{
+                                    margin: 0,
+                                    color: "#a78bfa",
+                                    fontSize: "0.72rem",
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  {selectedMf.schemeCode}
+                                </p>
+                                <p
+                                  style={{
+                                    margin: 0,
+                                    color: "#cbd5e1",
+                                    fontSize: "0.72rem",
+                                  }}
+                                >
+                                  {selectedMf.schemeName}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedMf(null);
+                                  setMfQuery("");
+                                  setLiveMfNav(null);
+                                }}
                                 style={{
-                                  color: pnlColor(h.pnl),
+                                  background: "transparent",
+                                  border: "none",
+                                  color: "#64748b",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {selectedMf && (
+                          <>
+                            {/* Purchase date */}
+                            <div>
+                              <p
+                                style={{
+                                  margin: "0 0 0.3rem",
+                                  color: "#94a3b8",
+                                  fontSize: "0.75rem",
                                   fontWeight: 600,
                                 }}
                               >
-                                {formatCurrency(h.pnl)}
-                              </td>
-                              <td
+                                PURCHASE DATE
+                              </p>
+                              <input
+                                type="date"
+                                value={mfBuyDate}
+                                onChange={(e) => setMfBuyDate(e.target.value)}
+                                style={inputStyle}
+                              />
+                            </div>
+
+                            {(liveMfNavFetching || liveMfNav !== null) && (
+                              <div
                                 style={{
-                                  color: pnlColor(h.pnlPercent),
+                                  padding: "0.75rem 0.9rem",
+                                  borderRadius: "0.75rem",
+                                  border: "1px solid rgba(139,92,246,0.2)",
+                                  backgroundColor: "rgba(139,92,246,0.08)",
+                                }}
+                              >
+                                <p
+                                  style={{
+                                    margin: 0,
+                                    color: "#f8fafc",
+                                    fontSize: "0.8rem",
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  Current NAV:
+                                </p>
+                                <p
+                                  style={{
+                                    margin: "0.25rem 0 0",
+                                    color: "#a78bfa",
+                                    fontSize: "1rem",
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  {liveMfNavFetching
+                                    ? "Fetching..."
+                                    : `₹${liveMfNav?.toFixed(4)}`}
+                                </p>
+                              </div>
+                            )}
+
+                            {/* Purchase NAV */}
+                            <div>
+                              <p
+                                style={{
+                                  margin: "0 0 0.3rem",
+                                  color: "#94a3b8",
+                                  fontSize: "0.75rem",
                                   fontWeight: 600,
                                 }}
                               >
-                                {(h.pnlPercent ?? 0).toFixed(2)}%
-                              </td>
-                              <td>
-                                <div style={{ display: "flex", gap: 4 }}>
+                                PURCHASE NAV (₹)
+                              </p>
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                placeholder="e.g. 45.23"
+                                value={mfBuyNav}
+                                onChange={(e) => {
+                                  if (/^\d*\.?\d*$/.test(e.target.value))
+                                    setMfBuyNav(e.target.value);
+                                }}
+                                style={{ ...inputStyle, fontSize: "1rem" }}
+                              />
+                            </div>
+
+                            {/* Units */}
+                            <div>
+                              <p
+                                style={{
+                                  margin: "0 0 0.3rem",
+                                  color: "#94a3b8",
+                                  fontSize: "0.75rem",
+                                  fontWeight: 600,
+                                }}
+                              >
+                                UNITS PURCHASED
+                              </p>
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                placeholder="e.g. 500.123"
+                                value={mfUnits}
+                                onChange={(e) => {
+                                  if (/^\d*\.?\d*$/.test(e.target.value))
+                                    setMfUnits(e.target.value);
+                                }}
+                                style={{ ...inputStyle, fontSize: "1rem" }}
+                              />
+                            </div>
+
+                            {mfError && (
+                              <p
+                                style={{
+                                  margin: 0,
+                                  color: "#ef4444",
+                                  fontSize: "0.78rem",
+                                }}
+                              >
+                                {mfError}
+                              </p>
+                            )}
+
+                            <div style={{ display: "flex", gap: "0.5rem" }}>
+                              <button
+                                type="button"
+                                onClick={onSubmitMf}
+                                disabled={mfSubmitting}
+                                style={{
+                                  flex: 1,
+                                  background: "#8b5cf6",
+                                  color: "white",
+                                  borderRadius: "20px",
+                                  padding: "8px 16px",
+                                  fontSize: "13px",
+                                  fontWeight: 600,
+                                  border: "none",
+                                  cursor: mfSubmitting
+                                    ? "not-allowed"
+                                    : "pointer",
+                                  opacity: mfSubmitting ? 0.7 : 1,
+                                  fontFamily: "inherit",
+                                }}
+                              >
+                                {mfSubmitting ? "Adding..." : "Add Fund"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowMfForm(false);
+                                  setMfError("");
+                                  setSelectedMf(null);
+                                  setMfQuery("");
+                                  setMfBuyNav("");
+                                  setMfUnits("");
+                                  setMfBuyDate("");
+                                }}
+                                style={{
+                                  background: "transparent",
+                                  color: "#94a3b8",
+                                  borderRadius: "20px",
+                                  padding: "8px 16px",
+                                  fontSize: "13px",
+                                  fontWeight: 600,
+                                  border: "1px solid rgba(255,255,255,0.1)",
+                                  cursor: "pointer",
+                                  fontFamily: "inherit",
+                                }}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    {/* MF Cards */}
+                    {mfHoldings.length === 0 ? (
+                      <div
+                        style={{
+                          textAlign: "center",
+                          padding: "3rem",
+                          color: "#64748b",
+                        }}
+                      >
+                        <div style={{ fontSize: 40, marginBottom: 8 }}>🏦</div>
+                        No mutual funds yet. Click &quot;+ Add MF&quot; to get
+                        started.
+                      </div>
+                    ) : (
+                      <div style={{ display: "grid", gap: "0.75rem" }}>
+                        {mfHoldings.map((h) => (
+                          <div
+                            key={h.id}
+                            onClick={(e) => {
+                              if (e.target.closest("button")) return;
+                              openMfDrawer(h);
+                            }}
+                            style={{
+                              backgroundColor: "#0f172a",
+                              border: "1px solid rgba(139,92,246,0.2)",
+                              borderLeft: "3px solid #8b5cf6",
+                              borderRadius: "0.75rem",
+                              padding: "0.9rem 1rem",
+                              cursor: "pointer",
+                              transition: "border-color 0.15s",
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.borderColor =
+                                "rgba(139,92,246,0.5)";
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.borderColor =
+                                "rgba(139,92,246,0.2)";
+                            }}
+                          >
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "flex-start",
+                                flexWrap: "wrap",
+                                gap: 6,
+                              }}
+                            >
+                              <div>
+                                <div
+                                  style={{
+                                    fontWeight: 700,
+                                    color: "#f8fafc",
+                                    fontSize: 14,
+                                  }}
+                                >
+                                  {h.schemeName || h.ticker}
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: 12,
+                                    color: "#64748b",
+                                    marginTop: 2,
+                                  }}
+                                >
+                                  {formatNumber(h.quantity)} units · NAV{" "}
+                                  {formatCurrency(h.currentPrice)}
+                                </div>
+                              </div>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  gap: 6,
+                                  alignItems: "center",
+                                }}
+                              >
+                                <div style={{ textAlign: "right" }}>
+                                  <div
+                                    style={{
+                                      fontSize: 15,
+                                      fontWeight: 700,
+                                      color: "#f8fafc",
+                                    }}
+                                  >
+                                    {formatCurrency(h.currentValue)}
+                                  </div>
+                                  <div
+                                    style={{
+                                      fontSize: 12,
+                                      color: pnlColor(h.pnl),
+                                      fontWeight: 600,
+                                    }}
+                                  >
+                                    {h.pnl >= 0 ? "+" : ""}
+                                    {formatCurrency(h.pnl)} (
+                                    {(h.pnlPercent ?? 0).toFixed(2)}%)
+                                  </div>
+                                </div>
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: 4,
+                                  }}
+                                >
                                   <button
                                     title="Edit"
                                     onClick={() => {
@@ -1441,7 +2081,7 @@ export default function DashboardPage() {
                                     style={{
                                       ...buttonBaseStyle,
                                       padding: "4px 9px",
-                                      fontSize: 13,
+                                      fontSize: 12,
                                       backgroundColor: "rgba(255,255,255,0.07)",
                                       color: "#94a3b8",
                                       borderRadius: "0.5rem",
@@ -1455,7 +2095,7 @@ export default function DashboardPage() {
                                     style={{
                                       ...buttonBaseStyle,
                                       padding: "4px 9px",
-                                      fontSize: 13,
+                                      fontSize: 12,
                                       backgroundColor: "rgba(239,68,68,0.12)",
                                       color: "#ef4444",
                                       borderRadius: "0.5rem",
@@ -1464,494 +2104,267 @@ export default function DashboardPage() {
                                     🗑
                                   </button>
                                 </div>
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </>
-              )}
-
-              {/* ── MUTUAL FUNDS ── */}
-              {holdingsSubTab === "Mutual Funds" && (
-                <>
-                  {showMfForm && (
-                    <div
-                      style={{
-                        marginBottom: "1rem",
-                        padding: "1rem",
-                        background: "rgba(139,92,246,0.06)",
-                        borderRadius: "0.85rem",
-                        border: "1px solid rgba(139,92,246,0.2)",
-                        display: "flex",
-                        flexDirection: "column",
-                        overflow: "visible",
-                        gap: "0.7rem",
-                      }}
-                    >
-                      <p
-                        style={{
-                          margin: 0,
-                          color: "#a78bfa",
-                          fontSize: "0.78rem",
-                          fontWeight: 700,
-                          letterSpacing: "0.08em",
-                        }}
-                      >
-                        ADD MUTUAL FUND
-                      </p>
-
-                      {/* Fund search */}
-                      <div style={{ position: "relative", overflow: "visible" }}>
-                        <p
-                          style={{
-                            margin: "0 0 0.3rem",
-                            color: "#94a3b8",
-                            fontSize: "0.75rem",
-                            fontWeight: 600,
-                          }}
-                        >
-                          SEARCH FUND
-                        </p>
-                        <input
-                          type="text"
-                          placeholder="e.g. Mirae Asset, Axis Bluechip..."
-                          value={mfQuery}
-                          onChange={(e) => {
-                            setMfQuery(e.target.value);
-                            searchMf(e.target.value);
-                          }}
-                          style={{ ...inputStyle, fontSize: "0.9rem" }}
-                        />
-                        {mfSearching && (
-                          <p
-                            style={{
-                              margin: "4px 0 0",
-                              color: "#94a3b8",
-                              fontSize: "0.72rem",
-                            }}
-                          >
-                            Searching...
-                          </p>
-                        )}
-                        {mfResults.length > 0 && !selectedMf && (
-                          <div
-                            style={{
-                              position: "absolute",
-                              top: "calc(100% + 4px)",
-                              left: 0,
-                              right: 0,
-                              backgroundColor: "#0f172a",
-                              border: "1px solid rgba(255,255,255,0.15)",
-                              borderRadius: "0.75rem",
-                              overflow: "hidden",
-                              zIndex: 500,
-                              boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
-                              maxHeight: "180px",
-                              overflowY: "auto",
-                            }}
-                          >
-                            {mfResults.map((mf) => (
-                              <div
-                                key={mf.schemeCode}
-                                onMouseDown={() => {
-                                  setSelectedMf(mf);
-                                  fetchLiveMfNav(mf.schemeCode);
-                                  setMfQuery(mf.schemeName);
-                                  setMfResults([]);
-                                }}
-                                style={{
-                                  padding: "0.65rem 1rem",
-                                  cursor: "pointer",
-                                  borderBottom:
-                                    "1px solid rgba(255,255,255,0.06)",
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.backgroundColor =
-                                    "rgba(139,92,246,0.1)";
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.backgroundColor =
-                                    "transparent";
-                                }}
-                              >
-                                <p
-                                  style={{
-                                    margin: 0,
-                                    color: "#a78bfa",
-                                    fontWeight: 700,
-                                    fontSize: "0.78rem",
-                                  }}
-                                >
-                                  {mf.schemeCode}
-                                </p>
-                                <p
-                                  style={{
-                                    margin: "2px 0 0",
-                                    color: "#94a3b8",
-                                    fontSize: "0.75rem",
-                                  }}
-                                >
-                                  {mf.schemeName}
-                                </p>
                               </div>
-                            ))}
-                          </div>
-                        )}
-                        {selectedMf && (
-                          <div
-                            style={{
-                              marginTop: "6px",
-                              padding: "8px 12px",
-                              borderRadius: "8px",
-                              background: "rgba(139,92,246,0.08)",
-                              border: "1px solid rgba(139,92,246,0.25)",
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "center",
-                            }}
-                          >
-                            <div>
-                              <p
-                                style={{
-                                  margin: 0,
-                                  color: "#a78bfa",
-                                  fontSize: "0.72rem",
-                                  fontWeight: 700,
-                                }}
-                              >
-                                {selectedMf.schemeCode}
-                              </p>
-                              <p
-                                style={{
-                                  margin: 0,
-                                  color: "#cbd5e1",
-                                  fontSize: "0.72rem",
-                                }}
-                              >
-                                {selectedMf.schemeName}
-                              </p>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedMf(null);
-                                setMfQuery("");
-                                setLiveMfNav(null);
-                              }}
-                              style={{
-                                background: "transparent",
-                                border: "none",
-                                color: "#64748b",
-                                cursor: "pointer",
-                              }}
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        )}
-                      </div>
-
-                      {selectedMf && (
-                        <>
-                          {/* Purchase date */}
-                          <div>
-                            <p
-                              style={{
-                                margin: "0 0 0.3rem",
-                                color: "#94a3b8",
-                                fontSize: "0.75rem",
-                                fontWeight: 600,
-                              }}
-                            >
-                              PURCHASE DATE
-                            </p>
-                            <input
-                              type="date"
-                              value={mfBuyDate}
-                              onChange={(e) => setMfBuyDate(e.target.value)}
-                              style={inputStyle}
-                            />
-                          </div>
-
-                          {(liveMfNavFetching || liveMfNav !== null) && (
                             <div
                               style={{
-                                padding: "0.75rem 0.9rem",
-                                borderRadius: "0.75rem",
-                                border: "1px solid rgba(139,92,246,0.2)",
-                                backgroundColor: "rgba(139,92,246,0.08)",
+                                marginTop: "0.5rem",
+                                display: "flex",
+                                gap: "1.5rem",
+                                fontSize: 12,
+                                color: "#64748b",
                               }}
                             >
-                              <p
-                                style={{
-                                  margin: 0,
-                                  color: "#f8fafc",
-                                  fontSize: "0.8rem",
-                                  fontWeight: 700,
-                                }}
-                              >
-                                Current NAV:
-                              </p>
-                              <p
-                                style={{
-                                  margin: "0.25rem 0 0",
-                                  color: "#a78bfa",
-                                  fontSize: "1rem",
-                                  fontWeight: 700,
-                                }}
-                              >
-                                {liveMfNavFetching
-                                  ? "Fetching..."
-                                  : `₹${liveMfNav?.toFixed(4)}`}
-                              </p>
+                              <span>
+                                Invested:{" "}
+                                <span style={{ color: "#94a3b8" }}>
+                                  {formatCurrency(h.invested)}
+                                </span>
+                              </span>
                             </div>
-                          )}
-
-                          {/* Purchase NAV */}
-                          <div>
-                            <p
-                              style={{
-                                margin: "0 0 0.3rem",
-                                color: "#94a3b8",
-                                fontSize: "0.75rem",
-                                fontWeight: 600,
-                              }}
-                            >
-                              PURCHASE NAV (₹)
-                            </p>
-                            <input
-                              type="text"
-                              inputMode="decimal"
-                              placeholder="e.g. 45.23"
-                              value={mfBuyNav}
-                              onChange={(e) => {
-                                if (/^\d*\.?\d*$/.test(e.target.value))
-                                  setMfBuyNav(e.target.value);
-                              }}
-                              style={{ ...inputStyle, fontSize: "1rem" }}
-                            />
                           </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
 
-                          {/* Units */}
-                          <div>
-                            <p
-                              style={{
-                                margin: "0 0 0.3rem",
-                                color: "#94a3b8",
-                                fontSize: "0.75rem",
-                                fontWeight: 600,
-                              }}
-                            >
-                              UNITS PURCHASED
-                            </p>
-                            <input
-                              type="text"
-                              inputMode="decimal"
-                              placeholder="e.g. 500.123"
-                              value={mfUnits}
-                              onChange={(e) => {
-                                if (/^\d*\.?\d*$/.test(e.target.value))
-                                  setMfUnits(e.target.value);
-                              }}
-                              style={{ ...inputStyle, fontSize: "1rem" }}
-                            />
-                          </div>
-
-                          {mfError && (
-                            <p
-                              style={{
-                                margin: 0,
-                                color: "#ef4444",
-                                fontSize: "0.78rem",
-                              }}
-                            >
-                              {mfError}
-                            </p>
-                          )}
-
-                          <div style={{ display: "flex", gap: "0.5rem" }}>
-                            <button
-                              type="button"
-                              onClick={onSubmitMf}
-                              disabled={mfSubmitting}
-                              style={{
-                                flex: 1,
-                                background: "#8b5cf6",
-                                color: "white",
-                                borderRadius: "20px",
-                                padding: "8px 16px",
-                                fontSize: "13px",
-                                fontWeight: 600,
-                                border: "none",
-                                cursor: mfSubmitting ? "not-allowed" : "pointer",
-                                opacity: mfSubmitting ? 0.7 : 1,
-                                fontFamily: "inherit",
-                              }}
-                            >
-                              {mfSubmitting ? "Adding..." : "Add Fund"}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setShowMfForm(false);
-                                setMfError("");
-                                setSelectedMf(null);
-                                setMfQuery("");
-                                setMfBuyNav("");
-                                setMfUnits("");
-                                setMfBuyDate("");
-                              }}
-                              style={{
-                                background: "transparent",
-                                color: "#94a3b8",
-                                borderRadius: "20px",
-                                padding: "8px 16px",
-                                fontSize: "13px",
-                                fontWeight: 600,
-                                border: "1px solid rgba(255,255,255,0.1)",
-                                cursor: "pointer",
-                                fontFamily: "inherit",
-                              }}
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )}
-
-                  {/* MF Cards */}
-                  {mfHoldings.length === 0 ? (
-                    <div
-                      style={{
-                        textAlign: "center",
-                        padding: "3rem",
-                        color: "#64748b",
-                      }}
-                    >
-                      <div style={{ fontSize: 40, marginBottom: 8 }}>🏦</div>
-                      No mutual funds yet. Click &quot;+ Add MF&quot; to get
-                      started.
-                    </div>
-                  ) : (
-                    <div style={{ display: "grid", gap: "0.75rem" }}>
-                      {mfHoldings.map((h) => (
+                {/* ── FD ── */}
+                {holdingsSubTab === "FD" && (
+                  <>
+                    {showFdForm && (
+                      <div
+                        style={{
+                          backgroundColor: "#0f172a",
+                          border: "1px solid rgba(16,185,129,0.25)",
+                          borderRadius: "0.75rem",
+                          padding: "1rem",
+                          marginBottom: "1rem",
+                        }}
+                      >
                         <div
-                          key={h.id}
-                          onClick={(e) => {
-                            if (e.target.closest("button")) return;
-                            openMfDrawer(h);
-                          }}
                           style={{
-                            backgroundColor: "#0f172a",
-                            border: "1px solid rgba(139,92,246,0.2)",
-                            borderLeft: "3px solid #8b5cf6",
-                            borderRadius: "0.75rem",
-                            padding: "0.9rem 1rem",
-                            cursor: "pointer",
-                            transition: "border-color 0.15s",
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor =
-                              "rgba(139,92,246,0.5)";
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor =
-                              "rgba(139,92,246,0.2)";
+                            display: "grid",
+                            gridTemplateColumns:
+                              "repeat(auto-fit, minmax(130px,1fr))",
+                            gap: "0.75rem",
+                            marginBottom: "0.75rem",
                           }}
                         >
+                          <div>
+                            <label
+                              style={{
+                                fontSize: 11,
+                                color: "#64748b",
+                                display: "block",
+                                marginBottom: 4,
+                              }}
+                            >
+                              Bank / Institution
+                            </label>
+                            <input
+                              style={inputStyle}
+                              placeholder="e.g. SBI"
+                              value={fdBank}
+                              onChange={(e) => setFdBank(e.target.value)}
+                            />
+                          </div>
+                          <div>
+                            <label
+                              style={{
+                                fontSize: 11,
+                                color: "#64748b",
+                                display: "block",
+                                marginBottom: 4,
+                              }}
+                            >
+                              Start Date
+                            </label>
+                            <input
+                              type="date"
+                              style={inputStyle}
+                              value={fdStartDate}
+                              onChange={(e) => setFdStartDate(e.target.value)}
+                            />
+                          </div>
+                          <div>
+                            <label
+                              style={{
+                                fontSize: 11,
+                                color: "#64748b",
+                                display: "block",
+                                marginBottom: 4,
+                              }}
+                            >
+                              Principal (₹)
+                            </label>
+                            <input
+                              type="number"
+                              style={inputStyle}
+                              placeholder="₹"
+                              value={fdPrincipal}
+                              onChange={(e) => setFdPrincipal(e.target.value)}
+                              min="0"
+                            />
+                          </div>
+                          <div>
+                            <label
+                              style={{
+                                fontSize: 11,
+                                color: "#64748b",
+                                display: "block",
+                                marginBottom: 4,
+                              }}
+                            >
+                              Interest Rate (%)
+                            </label>
+                            <input
+                              type="number"
+                              style={inputStyle}
+                              placeholder="% p.a."
+                              value={fdRate}
+                              onChange={(e) => setFdRate(e.target.value)}
+                              min="0"
+                              step="0.01"
+                            />
+                          </div>
+                          <div>
+                            <label
+                              style={{
+                                fontSize: 11,
+                                color: "#64748b",
+                                display: "block",
+                                marginBottom: 4,
+                              }}
+                            >
+                              Maturity Date{" "}
+                              <span style={{ color: "#475569" }}>
+                                (optional)
+                              </span>
+                            </label>
+                            <input
+                              type="date"
+                              style={inputStyle}
+                              value={fdMaturityDate}
+                              onChange={(e) =>
+                                setFdMaturityDate(e.target.value)
+                              }
+                            />
+                          </div>
+                        </div>
+
+                        {fdError && (
                           <div
                             style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "flex-start",
-                              flexWrap: "wrap",
-                              gap: 6,
+                              color: "#ef4444",
+                              fontSize: 12,
+                              marginBottom: 8,
                             }}
                           >
-                            <div>
-                              <div
-                                style={{
-                                  fontWeight: 700,
-                                  color: "#f8fafc",
-                                  fontSize: 14,
-                                }}
-                              >
-                                {h.schemeName || h.ticker}
-                              </div>
-                              <div
-                                style={{
-                                  fontSize: 12,
-                                  color: "#64748b",
-                                  marginTop: 2,
-                                }}
-                              >
-                                {formatNumber(h.quantity)} units · NAV{" "}
-                                {formatCurrency(h.currentPrice)}
-                              </div>
-                            </div>
+                            {fdError}
+                          </div>
+                        )}
+
+                        <button
+                          onClick={onSubmitFd}
+                          disabled={fdSubmitting}
+                          style={{
+                            ...buttonBaseStyle,
+                            backgroundColor: "#10b981",
+                            color: "#fff",
+                            padding: "7px 22px",
+                          }}
+                        >
+                          {fdSubmitting ? (
+                            <span className="loader-spin" />
+                          ) : (
+                            "Add FD"
+                          )}
+                        </button>
+                      </div>
+                    )}
+
+                    {/* FD Cards */}
+                    {fdHoldings.length === 0 ? (
+                      <div
+                        style={{
+                          textAlign: "center",
+                          padding: "3rem",
+                          color: "#64748b",
+                        }}
+                      >
+                        <div style={{ fontSize: 40, marginBottom: 8 }}>💰</div>
+                        No FDs yet. Click &quot;+ Add FD&quot; to get started.
+                      </div>
+                    ) : (
+                      <div style={{ display: "grid", gap: "0.75rem" }}>
+                        {fdHoldings.map((h) => (
+                          <div
+                            key={h.id}
+                            style={{
+                              backgroundColor: "#0f172a",
+                              border: "1px solid rgba(16,185,129,0.2)",
+                              borderLeft: "3px solid #10b981",
+                              borderRadius: "0.75rem",
+                              padding: "0.9rem 1rem",
+                            }}
+                          >
                             <div
                               style={{
                                 display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "flex-start",
+                                flexWrap: "wrap",
                                 gap: 6,
-                                alignItems: "center",
                               }}
                             >
-                              <div style={{ textAlign: "right" }}>
+                              <div>
                                 <div
                                   style={{
-                                    fontSize: 15,
                                     fontWeight: 700,
                                     color: "#f8fafc",
+                                    fontSize: 15,
                                   }}
                                 >
-                                  {formatCurrency(h.currentValue)}
+                                  {h.ticker}
                                 </div>
                                 <div
                                   style={{
                                     fontSize: 12,
-                                    color: pnlColor(h.pnl),
-                                    fontWeight: 600,
+                                    color: "#10b981",
+                                    marginTop: 2,
                                   }}
                                 >
-                                  {h.pnl >= 0 ? "+" : ""}
-                                  {formatCurrency(h.pnl)} (
-                                  {(h.pnlPercent ?? 0).toFixed(2)}%)
+                                  {h.fdRate ?? "—"}% p.a.
                                 </div>
                               </div>
                               <div
                                 style={{
                                   display: "flex",
-                                  flexDirection: "column",
-                                  gap: 4,
+                                  gap: 8,
+                                  alignItems: "center",
                                 }}
                               >
-                                <button
-                                  title="Edit"
-                                  onClick={() => {
-                                    setEditTarget(h);
-                                    setEditForm({
-                                      buyPrice: String(h.buyPrice),
-                                      qty: String(h.quantity),
-                                      buyDate: h.buyDate || "",
-                                    });
-                                    setEditError("");
-                                  }}
-                                  style={{
-                                    ...buttonBaseStyle,
-                                    padding: "4px 9px",
-                                    fontSize: 12,
-                                    backgroundColor: "rgba(255,255,255,0.07)",
-                                    color: "#94a3b8",
-                                    borderRadius: "0.5rem",
-                                  }}
-                                >
-                                  ✏
-                                </button>
+                                <div style={{ textAlign: "right" }}>
+                                  <div
+                                    style={{
+                                      fontSize: 15,
+                                      fontWeight: 700,
+                                      color: "#f8fafc",
+                                    }}
+                                  >
+                                    {formatCurrency(h.currentValue)}
+                                  </div>
+                                  <div
+                                    style={{
+                                      fontSize: 12,
+                                      color: "#10b981",
+                                      fontWeight: 600,
+                                    }}
+                                  >
+                                    +{formatCurrency(h.pnl)} interest
+                                  </div>
+                                </div>
                                 <button
                                   title="Delete"
                                   onClick={() => setDeleteTarget(h)}
@@ -1968,308 +2381,37 @@ export default function DashboardPage() {
                                 </button>
                               </div>
                             </div>
-                          </div>
-                          <div
-                            style={{
-                              marginTop: "0.5rem",
-                              display: "flex",
-                              gap: "1.5rem",
-                              fontSize: 12,
-                              color: "#64748b",
-                            }}
-                          >
-                            <span>
-                              Invested:{" "}
-                              <span style={{ color: "#94a3b8" }}>
-                                {formatCurrency(h.invested)}
-                              </span>
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </>
-              )}
-
-              {/* ── FD ── */}
-              {holdingsSubTab === "FD" && (
-                <>
-                  {showFdForm && (
-                    <div
-                      style={{
-                        backgroundColor: "#0f172a",
-                        border: "1px solid rgba(16,185,129,0.25)",
-                        borderRadius: "0.75rem",
-                        padding: "1rem",
-                        marginBottom: "1rem",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns:
-                            "repeat(auto-fit, minmax(130px,1fr))",
-                          gap: "0.75rem",
-                          marginBottom: "0.75rem",
-                        }}
-                      >
-                        <div>
-                          <label
-                            style={{
-                              fontSize: 11,
-                              color: "#64748b",
-                              display: "block",
-                              marginBottom: 4,
-                            }}
-                          >
-                            Bank / Institution
-                          </label>
-                          <input
-                            style={inputStyle}
-                            placeholder="e.g. SBI"
-                            value={fdBank}
-                            onChange={(e) => setFdBank(e.target.value)}
-                          />
-                        </div>
-                        <div>
-                          <label
-                            style={{
-                              fontSize: 11,
-                              color: "#64748b",
-                              display: "block",
-                              marginBottom: 4,
-                            }}
-                          >
-                            Start Date
-                          </label>
-                          <input
-                            type="date"
-                            style={inputStyle}
-                            value={fdStartDate}
-                            onChange={(e) => setFdStartDate(e.target.value)}
-                          />
-                        </div>
-                        <div>
-                          <label
-                            style={{
-                              fontSize: 11,
-                              color: "#64748b",
-                              display: "block",
-                              marginBottom: 4,
-                            }}
-                          >
-                            Principal (₹)
-                          </label>
-                          <input
-                            type="number"
-                            style={inputStyle}
-                            placeholder="₹"
-                            value={fdPrincipal}
-                            onChange={(e) => setFdPrincipal(e.target.value)}
-                            min="0"
-                          />
-                        </div>
-                        <div>
-                          <label
-                            style={{
-                              fontSize: 11,
-                              color: "#64748b",
-                              display: "block",
-                              marginBottom: 4,
-                            }}
-                          >
-                            Interest Rate (%)
-                          </label>
-                          <input
-                            type="number"
-                            style={inputStyle}
-                            placeholder="% p.a."
-                            value={fdRate}
-                            onChange={(e) => setFdRate(e.target.value)}
-                            min="0"
-                            step="0.01"
-                          />
-                        </div>
-                        <div>
-                          <label
-                            style={{
-                              fontSize: 11,
-                              color: "#64748b",
-                              display: "block",
-                              marginBottom: 4,
-                            }}
-                          >
-                            Maturity Date{" "}
-                            <span style={{ color: "#475569" }}>(optional)</span>
-                          </label>
-                          <input
-                            type="date"
-                            style={inputStyle}
-                            value={fdMaturityDate}
-                            onChange={(e) => setFdMaturityDate(e.target.value)}
-                          />
-                        </div>
-                      </div>
-
-                      {fdError && (
-                        <div
-                          style={{
-                            color: "#ef4444",
-                            fontSize: 12,
-                            marginBottom: 8,
-                          }}
-                        >
-                          {fdError}
-                        </div>
-                      )}
-
-                      <button
-                        onClick={onSubmitFd}
-                        disabled={fdSubmitting}
-                        style={{
-                          ...buttonBaseStyle,
-                          backgroundColor: "#10b981",
-                          color: "#fff",
-                          padding: "7px 22px",
-                        }}
-                      >
-                        {fdSubmitting ? (
-                          <span className="loader-spin" />
-                        ) : (
-                          "Add FD"
-                        )}
-                      </button>
-                    </div>
-                  )}
-
-                  {/* FD Cards */}
-                  {fdHoldings.length === 0 ? (
-                    <div
-                      style={{
-                        textAlign: "center",
-                        padding: "3rem",
-                        color: "#64748b",
-                      }}
-                    >
-                      <div style={{ fontSize: 40, marginBottom: 8 }}>💰</div>
-                      No FDs yet. Click &quot;+ Add FD&quot; to get started.
-                    </div>
-                  ) : (
-                    <div style={{ display: "grid", gap: "0.75rem" }}>
-                      {fdHoldings.map((h) => (
-                        <div
-                          key={h.id}
-                          style={{
-                            backgroundColor: "#0f172a",
-                            border: "1px solid rgba(16,185,129,0.2)",
-                            borderLeft: "3px solid #10b981",
-                            borderRadius: "0.75rem",
-                            padding: "0.9rem 1rem",
-                          }}
-                        >
-                          <div
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "flex-start",
-                              flexWrap: "wrap",
-                              gap: 6,
-                            }}
-                          >
-                            <div>
-                              <div
-                                style={{
-                                  fontWeight: 700,
-                                  color: "#f8fafc",
-                                  fontSize: 15,
-                                }}
-                              >
-                                {h.ticker}
-                              </div>
-                              <div
-                                style={{
-                                  fontSize: 12,
-                                  color: "#10b981",
-                                  marginTop: 2,
-                                }}
-                              >
-                                {h.fdRate ?? "—"}% p.a.
-                              </div>
-                            </div>
                             <div
                               style={{
+                                marginTop: "0.5rem",
                                 display: "flex",
-                                gap: 8,
-                                alignItems: "center",
+                                gap: "1.5rem",
+                                fontSize: 12,
+                                color: "#64748b",
                               }}
                             >
-                              <div style={{ textAlign: "right" }}>
-                                <div
-                                  style={{
-                                    fontSize: 15,
-                                    fontWeight: 700,
-                                    color: "#f8fafc",
-                                  }}
-                                >
-                                  {formatCurrency(h.currentValue)}
-                                </div>
-                                <div
-                                  style={{
-                                    fontSize: 12,
-                                    color: "#10b981",
-                                    fontWeight: 600,
-                                  }}
-                                >
-                                  +{formatCurrency(h.pnl)} interest
-                                </div>
-                              </div>
-                              <button
-                                title="Delete"
-                                onClick={() => setDeleteTarget(h)}
-                                style={{
-                                  ...buttonBaseStyle,
-                                  padding: "4px 9px",
-                                  fontSize: 12,
-                                  backgroundColor: "rgba(239,68,68,0.12)",
-                                  color: "#ef4444",
-                                  borderRadius: "0.5rem",
-                                }}
-                              >
-                                🗑
-                              </button>
-                            </div>
-                          </div>
-                          <div
-                            style={{
-                              marginTop: "0.5rem",
-                              display: "flex",
-                              gap: "1.5rem",
-                              fontSize: 12,
-                              color: "#64748b",
-                            }}
-                          >
-                            <span>
-                              Principal:{" "}
-                              <span style={{ color: "#94a3b8" }}>
-                                {formatCurrency(h.buyPrice)}
-                              </span>
-                            </span>
-                            {h.buyDate && (
                               <span>
-                                From:{" "}
+                                Principal:{" "}
                                 <span style={{ color: "#94a3b8" }}>
-                                  {h.buyDate}
+                                  {formatCurrency(h.buyPrice)}
                                 </span>
                               </span>
-                            )}
+                              {h.buyDate && (
+                                <span>
+                                  From:{" "}
+                                  <span style={{ color: "#94a3b8" }}>
+                                    {h.buyDate}
+                                  </span>
+                                </span>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </>
-              )}
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
             </>
           )}
 
@@ -2284,7 +2426,7 @@ export default function DashboardPage() {
                   alignItems: "center",
                 }}
               >
-                {["Stocks", "Mutual Funds"].map((sub) => (
+                {WATCHLIST_TABS.map((sub) => (
                   <button
                     key={sub}
                     type="button"
@@ -2311,565 +2453,183 @@ export default function DashboardPage() {
                 ))}
               </div>
 
-              {watchlistSubTab === "Stocks" && (
-                <>
-                  {showWatchlistInput && (
-                    <div style={{ marginBottom: "1rem", position: "relative" }}>
-                      <div style={{ display: "flex", gap: 6 }}>
-                        <div style={{ flex: 1, position: "relative" }}>
-                          <input
-                            style={inputStyle}
-                            placeholder="Search NSE ticker…"
-                            value={watchInputTicker}
-                            onChange={(e) => {
-                              setWatchInputTicker(e.target.value);
-                              setShowWatchTickerDrop(true);
-                            }}
-                            onFocus={() => setShowWatchTickerDrop(true)}
-                            onBlur={() =>
-                              setTimeout(
-                                () => setShowWatchTickerDrop(false),
-                                150,
-                              )
-                            }
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                handleWatchlistAdd();
+              <div ref={watchlistSwipeRef} style={{ touchAction: "pan-y" }}>
+                {watchlistSubTab === "Stocks" && (
+                  <>
+                    {showWatchlistInput && (
+                      <div
+                        style={{ marginBottom: "1rem", position: "relative" }}
+                      >
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <div style={{ flex: 1, position: "relative" }}>
+                            <input
+                              style={inputStyle}
+                              placeholder="Search NSE ticker…"
+                              value={watchInputTicker}
+                              onChange={(e) => {
+                                setWatchInputTicker(e.target.value);
+                                setShowWatchTickerDrop(true);
+                              }}
+                              onFocus={() => setShowWatchTickerDrop(true)}
+                              onBlur={() =>
+                                setTimeout(
+                                  () => setShowWatchTickerDrop(false),
+                                  150,
+                                )
                               }
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  handleWatchlistAdd();
+                                }
+                              }}
+                              autoFocus
+                            />
+                            {showWatchTickerDrop &&
+                              watchTickerSuggestions.length > 0 && (
+                                <div
+                                  style={{
+                                    position: "absolute",
+                                    top: "100%",
+                                    left: 0,
+                                    right: 0,
+                                    zIndex: 50,
+                                    backgroundColor: "#1e293b",
+                                    border: "1px solid rgba(255,255,255,0.1)",
+                                    borderRadius: "0.5rem",
+                                    marginTop: 2,
+                                    overflow: "hidden",
+                                  }}
+                                >
+                                  {watchTickerSuggestions.map((t) => (
+                                    <div
+                                      key={t.symbol}
+                                      onMouseDown={() => {
+                                        setWatchInputTicker(t.symbol);
+                                        setShowWatchTickerDrop(false);
+                                      }}
+                                      style={{
+                                        padding: "0.5rem 0.75rem",
+                                        cursor: "pointer",
+                                        fontSize: 13,
+                                        borderBottom:
+                                          "1px solid rgba(255,255,255,0.05)",
+                                      }}
+                                      onMouseEnter={(e) => {
+                                        e.currentTarget.style.backgroundColor =
+                                          "rgba(255,255,255,0.06)";
+                                      }}
+                                      onMouseLeave={(e) => {
+                                        e.currentTarget.style.backgroundColor =
+                                          "transparent";
+                                      }}
+                                    >
+                                      <span
+                                        style={{
+                                          color: "#f97316",
+                                          fontWeight: 600,
+                                        }}
+                                      >
+                                        {t.symbol}
+                                      </span>
+                                      <span
+                                        style={{
+                                          color: "#64748b",
+                                          marginLeft: 8,
+                                          fontSize: 11,
+                                        }}
+                                      >
+                                        {t.full}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                          </div>
+                          <button
+                            onClick={handleWatchlistAdd}
+                            disabled={watchInputLoading}
+                            style={{
+                              ...buttonBaseStyle,
+                              backgroundColor: "#f97316",
+                              color: "#fff",
+                              borderRadius: "0.75rem",
+                              padding: "6px 16px",
                             }}
-                            autoFocus
-                          />
-                          {showWatchTickerDrop &&
-                            watchTickerSuggestions.length > 0 && (
-                              <div
-                                style={{
-                                  position: "absolute",
-                                  top: "100%",
-                                  left: 0,
-                                  right: 0,
-                                  zIndex: 50,
-                                  backgroundColor: "#1e293b",
-                                  border: "1px solid rgba(255,255,255,0.1)",
-                                  borderRadius: "0.5rem",
-                                  marginTop: 2,
-                                  overflow: "hidden",
-                                }}
-                              >
-                                {watchTickerSuggestions.map((t) => (
-                                  <div
-                                    key={t.symbol}
-                                    onMouseDown={() => {
-                                      setWatchInputTicker(t.symbol);
-                                      setShowWatchTickerDrop(false);
-                                    }}
-                                    style={{
-                                      padding: "0.5rem 0.75rem",
-                                      cursor: "pointer",
-                                      fontSize: 13,
-                                      borderBottom:
-                                        "1px solid rgba(255,255,255,0.05)",
-                                    }}
-                                    onMouseEnter={(e) => {
-                                      e.currentTarget.style.backgroundColor =
-                                        "rgba(255,255,255,0.06)";
-                                    }}
-                                    onMouseLeave={(e) => {
-                                      e.currentTarget.style.backgroundColor =
-                                        "transparent";
-                                    }}
-                                  >
-                                    <span
-                                      style={{
-                                        color: "#f97316",
-                                        fontWeight: 600,
-                                      }}
-                                    >
-                                      {t.symbol}
-                                    </span>
-                                    <span
-                                      style={{
-                                        color: "#64748b",
-                                        marginLeft: 8,
-                                        fontSize: 11,
-                                      }}
-                                    >
-                                      {t.full}
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
+                          >
+                            {watchInputLoading ? (
+                              <span className="loader-spin" />
+                            ) : (
+                              "Add"
                             )}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setShowWatchlistInput(false);
+                              setWatchInputTicker("");
+                              setWatchInputError("");
+                            }}
+                            style={{
+                              ...buttonBaseStyle,
+                              backgroundColor: "rgba(255,255,255,0.07)",
+                              color: "#94a3b8",
+                              borderRadius: "0.75rem",
+                            }}
+                          >
+                            Cancel
+                          </button>
                         </div>
-                        <button
-                          onClick={handleWatchlistAdd}
-                          disabled={watchInputLoading}
-                          style={{
-                            ...buttonBaseStyle,
-                            backgroundColor: "#f97316",
-                            color: "#fff",
-                            borderRadius: "0.75rem",
-                            padding: "6px 16px",
-                          }}
-                        >
-                          {watchInputLoading ? (
-                            <span className="loader-spin" />
-                          ) : (
-                            "Add"
-                          )}
-                        </button>
-                        <button
-                          onClick={() => {
-                            setShowWatchlistInput(false);
-                            setWatchInputTicker("");
-                            setWatchInputError("");
-                          }}
-                          style={{
-                            ...buttonBaseStyle,
-                            backgroundColor: "rgba(255,255,255,0.07)",
-                            color: "#94a3b8",
-                            borderRadius: "0.75rem",
-                          }}
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                      {watchInputError && (
-                        <div
-                          style={{
-                            color: "#ef4444",
-                            fontSize: 12,
-                            marginTop: 4,
-                          }}
-                        >
-                          {watchInputError}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {watchlistLoading ? (
-                    <div style={{ display: "grid", gap: "0.5rem" }}>
-                      {[1, 2, 3].map((i) => (
-                        <div
-                          key={i}
-                          className="animate-pulse"
-                          style={{
-                            height: 56,
-                            borderRadius: "0.75rem",
-                            backgroundColor: "rgba(255,255,255,0.05)",
-                          }}
-                        />
-                      ))}
-                    </div>
-                  ) : watchlistError ? (
-                    <div style={{ color: "#ef4444", fontSize: 13 }}>
-                      {watchlistError}
-                    </div>
-                  ) : watchlist.length === 0 ? (
-                    <div
-                      style={{
-                        textAlign: "center",
-                        padding: "3rem",
-                        color: "#64748b",
-                      }}
-                    >
-                      No watchlist items yet. Click &quot;+ Add&quot; to track a
-                      stock.
-                    </div>
-                  ) : (
-                    <div style={{ display: "grid", gap: "0.5rem" }}>
-                      {watchlist.map((item) => (
-                        <div
-                          key={item.ticker}
-                          onClick={() => {
-                            setSelectedTicker(item.ticker);
-                            setDrawerOpen(true);
-                          }}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            padding: "0.7rem 0.85rem",
-                            borderRadius: "0.75rem",
-                            border: "1px solid rgba(255,255,255,0.07)",
-                            backgroundColor: "rgba(15,23,42,0.5)",
-                            cursor: "pointer",
-                            gap: "0.5rem",
-                            marginBottom: "6px",
-                          }}
-                          onMouseEnter={(e) =>
-                            (e.currentTarget.style.borderColor =
-                              "rgba(249,115,22,0.35)")
-                          }
-                          onMouseLeave={(e) =>
-                            (e.currentTarget.style.borderColor =
-                              "rgba(255,255,255,0.07)")
-                          }
-                        >
-                          <div style={{ minWidth: "5rem" }}>
-                            <p
-                              style={{
-                                margin: 0,
-                                color: "#f8fafc",
-                                fontWeight: 700,
-                                fontSize: "0.9rem",
-                              }}
-                            >
-                              {item.ticker.replace(/\.NS$/i, "")}
-                            </p>
-                          </div>
-                          <div style={{ flex: 1, textAlign: "center" }}>
-                            <p
-                              style={{
-                                margin: 0,
-                                color: "#f8fafc",
-                                fontSize: "0.95rem",
-                                fontWeight: 600,
-                                fontFamily: "'Barlow Condensed', sans-serif",
-                              }}
-                            >
-                              {item.currentPrice
-                                ? formatCurrency(item.currentPrice)
-                                : "—"}
-                            </p>
-                            {item.changePct != null && (
-                              <p
-                                style={{
-                                  margin: 0,
-                                  fontSize: "0.75rem",
-                                  color:
-                                    Number(item.changePct) >= 0
-                                      ? "#22c55e"
-                                      : "#ef4444",
-                                }}
-                              >
-                                {Number(item.changePct) >= 0 ? "▲" : "▼"}{" "}
-                                {Math.abs(Number(item.changePct)).toFixed(2)}%
-                              </p>
-                            )}
-                          </div>
+                        {watchInputError && (
                           <div
                             style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "0.5rem",
+                              color: "#ef4444",
+                              fontSize: 12,
+                              marginTop: 4,
                             }}
                           >
-                            <span
-                              style={{
-                                fontSize: "0.7rem",
-                                fontWeight: 700,
-                                padding: "3px 8px",
-                                borderRadius: "20px",
-                                background:
-                                  item.sentimentBadge === "Bullish"
-                                    ? "rgba(34,197,94,0.15)"
-                                    : item.sentimentBadge === "Bearish"
-                                      ? "rgba(239,68,68,0.15)"
-                                      : "rgba(100,116,139,0.2)",
-                                color:
-                                  item.sentimentBadge === "Bullish"
-                                    ? "#22c55e"
-                                    : item.sentimentBadge === "Bearish"
-                                      ? "#ef4444"
-                                      : "#94a3b8",
-                                whiteSpace: "nowrap",
-                              }}
-                            >
-                              {item.sentimentBadge || "Neutral"}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleWatchlistRemove(item.ticker);
-                              }}
-                              style={{
-                                background: "transparent",
-                                border: "none",
-                                cursor: "pointer",
-                                color: "#475569",
-                                fontSize: "0.9rem",
-                                padding: "2px 4px",
-                                lineHeight: 1,
-                              }}
-                              onMouseEnter={(e) =>
-                                (e.currentTarget.style.color = "#ef4444")
-                              }
-                              onMouseLeave={(e) =>
-                                (e.currentTarget.style.color = "#475569")
-                              }
-                            >
-                              🗑
-                            </button>
+                            {watchInputError}
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </>
-              )}
-
-              {watchlistSubTab === "Mutual Funds" && (
-                <>
-                  <div style={{ marginBottom: "0.85rem" }}>
-                    <div style={{ position: "relative" }}>
-                      <input
-                        type="text"
-                        placeholder="Search fund e.g. Mirae Asset, Axis..."
-                        value={watchMfQuery}
-                        onChange={(e) => {
-                          setWatchMfQuery(e.target.value);
-                          searchWatchMf(e.target.value);
-                        }}
-                        style={{ ...inputStyle, fontSize: "0.9rem" }}
-                      />
-                      {watchMfSearching && (
-                        <p
-                          style={{
-                            margin: "4px 0 0",
-                            color: "#94a3b8",
-                            fontSize: "0.72rem",
-                          }}
-                        >
-                          Searching...
-                        </p>
-                      )}
-                      {watchMfResults.length > 0 && !watchMfSelected && (
-                        <div
-                          style={{
-                            position: "absolute",
-                            top: "calc(100% + 4px)",
-                            left: 0,
-                            right: 0,
-                            backgroundColor: "#0f172a",
-                            border: "1px solid rgba(255,255,255,0.15)",
-                            borderRadius: "0.75rem",
-                            overflow: "hidden",
-                            zIndex: 200,
-                            boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
-                            maxHeight: "180px",
-                            overflowY: "auto",
-                          }}
-                        >
-                          {watchMfResults.map((mf) => (
-                            <div
-                              key={mf.schemeCode}
-                              onMouseDown={() => {
-                                setWatchMfSelected(mf);
-                                setWatchMfQuery(mf.schemeName);
-                                setWatchMfResults([]);
-                              }}
-                              style={{
-                                padding: "0.65rem 1rem",
-                                cursor: "pointer",
-                                borderBottom:
-                                  "1px solid rgba(255,255,255,0.06)",
-                              }}
-                              onMouseEnter={(e) =>
-                                (e.currentTarget.style.backgroundColor =
-                                  "rgba(139,92,246,0.1)")
-                              }
-                              onMouseLeave={(e) =>
-                                (e.currentTarget.style.backgroundColor =
-                                  "transparent")
-                              }
-                            >
-                              <p
-                                style={{
-                                  margin: 0,
-                                  color: "#a78bfa",
-                                  fontWeight: 700,
-                                  fontSize: "0.78rem",
-                                }}
-                              >
-                                {mf.schemeCode}
-                              </p>
-                              <p
-                                style={{
-                                  margin: "2px 0 0",
-                                  color: "#94a3b8",
-                                  fontSize: "0.75rem",
-                                }}
-                              >
-                                {mf.schemeName}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    {watchMfSelected && (
-                      <div
-                        style={{
-                          marginTop: "6px",
-                          padding: "8px 12px",
-                          borderRadius: "8px",
-                          background: "rgba(139,92,246,0.08)",
-                          border: "1px solid rgba(139,92,246,0.25)",
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                        }}
-                      >
-                        <div>
-                          <p
-                            style={{
-                              margin: 0,
-                              color: "#a78bfa",
-                              fontSize: "0.72rem",
-                              fontWeight: 700,
-                            }}
-                          >
-                            {watchMfSelected.schemeCode}
-                          </p>
-                          <p
-                            style={{
-                              margin: 0,
-                              color: "#cbd5e1",
-                              fontSize: "0.72rem",
-                            }}
-                          >
-                            {watchMfSelected.schemeName}
-                          </p>
-                        </div>
-                        <div style={{ display: "flex", gap: "6px" }}>
-                          <button
-                            type="button"
-                            onClick={handleAddMfWatchlist}
-                            disabled={watchMfAdding}
-                            style={{
-                              background: "#8b5cf6",
-                              color: "white",
-                              border: "none",
-                              borderRadius: "20px",
-                              padding: "5px 14px",
-                              fontSize: "12px",
-                              fontWeight: 600,
-                              cursor: "pointer",
-                              opacity: watchMfAdding ? 0.7 : 1,
-                              fontFamily: "inherit",
-                            }}
-                          >
-                            {watchMfAdding ? "Adding..." : "Add"}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setWatchMfSelected(null);
-                              setWatchMfQuery("");
-                            }}
-                            style={{
-                              background: "transparent",
-                              border: "none",
-                              color: "#64748b",
-                              cursor: "pointer",
-                              fontSize: "1rem",
-                            }}
-                          >
-                            ✕
-                          </button>
-                        </div>
+                        )}
                       </div>
                     )}
-                    {watchMfError && (
-                      <p
-                        style={{
-                          margin: "4px 0 0",
-                          color: "#ef4444",
-                          fontSize: "0.75rem",
-                        }}
-                      >
-                        {watchMfError}
-                      </p>
-                    )}
-                  </div>
 
-                  {watchlistLoading ? (
-                    <div style={{ display: "grid", gap: "0.6rem" }}>
-                      {[1, 2].map((i) => (
-                        <div
-                          key={i}
-                          className="animate-pulse"
-                          style={{
-                            height: "3rem",
-                            borderRadius: "0.75rem",
-                            backgroundColor: "rgba(51,65,85,0.35)",
-                          }}
-                        />
-                      ))}
-                    </div>
-                  ) : watchlist.filter((item) => {
-                      const code = item.ticker;
-                      return !code.endsWith(".NS") && !code.endsWith(".BO");
-                    }).length === 0 ? (
-                    <div
-                      style={{ textAlign: "center", padding: "1.5rem 1rem" }}
-                    >
-                      <p style={{ margin: 0, fontSize: "1.5rem" }}>🏦</p>
-                      <p
+                    {watchlistLoading ? (
+                      <div style={{ display: "grid", gap: "0.5rem" }}>
+                        {[1, 2, 3].map((i) => (
+                          <div
+                            key={i}
+                            className="animate-pulse"
+                            style={{
+                              height: 56,
+                              borderRadius: "0.75rem",
+                              backgroundColor: "rgba(255,255,255,0.05)",
+                            }}
+                          />
+                        ))}
+                      </div>
+                    ) : watchlistError ? (
+                      <div style={{ color: "#ef4444", fontSize: 13 }}>
+                        {watchlistError}
+                      </div>
+                    ) : watchlist.length === 0 ? (
+                      <div
                         style={{
-                          margin: "0.5rem 0 0",
-                          color: "#94a3b8",
-                          fontSize: "0.9rem",
+                          textAlign: "center",
+                          padding: "3rem",
+                          color: "#64748b",
                         }}
                       >
-                        No funds in watchlist
-                      </p>
-                      <p
-                        style={{
-                          margin: "0.3rem 0 0",
-                          color: "#475569",
-                          fontSize: "0.8rem",
-                        }}
-                      >
-                        Search and add mutual funds above
-                      </p>
-                    </div>
-                  ) : (
-                    <div style={{ display: "grid", gap: "0.5rem" }}>
-                      {watchlist
-                        .filter(
-                          (item) =>
-                            !item.ticker.endsWith(".NS") &&
-                            !item.ticker.endsWith(".BO"),
-                        )
-                        .map((item) => (
+                        No watchlist items yet. Click &quot;+ Add&quot; to track
+                        a stock.
+                      </div>
+                    ) : (
+                      <div style={{ display: "grid", gap: "0.5rem" }}>
+                        {watchlist.map((item) => (
                           <div
                             key={item.ticker}
                             onClick={() => {
-                              setMfDrawerOpen(true);
-                              setMfDrawerLoading(true);
-                              setMfDrawerData(null);
-                              api
-                                .get(`/api/holdings/mf-nav/${item.ticker}`)
-                                .then((res) =>
-                                  setMfDrawerData({
-                                    ...res.data,
-                                    holding: {
-                                      ticker: item.ticker,
-                                      schemeName:
-                                        res.data.schemeName || item.ticker,
-                                      invested: null,
-                                      currentValue: null,
-                                      pnl: null,
-                                      pnlPercent: null,
-                                      quantity: null,
-                                      currentPrice: res.data.currentNav,
-                                      buyPrice: null,
-                                      buyDate: null,
-                                    },
-                                  }),
-                                )
-                                .catch(() =>
-                                  setMfDrawerData({
-                                    error: true,
-                                    holding: { ticker: item.ticker },
-                                  }),
-                                )
-                                .finally(() => setMfDrawerLoading(false));
+                              setSelectedTicker(item.ticker);
+                              setDrawerOpen(true);
                             }}
                             style={{
                               display: "flex",
@@ -2877,82 +2637,468 @@ export default function DashboardPage() {
                               justifyContent: "space-between",
                               padding: "0.7rem 0.85rem",
                               borderRadius: "0.75rem",
-                              border: "1px solid rgba(139,92,246,0.15)",
+                              border: "1px solid rgba(255,255,255,0.07)",
                               backgroundColor: "rgba(15,23,42,0.5)",
                               cursor: "pointer",
                               gap: "0.5rem",
+                              marginBottom: "6px",
                             }}
                             onMouseEnter={(e) =>
                               (e.currentTarget.style.borderColor =
-                                "rgba(139,92,246,0.4)")
+                                "rgba(249,115,22,0.35)")
                             }
                             onMouseLeave={(e) =>
                               (e.currentTarget.style.borderColor =
-                                "rgba(139,92,246,0.15)")
+                                "rgba(255,255,255,0.07)")
                             }
                           >
-                            <div style={{ flex: 1 }}>
-                              <div
+                            <div style={{ minWidth: "5rem" }}>
+                              <p
                                 style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: "6px",
+                                  margin: 0,
+                                  color: "#f8fafc",
+                                  fontWeight: 700,
+                                  fontSize: "0.9rem",
                                 }}
                               >
-                                <span
-                                  style={{
-                                    fontSize: "9px",
-                                    fontWeight: 700,
-                                    background: "rgba(139,92,246,0.2)",
-                                    color: "#a78bfa",
-                                    borderRadius: "10px",
-                                    padding: "1px 6px",
-                                  }}
-                                >
-                                  MF
-                                </span>
+                                {item.ticker.replace(/\.NS$/i, "")}
+                              </p>
+                            </div>
+                            <div style={{ flex: 1, textAlign: "center" }}>
+                              <p
+                                style={{
+                                  margin: 0,
+                                  color: "#f8fafc",
+                                  fontSize: "0.95rem",
+                                  fontWeight: 600,
+                                  fontFamily: "'Barlow Condensed', sans-serif",
+                                }}
+                              >
+                                {item.currentPrice
+                                  ? formatCurrency(item.currentPrice)
+                                  : "—"}
+                              </p>
+                              {item.changePct != null && (
                                 <p
                                   style={{
                                     margin: 0,
-                                    color: "#f8fafc",
-                                    fontWeight: 700,
-                                    fontSize: "0.85rem",
+                                    fontSize: "0.75rem",
+                                    color:
+                                      Number(item.changePct) >= 0
+                                        ? "#22c55e"
+                                        : "#ef4444",
                                   }}
                                 >
-                                  {mfNameCache[item.ticker] || item.ticker}
+                                  {Number(item.changePct) >= 0 ? "▲" : "▼"}{" "}
+                                  {Math.abs(Number(item.changePct)).toFixed(2)}%
+                                </p>
+                              )}
+                            </div>
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.5rem",
+                              }}
+                            >
+                              <span
+                                style={{
+                                  fontSize: "0.7rem",
+                                  fontWeight: 700,
+                                  padding: "3px 8px",
+                                  borderRadius: "20px",
+                                  background:
+                                    item.sentimentBadge === "Bullish"
+                                      ? "rgba(34,197,94,0.15)"
+                                      : item.sentimentBadge === "Bearish"
+                                        ? "rgba(239,68,68,0.15)"
+                                        : "rgba(100,116,139,0.2)",
+                                  color:
+                                    item.sentimentBadge === "Bullish"
+                                      ? "#22c55e"
+                                      : item.sentimentBadge === "Bearish"
+                                        ? "#ef4444"
+                                        : "#94a3b8",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                {item.sentimentBadge || "Neutral"}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleWatchlistRemove(item.ticker);
+                                }}
+                                style={{
+                                  background: "transparent",
+                                  border: "none",
+                                  cursor: "pointer",
+                                  color: "#475569",
+                                  fontSize: "0.9rem",
+                                  padding: "2px 4px",
+                                  lineHeight: 1,
+                                }}
+                                onMouseEnter={(e) =>
+                                  (e.currentTarget.style.color = "#ef4444")
+                                }
+                                onMouseLeave={(e) =>
+                                  (e.currentTarget.style.color = "#475569")
+                                }
+                              >
+                                🗑
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {watchlistSubTab === "Mutual Funds" && (
+                  <>
+                    <div style={{ marginBottom: "0.85rem" }}>
+                      <div style={{ position: "relative" }}>
+                        <input
+                          type="text"
+                          placeholder="Search fund e.g. Mirae Asset, Axis..."
+                          value={watchMfQuery}
+                          onChange={(e) => {
+                            setWatchMfQuery(e.target.value);
+                            searchWatchMf(e.target.value);
+                          }}
+                          style={{ ...inputStyle, fontSize: "0.9rem" }}
+                        />
+                        {watchMfSearching && (
+                          <p
+                            style={{
+                              margin: "4px 0 0",
+                              color: "#94a3b8",
+                              fontSize: "0.72rem",
+                            }}
+                          >
+                            Searching...
+                          </p>
+                        )}
+                        {watchMfResults.length > 0 && !watchMfSelected && (
+                          <div
+                            style={{
+                              position: "absolute",
+                              top: "calc(100% + 4px)",
+                              left: 0,
+                              right: 0,
+                              backgroundColor: "#0f172a",
+                              border: "1px solid rgba(255,255,255,0.15)",
+                              borderRadius: "0.75rem",
+                              overflow: "hidden",
+                              zIndex: 200,
+                              boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+                              maxHeight: "180px",
+                              overflowY: "auto",
+                            }}
+                          >
+                            {watchMfResults.map((mf) => (
+                              <div
+                                key={mf.schemeCode}
+                                onMouseDown={() => {
+                                  setWatchMfSelected(mf);
+                                  setWatchMfQuery(mf.schemeName);
+                                  setWatchMfResults([]);
+                                }}
+                                style={{
+                                  padding: "0.65rem 1rem",
+                                  cursor: "pointer",
+                                  borderBottom:
+                                    "1px solid rgba(255,255,255,0.06)",
+                                }}
+                                onMouseEnter={(e) =>
+                                  (e.currentTarget.style.backgroundColor =
+                                    "rgba(139,92,246,0.1)")
+                                }
+                                onMouseLeave={(e) =>
+                                  (e.currentTarget.style.backgroundColor =
+                                    "transparent")
+                                }
+                              >
+                                <p
+                                  style={{
+                                    margin: 0,
+                                    color: "#a78bfa",
+                                    fontWeight: 700,
+                                    fontSize: "0.78rem",
+                                  }}
+                                >
+                                  {mf.schemeCode}
+                                </p>
+                                <p
+                                  style={{
+                                    margin: "2px 0 0",
+                                    color: "#94a3b8",
+                                    fontSize: "0.75rem",
+                                  }}
+                                >
+                                  {mf.schemeName}
                                 </p>
                               </div>
-                            </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {watchMfSelected && (
+                        <div
+                          style={{
+                            marginTop: "6px",
+                            padding: "8px 12px",
+                            borderRadius: "8px",
+                            background: "rgba(139,92,246,0.08)",
+                            border: "1px solid rgba(139,92,246,0.25)",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                          }}
+                        >
+                          <div>
+                            <p
+                              style={{
+                                margin: 0,
+                                color: "#a78bfa",
+                                fontSize: "0.72rem",
+                                fontWeight: 700,
+                              }}
+                            >
+                              {watchMfSelected.schemeCode}
+                            </p>
+                            <p
+                              style={{
+                                margin: 0,
+                                color: "#cbd5e1",
+                                fontSize: "0.72rem",
+                              }}
+                            >
+                              {watchMfSelected.schemeName}
+                            </p>
+                          </div>
+                          <div style={{ display: "flex", gap: "6px" }}>
                             <button
                               type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleWatchlistRemove(item.ticker);
+                              onClick={handleAddMfWatchlist}
+                              disabled={watchMfAdding}
+                              style={{
+                                background: "#8b5cf6",
+                                color: "white",
+                                border: "none",
+                                borderRadius: "20px",
+                                padding: "5px 14px",
+                                fontSize: "12px",
+                                fontWeight: 600,
+                                cursor: "pointer",
+                                opacity: watchMfAdding ? 0.7 : 1,
+                                fontFamily: "inherit",
+                              }}
+                            >
+                              {watchMfAdding ? "Adding..." : "Add"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setWatchMfSelected(null);
+                                setWatchMfQuery("");
                               }}
                               style={{
                                 background: "transparent",
                                 border: "none",
+                                color: "#64748b",
                                 cursor: "pointer",
-                                color: "#475569",
-                                fontSize: "0.9rem",
-                                padding: "2px 4px",
-                                lineHeight: 1,
+                                fontSize: "1rem",
                               }}
-                              onMouseEnter={(e) =>
-                                (e.currentTarget.style.color = "#ef4444")
-                              }
-                              onMouseLeave={(e) =>
-                                (e.currentTarget.style.color = "#475569")
-                              }
                             >
-                              🗑
+                              ✕
                             </button>
                           </div>
-                        ))}
+                        </div>
+                      )}
+                      {watchMfError && (
+                        <p
+                          style={{
+                            margin: "4px 0 0",
+                            color: "#ef4444",
+                            fontSize: "0.75rem",
+                          }}
+                        >
+                          {watchMfError}
+                        </p>
+                      )}
                     </div>
-                  )}
-                </>
-              )}
+
+                    {watchlistLoading ? (
+                      <div style={{ display: "grid", gap: "0.6rem" }}>
+                        {[1, 2].map((i) => (
+                          <div
+                            key={i}
+                            className="animate-pulse"
+                            style={{
+                              height: "3rem",
+                              borderRadius: "0.75rem",
+                              backgroundColor: "rgba(51,65,85,0.35)",
+                            }}
+                          />
+                        ))}
+                      </div>
+                    ) : watchlist.filter((item) => {
+                        const code = item.ticker;
+                        return !code.endsWith(".NS") && !code.endsWith(".BO");
+                      }).length === 0 ? (
+                      <div
+                        style={{ textAlign: "center", padding: "1.5rem 1rem" }}
+                      >
+                        <p style={{ margin: 0, fontSize: "1.5rem" }}>🏦</p>
+                        <p
+                          style={{
+                            margin: "0.5rem 0 0",
+                            color: "#94a3b8",
+                            fontSize: "0.9rem",
+                          }}
+                        >
+                          No funds in watchlist
+                        </p>
+                        <p
+                          style={{
+                            margin: "0.3rem 0 0",
+                            color: "#475569",
+                            fontSize: "0.8rem",
+                          }}
+                        >
+                          Search and add mutual funds above
+                        </p>
+                      </div>
+                    ) : (
+                      <div style={{ display: "grid", gap: "0.5rem" }}>
+                        {watchlist
+                          .filter(
+                            (item) =>
+                              !item.ticker.endsWith(".NS") &&
+                              !item.ticker.endsWith(".BO"),
+                          )
+                          .map((item) => (
+                            <div
+                              key={item.ticker}
+                              onClick={() => {
+                                setMfDrawerOpen(true);
+                                setMfDrawerLoading(true);
+                                setMfDrawerData(null);
+                                api
+                                  .get(`/api/holdings/mf-nav/${item.ticker}`)
+                                  .then((res) =>
+                                    setMfDrawerData({
+                                      ...res.data,
+                                      holding: {
+                                        ticker: item.ticker,
+                                        schemeName:
+                                          res.data.schemeName || item.ticker,
+                                        invested: null,
+                                        currentValue: null,
+                                        pnl: null,
+                                        pnlPercent: null,
+                                        quantity: null,
+                                        currentPrice: res.data.currentNav,
+                                        buyPrice: null,
+                                        buyDate: null,
+                                      },
+                                    }),
+                                  )
+                                  .catch(() =>
+                                    setMfDrawerData({
+                                      error: true,
+                                      holding: { ticker: item.ticker },
+                                    }),
+                                  )
+                                  .finally(() => setMfDrawerLoading(false));
+                              }}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                padding: "0.7rem 0.85rem",
+                                borderRadius: "0.75rem",
+                                border: "1px solid rgba(139,92,246,0.15)",
+                                backgroundColor: "rgba(15,23,42,0.5)",
+                                cursor: "pointer",
+                                gap: "0.5rem",
+                              }}
+                              onMouseEnter={(e) =>
+                                (e.currentTarget.style.borderColor =
+                                  "rgba(139,92,246,0.4)")
+                              }
+                              onMouseLeave={(e) =>
+                                (e.currentTarget.style.borderColor =
+                                  "rgba(139,92,246,0.15)")
+                              }
+                            >
+                              <div style={{ flex: 1 }}>
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "6px",
+                                  }}
+                                >
+                                  <span
+                                    style={{
+                                      fontSize: "9px",
+                                      fontWeight: 700,
+                                      background: "rgba(139,92,246,0.2)",
+                                      color: "#a78bfa",
+                                      borderRadius: "10px",
+                                      padding: "1px 6px",
+                                    }}
+                                  >
+                                    MF
+                                  </span>
+                                  <p
+                                    style={{
+                                      margin: 0,
+                                      color: "#f8fafc",
+                                      fontWeight: 700,
+                                      fontSize: "0.85rem",
+                                    }}
+                                  >
+                                    {mfNameCache[item.ticker] || item.ticker}
+                                  </p>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleWatchlistRemove(item.ticker);
+                                }}
+                                style={{
+                                  background: "transparent",
+                                  border: "none",
+                                  cursor: "pointer",
+                                  color: "#475569",
+                                  fontSize: "0.9rem",
+                                  padding: "2px 4px",
+                                  lineHeight: 1,
+                                }}
+                                onMouseEnter={(e) =>
+                                  (e.currentTarget.style.color = "#ef4444")
+                                }
+                                onMouseLeave={(e) =>
+                                  (e.currentTarget.style.color = "#475569")
+                                }
+                              >
+                                🗑
+                              </button>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
             </>
           )}
 
@@ -3098,14 +3244,16 @@ export default function DashboardPage() {
                           {article.source || "News"}
                         </span>
                         <span style={{ color: "#475569", fontSize: "0.72rem" }}>
-                          {(article.pubDate || article.publishedAt)
+                          {article.pubDate || article.publishedAt
                             ? (() => {
                                 try {
                                   const d = new Date(
                                     article.pubDate || article.publishedAt,
                                   );
                                   if (isNaN(d.getTime())) {
-                                    return article.pubDate || article.publishedAt;
+                                    return (
+                                      article.pubDate || article.publishedAt
+                                    );
                                   }
                                   return d.toLocaleDateString("en-IN", {
                                     day: "numeric",
@@ -3116,7 +3264,9 @@ export default function DashboardPage() {
                                     hour12: true,
                                   });
                                 } catch {
-                                  return article.pubDate || article.publishedAt || "";
+                                  return (
+                                    article.pubDate || article.publishedAt || ""
+                                  );
                                 }
                               })()
                             : ""}
@@ -3515,7 +3665,9 @@ export default function DashboardPage() {
                 }}
               >
                 <div>
-                  <p style={{ margin: 0, color: "#64748b", fontSize: "0.72rem" }}>
+                  <p
+                    style={{ margin: 0, color: "#64748b", fontSize: "0.72rem" }}
+                  >
                     Current NAV
                   </p>
                   <p
@@ -3532,7 +3684,13 @@ export default function DashboardPage() {
                 </div>
                 {mfDrawerData?.returns?.["1Y"] != null && (
                   <div style={{ textAlign: "right" }}>
-                    <p style={{ margin: 0, color: "#64748b", fontSize: "0.72rem" }}>
+                    <p
+                      style={{
+                        margin: 0,
+                        color: "#64748b",
+                        fontSize: "0.72rem",
+                      }}
+                    >
                       1Y Return
                     </p>
                     <p
@@ -3662,7 +3820,9 @@ export default function DashboardPage() {
                           label: "Current Value",
                           value:
                             mfDrawerData?.holding?.currentValue != null
-                              ? formatCurrency(mfDrawerData.holding.currentValue)
+                              ? formatCurrency(
+                                  mfDrawerData.holding.currentValue,
+                                )
                               : `₹— (NAV: ₹${mfDrawerData?.holding?.currentPrice?.toFixed(2)})`,
                         },
                         {
@@ -3824,174 +3984,175 @@ export default function DashboardPage() {
                 </div>
 
                 {/* NAV History sparkline */}
-                {mfDrawerData?.navHistory && mfDrawerData.navHistory.length > 0 ? (
-                  (() => {
-                    const allZero = mfDrawerData.navHistory.every(
-                      (p) => parseFloat(p.nav) === 0,
-                    );
-                    if (allZero || (mfDrawerData.currentNav || 0) === 0) {
+                {mfDrawerData?.navHistory && mfDrawerData.navHistory.length > 0
+                  ? (() => {
+                      const allZero = mfDrawerData.navHistory.every(
+                        (p) => parseFloat(p.nav) === 0,
+                      );
+                      if (allZero || (mfDrawerData.currentNav || 0) === 0) {
+                        return (
+                          <div
+                            style={{
+                              padding: "1rem",
+                              borderRadius: "0.85rem",
+                              background: "rgba(239,68,68,0.06)",
+                              border: "1px solid rgba(239,68,68,0.15)",
+                              textAlign: "center",
+                              marginBottom: "1rem",
+                            }}
+                          >
+                            <p style={{ margin: 0, fontSize: "1.2rem" }}>⚠️</p>
+                            <p
+                              style={{
+                                margin: "0.5rem 0 0",
+                                color: "#f87171",
+                                fontSize: "0.85rem",
+                                fontWeight: 600,
+                              }}
+                            >
+                              Fund Inactive / Matured
+                            </p>
+                            <p
+                              style={{
+                                margin: "0.3rem 0 0",
+                                color: "#64748b",
+                                fontSize: "0.75rem",
+                              }}
+                            >
+                              This fund has no active NAV data. It may be
+                              closed, matured, or merged into another scheme.
+                            </p>
+                          </div>
+                        );
+                      }
+
+                      const hist = mfDrawerData.navHistory.slice(-30);
+                      const navs = hist.map((h) => h.nav);
+                      const minNav = Math.min(...navs);
+                      const maxNav = Math.max(...navs);
+                      const range = maxNav - minNav || 1;
                       return (
                         <div
                           style={{
+                            backgroundColor: "#0f172a",
+                            border: "1px solid rgba(255,255,255,0.08)",
+                            borderRadius: "0.75rem",
                             padding: "1rem",
-                            borderRadius: "0.85rem",
-                            background: "rgba(239,68,68,0.06)",
-                            border: "1px solid rgba(239,68,68,0.15)",
-                            textAlign: "center",
                             marginBottom: "1rem",
                           }}
                         >
-                          <p style={{ margin: 0, fontSize: "1.2rem" }}>⚠️</p>
-                          <p
+                          <div
                             style={{
-                              margin: "0.5rem 0 0",
-                              color: "#f87171",
-                              fontSize: "0.85rem",
+                              fontSize: 12,
                               fontWeight: 600,
-                            }}
-                          >
-                            Fund Inactive / Matured
-                          </p>
-                          <p
-                            style={{
-                              margin: "0.3rem 0 0",
                               color: "#64748b",
-                              fontSize: "0.75rem",
+                              marginBottom: "0.75rem",
                             }}
                           >
-                            This fund has no active NAV data. It may be closed,
-                            matured, or merged into another scheme.
-                          </p>
+                            NAV HISTORY (30 days)
+                          </div>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "flex-end",
+                              gap: 2,
+                              height: 48,
+                            }}
+                          >
+                            {hist.map((h, i) => {
+                              const heightPct =
+                                ((h.nav - minNav) / range) * 80 + 20;
+                              const isLast = i === hist.length - 1;
+                              return (
+                                <div
+                                  key={i}
+                                  title={`${h.date}: ₹${h.nav}`}
+                                  style={{
+                                    flex: 1,
+                                    height: `${heightPct}%`,
+                                    backgroundColor: isLast
+                                      ? "#f97316"
+                                      : "rgba(139,92,246,0.5)",
+                                    borderRadius: "2px 2px 0 0",
+                                    transition: "height 0.2s",
+                                  }}
+                                />
+                              );
+                            })}
+                          </div>
                         </div>
                       );
-                    }
-
-                    const hist = mfDrawerData.navHistory.slice(-30);
-                    const navs = hist.map((h) => h.nav);
-                    const minNav = Math.min(...navs);
-                    const maxNav = Math.max(...navs);
-                    const range = maxNav - minNav || 1;
-                    return (
-                      <div
-                        style={{
-                          backgroundColor: "#0f172a",
-                          border: "1px solid rgba(255,255,255,0.08)",
-                          borderRadius: "0.75rem",
-                          padding: "1rem",
-                          marginBottom: "1rem",
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontSize: 12,
-                            fontWeight: 600,
-                            color: "#64748b",
-                            marginBottom: "0.75rem",
-                          }}
-                        >
-                          NAV HISTORY (30 days)
-                        </div>
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "flex-end",
-                            gap: 2,
-                            height: 48,
-                          }}
-                        >
-                          {hist.map((h, i) => {
-                            const heightPct =
-                              ((h.nav - minNav) / range) * 80 + 20;
-                            const isLast = i === hist.length - 1;
-                            return (
-                              <div
-                                key={i}
-                                title={`${h.date}: ₹${h.nav}`}
-                                style={{
-                                  flex: 1,
-                                  height: `${heightPct}%`,
-                                  backgroundColor: isLast
-                                    ? "#f97316"
-                                    : "rgba(139,92,246,0.5)",
-                                  borderRadius: "2px 2px 0 0",
-                                  transition: "height 0.2s",
-                                }}
-                              />
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })()
-                ) : null}
+                    })()
+                  : null}
 
                 {/* Historical returns */}
                 {mfDrawerData?.returns &&
                   Object.keys(mfDrawerData.returns).length > 0 &&
                   Object.values(mfDrawerData.returns).some((v) => v !== 0) && (
-                  <div
-                    style={{
-                      backgroundColor: "#0f172a",
-                      border: "1px solid rgba(255,255,255,0.08)",
-                      borderRadius: "0.75rem",
-                      padding: "1rem",
-                    }}
-                  >
                     <div
                       style={{
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: "#64748b",
-                        marginBottom: "0.75rem",
+                        backgroundColor: "#0f172a",
+                        border: "1px solid rgba(255,255,255,0.08)",
+                        borderRadius: "0.75rem",
+                        padding: "1rem",
                       }}
                     >
-                      HISTORICAL RETURNS
-                    </div>
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(4,1fr)",
-                        gap: "0.5rem",
-                      }}
-                    >
-                      {["1W", "1M", "3M", "1Y"].map((period) => {
-                        const val = mfDrawerData.returns[period] ?? null;
-                        return (
-                          <div
-                            key={period}
-                            style={{
-                              backgroundColor: "rgba(255,255,255,0.04)",
-                              borderRadius: "0.5rem",
-                              padding: "0.6rem",
-                              textAlign: "center",
-                            }}
-                          >
+                      <div
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: "#64748b",
+                          marginBottom: "0.75rem",
+                        }}
+                      >
+                        HISTORICAL RETURNS
+                      </div>
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "repeat(4,1fr)",
+                          gap: "0.5rem",
+                        }}
+                      >
+                        {["1W", "1M", "3M", "1Y"].map((period) => {
+                          const val = mfDrawerData.returns[period] ?? null;
+                          return (
                             <div
+                              key={period}
                               style={{
-                                fontSize: 11,
-                                color: "#64748b",
-                                marginBottom: 4,
+                                backgroundColor: "rgba(255,255,255,0.04)",
+                                borderRadius: "0.5rem",
+                                padding: "0.6rem",
+                                textAlign: "center",
                               }}
                             >
-                              {period}
+                              <div
+                                style={{
+                                  fontSize: 11,
+                                  color: "#64748b",
+                                  marginBottom: 4,
+                                }}
+                              >
+                                {period}
+                              </div>
+                              <div
+                                style={{
+                                  fontSize: 14,
+                                  fontWeight: 700,
+                                  color:
+                                    val == null ? "#475569" : pnlColor(val),
+                                }}
+                              >
+                                {val == null
+                                  ? "—"
+                                  : `${val >= 0 ? "+" : ""}${val.toFixed(2)}%`}
+                              </div>
                             </div>
-                            <div
-                              style={{
-                                fontSize: 14,
-                                fontWeight: 700,
-                                color: val == null ? "#475569" : pnlColor(val),
-                              }}
-                            >
-                              {val == null
-                                ? "—"
-                                : `${val >= 0 ? "+" : ""}${val.toFixed(2)}%`}
-                            </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
               </>
             )}
           </div>

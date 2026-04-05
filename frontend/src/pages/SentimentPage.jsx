@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 import api from '../services/api'
 
 const shellStyle = {
@@ -105,11 +107,14 @@ const normalizePayload = (payload) => {
 }
 
 const SentimentPage = () => {
+  const { logout } = useAuth()
+  const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [portfolioSignal, setPortfolioSignal] = useState('Mixed')
   const [stocks, setStocks] = useState([])
   const [showSlowWarning, setShowSlowWarning] = useState(false)
+  const [lastUpdated, setLastUpdated] = useState(null)
 
   useEffect(() => {
     document.title = 'Sentiment | PortSense'
@@ -124,6 +129,7 @@ const SentimentPage = () => {
       const normalized = normalizePayload(response?.data || {})
       setPortfolioSignal(normalized.portfolioSignal)
       setStocks(normalized.stocks)
+      setLastUpdated(new Date())
     } catch (requestError) {
       setError('Unable to fetch sentiment right now. Please try again.')
       setPortfolioSignal('Mixed')
@@ -205,25 +211,66 @@ const SentimentPage = () => {
             gap: '0.75rem',
           }}
         >
-          <h1 style={{ margin: 0, fontSize: '1.5rem', color: '#f8fafc', fontWeight: 700 }}>Sentiment</h1>
-          <button
-            type='button'
-            onClick={fetchSentiment}
-            disabled={loading}
-            style={{
-              border: '1px solid rgba(249, 115, 22, 0.45)',
-              backgroundColor: 'rgba(249, 115, 22, 0.18)',
-              color: '#fdba74',
-              borderRadius: '0.75rem',
-              padding: '0.5rem 0.9rem',
-              fontWeight: 700,
-              fontFamily: "'DM Sans', sans-serif",
-              cursor: loading ? 'not-allowed' : 'pointer',
-              opacity: loading ? 0.7 : 1,
-            }}
-          >
-            Refresh
-          </button>
+          <div style={{ display: 'grid', gap: '0.3rem' }}>
+            <h1 style={{ margin: 0, fontSize: '1.5rem', color: '#f8fafc', fontWeight: 700 }}>Sentiment</h1>
+            {!loading && lastUpdated && (
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: '0.75rem',
+                  color: '#64748b',
+                }}
+              >
+                Last analysed: {lastUpdated.toLocaleDateString('en-IN', {
+                  day: '2-digit',
+                  month: 'short',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: true,
+                })}
+              </p>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
+            <button
+              type='button'
+              onClick={fetchSentiment}
+              disabled={loading}
+              style={{
+                border: '1px solid rgba(249, 115, 22, 0.45)',
+                backgroundColor: 'rgba(249, 115, 22, 0.18)',
+                color: '#fdba74',
+                borderRadius: '0.75rem',
+                padding: '0.5rem 0.9rem',
+                fontWeight: 700,
+                fontFamily: "'DM Sans', sans-serif",
+                cursor: loading ? 'not-allowed' : 'pointer',
+                opacity: loading ? 0.7 : 1,
+              }}
+            >
+              Refresh
+            </button>
+            <button
+              type='button'
+              onClick={() => {
+                logout()
+                navigate('/', { replace: true })
+              }}
+              style={{
+                backgroundColor: 'rgba(239,68,68,0.1)',
+                border: '1px solid rgba(239,68,68,0.3)',
+                color: '#f87171',
+                borderRadius: '0.75rem',
+                padding: '0.5rem 0.9rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                fontFamily: "'DM Sans', sans-serif",
+              }}
+            >
+              Sign Out
+            </button>
+          </div>
         </div>
 
         {loading ? (

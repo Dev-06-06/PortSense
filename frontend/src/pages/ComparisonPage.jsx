@@ -9,6 +9,8 @@ import {
   Tooltip,
   Legend,
 } from "recharts";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import api from "../services/api";
 
 const shellStyle = {
@@ -138,6 +140,8 @@ const getAssetKey = (assetName) => {
 };
 
 const ComparisonPage = () => {
+  const { logout } = useAuth();
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -237,29 +241,60 @@ const ComparisonPage = () => {
       `}</style>
 
       <div style={containerStyle}>
-        <div>
-          <h1
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            gap: "0.75rem",
+          }}
+        >
+          <div>
+            <h1
+              style={{
+                margin: "0 0 4px",
+                color: "#ffffff",
+                fontSize: "24px",
+                fontFamily: "'Barlow Condensed', 'DM Sans', sans-serif",
+                fontWeight: 900,
+                letterSpacing: "0.02em",
+              }}
+            >
+              What If?
+            </h1>
+            <p
+              style={{
+                margin: 0,
+                color: "#94a3b8",
+                fontSize: "13px",
+              }}
+            >
+              See how your portfolio compares to alternative investments with
+              the same cash flows
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              logout();
+              navigate("/", { replace: true });
+            }}
             style={{
-              margin: "0 0 4px",
-              color: "#ffffff",
-              fontSize: "24px",
-              fontFamily: "'Barlow Condensed', 'DM Sans', sans-serif",
-              fontWeight: 900,
-              letterSpacing: "0.02em",
+              backgroundColor: "rgba(239,68,68,0.1)",
+              border: "1px solid rgba(239,68,68,0.3)",
+              color: "#f87171",
+              borderRadius: "20px",
+              padding: "5px 14px",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+              flexShrink: 0,
+              alignSelf: "flex-start",
+              fontFamily: "inherit",
             }}
           >
-            What If?
-          </h1>
-          <p
-            style={{
-              margin: 0,
-              color: "#94a3b8",
-              fontSize: "13px",
-            }}
-          >
-            See how your portfolio compares to alternative investments with the
-            same cash flows
-          </p>
+            Sign Out
+          </button>
         </div>
 
         <div

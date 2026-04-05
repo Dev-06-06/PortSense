@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -15,6 +15,9 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import useSwipe from "../hooks/useSwipe";
 import api from "../services/api";
 
 const SLICE_COLORS = [
@@ -98,14 +101,6 @@ const tdStyle = {
   borderBottom: "1px solid rgba(255,255,255,0.05)",
 };
 
-const tabs = [
-  "Overview",
-  "Beta / Diversification",
-  "Benchmark",
-  "Risk",
-  "Correlation",
-];
-
 const formatCurrency = (value) =>
   new Intl.NumberFormat("en-IN", {
     minimumFractionDigits: 2,
@@ -136,6 +131,16 @@ const parseAdvice = (text) => {
 };
 
 const AnalyticsPage = () => {
+  const { logout } = useAuth();
+  const navigate = useNavigate();
+  const ANALYTICS_TABS = [
+    "Overview",
+    "Beta / Diversification",
+    "Benchmark",
+    "Risk",
+    "Correlation",
+  ];
+
   // STATE
   const [sectors, setSectors] = useState([]);
   const [beta, setBeta] = useState(null);
@@ -170,6 +175,20 @@ const AnalyticsPage = () => {
   const [expandedPair, setExpandedPair] = useState(null);
   const [explanations, setExplanations] = useState({});
   const [loadingPair, setLoadingPair] = useState(null);
+  const analyticsSwipeRef = useRef(null);
+
+  const onSwipeLeft = () => {
+    const currentIndex = ANALYTICS_TABS.indexOf(activeTab);
+    if (currentIndex < ANALYTICS_TABS.length - 1)
+      setActiveTab(ANALYTICS_TABS[currentIndex + 1]);
+  };
+
+  const onSwipeRight = () => {
+    const currentIndex = ANALYTICS_TABS.indexOf(activeTab);
+    if (currentIndex > 0) setActiveTab(ANALYTICS_TABS[currentIndex - 1]);
+  };
+
+  useSwipe(analyticsSwipeRef, onSwipeLeft, onSwipeRight);
 
   // Parse advice text
   const parsedAdvice = useMemo(() => parseAdvice(adviceText), [adviceText]);
@@ -483,26 +502,56 @@ const AnalyticsPage = () => {
       `}</style>
 
       <div style={containerStyle}>
-        <div>
-          <h1
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            gap: "0.75rem",
+          }}
+        >
+          <div>
+            <h1
+              style={{
+                margin: "0 0 0.3rem",
+                fontSize: "1.55rem",
+                fontWeight: 800,
+                color: "#f8fafc",
+              }}
+            >
+              Portfolio Analytics
+            </h1>
+            <p
+              style={{
+                margin: 0,
+                color: "#94a3b8",
+                fontSize: "0.9rem",
+              }}
+            >
+              Track allocation, benchmark performance, and portfolio risk.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              logout();
+              navigate("/", { replace: true });
+            }}
             style={{
-              margin: "0 0 0.3rem",
-              fontSize: "1.55rem",
-              fontWeight: 800,
-              color: "#f8fafc",
+              backgroundColor: "rgba(239,68,68,0.1)",
+              border: "1px solid rgba(239,68,68,0.3)",
+              color: "#f87171",
+              borderRadius: "20px",
+              padding: "5px 14px",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+              flexShrink: 0,
+              fontFamily: "inherit",
             }}
           >
-            Portfolio Analytics
-          </h1>
-          <p
-            style={{
-              margin: 0,
-              color: "#94a3b8",
-              fontSize: "0.9rem",
-            }}
-          >
-            Track allocation, benchmark performance, and portfolio risk.
-          </p>
+            Sign Out
+          </button>
         </div>
 
         <div
@@ -518,7 +567,7 @@ const AnalyticsPage = () => {
             overflowX: "auto",
           }}
         >
-          {tabs.map((tab) => (
+          {ANALYTICS_TABS.map((tab) => (
             <button
               key={tab}
               type="button"
@@ -540,7 +589,8 @@ const AnalyticsPage = () => {
           ))}
         </div>
 
-        {activeTab === "Overview" && (
+        <div ref={analyticsSwipeRef} style={{ touchAction: "pan-y" }}>
+          {activeTab === "Overview" && (
           <>
             {/* ========== 1. SECTOR BREAKDOWN ========== */}
             {sectors && (
@@ -729,7 +779,7 @@ const AnalyticsPage = () => {
           </>
         )}
 
-        {activeTab === "Beta / Diversification" && (
+          {activeTab === "Beta / Diversification" && (
           <>
             {/* ========== 2. BETA ANALYSIS ========== */}
             {beta && (
@@ -934,7 +984,7 @@ const AnalyticsPage = () => {
         )}
 
         {/* ========== 4. BENCHMARK VS NIFTY 50 ========== */}
-        {activeTab === "Benchmark" && benchmark && (
+          {activeTab === "Benchmark" && benchmark && (
           <div style={cardStyle}>
             <h2 style={sectionTitleStyle}>Benchmark vs Nifty 50</h2>
 
@@ -1003,7 +1053,7 @@ const AnalyticsPage = () => {
         )}
 
         {/* ========== 5. STRESS TEST ========== */}
-        {activeTab === "Risk" && (
+          {activeTab === "Risk" && (
           <>
             <div style={cardStyle}>
               {/* Header row */}
@@ -1868,7 +1918,7 @@ const AnalyticsPage = () => {
         )}
 
         {/* ========== 7. REBALANCING ADVISOR ========== */}
-        {activeTab === "Risk" && (
+          {activeTab === "Risk" && (
           <div
             style={{
               borderRadius: "1rem",
@@ -2032,7 +2082,7 @@ const AnalyticsPage = () => {
           </div>
         )}
 
-        {activeTab === "Correlation" && (
+          {activeTab === "Correlation" && (
           <>
             {/* Heatmap Card */}
             <div style={cardStyle}>
@@ -2296,7 +2346,8 @@ const AnalyticsPage = () => {
               )}
             </div>
           </>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

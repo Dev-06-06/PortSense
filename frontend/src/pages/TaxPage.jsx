@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import api from "../services/api";
 
 const shellStyle = {
@@ -99,6 +101,8 @@ const toneForSignedValue = (value) =>
   (Number(value) || 0) >= 0 ? "#22c55e" : "#ef4444";
 
 const TaxPage = () => {
+  const { logout } = useAuth();
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -266,35 +270,66 @@ const TaxPage = () => {
       `}</style>
 
       <div style={containerStyle}>
-        <header style={{ display: "grid", gap: "0.5rem" }}>
-          <h1
-            style={{
-              margin: 0,
-              fontFamily: "'Barlow Condensed', 'DM Sans', sans-serif",
-              fontSize: "22px",
-              fontWeight: 700,
-              color: "#ffffff",
-              letterSpacing: "0.02em",
-            }}
-          >
-            Tax & Real Returns
-          </h1>
-          <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.88rem" }}>
-            Estimated tax liability and inflation-adjusted returns
-          </p>
-          <div
-            style={{
-              width: "fit-content",
-              background: "rgba(245,158,11,0.1)",
-              color: "#f59e0b",
-              borderRadius: 20,
-              padding: "4px 12px",
-              fontSize: 11,
-              fontWeight: 700,
-            }}
-          >
-            ⚠ Indicative only — consult a tax advisor
+        <header
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            gap: "0.75rem",
+          }}
+        >
+          <div style={{ display: "grid", gap: "0.5rem" }}>
+            <h1
+              style={{
+                margin: 0,
+                fontFamily: "'Barlow Condensed', 'DM Sans', sans-serif",
+                fontSize: "22px",
+                fontWeight: 700,
+                color: "#ffffff",
+                letterSpacing: "0.02em",
+              }}
+            >
+              Tax & Real Returns
+            </h1>
+            <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.88rem" }}>
+              Estimated tax liability and inflation-adjusted returns
+            </p>
+            <div
+              style={{
+                width: "fit-content",
+                background: "rgba(245,158,11,0.1)",
+                color: "#f59e0b",
+                borderRadius: 20,
+                padding: "4px 12px",
+                fontSize: 11,
+                fontWeight: 700,
+              }}
+            >
+              ⚠ Indicative only — consult a tax advisor
+            </div>
           </div>
+          <button
+            type="button"
+            onClick={() => {
+              logout();
+              navigate("/", { replace: true });
+            }}
+            style={{
+              backgroundColor: "rgba(239,68,68,0.1)",
+              border: "1px solid rgba(239,68,68,0.3)",
+              color: "#f87171",
+              borderRadius: "20px",
+              padding: "5px 14px",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+              flexShrink: 0,
+              alignSelf: "flex-start",
+              fontFamily: "inherit",
+            }}
+          >
+            Sign Out
+          </button>
         </header>
 
         {loading ? (
