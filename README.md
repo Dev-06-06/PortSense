@@ -150,24 +150,56 @@ The demo portfolio is deliberately constructed to showcase all analytics feature
 ---
 
 ## Project Structure
+```
 PortSense/
 ├── backend/
 │   ├── app/
-│   │   ├── routes/        # auth, holdings, analytics, genai, sentiment,
-│   │   │                  # market, watchlist, news, comparison, tax_returns
-│   │   ├── services/      # analytics, cache, concurrency, gemini,
-│   │   │                  # market, mf, risk_decomposition, sentiment, technical
-│   │   ├── models/        # holding.py (assetType, fdRate, schemeName)
-│   │   └── config/        # db.py (partial unique index for FD)
+│   │   ├── routes/
+│   │   │   ├── auth.py
+│   │   │   ├── holdings.py
+│   │   │   ├── analytics.py
+│   │   │   ├── genai.py
+│   │   │   ├── sentiment.py
+│   │   │   ├── market.py
+│   │   │   ├── watchlist.py
+│   │   │   ├── news.py
+│   │   │   ├── comparison.py
+│   │   │   └── tax_returns.py
+│   │   ├── services/
+│   │   │   ├── analytics.py
+│   │   │   ├── gemini.py
+│   │   │   ├── sentiment.py
+│   │   │   ├── market.py
+│   │   │   ├── mf.py
+│   │   │   ├── risk_decomposition.py
+│   │   │   ├── technical.py
+│   │   │   ├── cache.py
+│   │   │   └── concurrency.py
+│   │   ├── models/
+│   │   │   └── holding.py
+│   │   └── config/
+│   │       └── db.py
 │   └── seed.py
 └── frontend/
-└── src/
-├── pages/         # Dashboard, Analytics, Tax, Comparison,
-│                  # Sentiment, Account, News, Landing
-├── components/    # StockIntelDrawer, BottomNav, DemoBanner
-├── hooks/         # useSwipe.js
-└── context/       # AuthContext
----
+    └── src/
+        ├── pages/
+        │   ├── Dashboard.jsx
+        │   ├── Analytics.jsx
+        │   ├── Tax.jsx
+        │   ├── Comparison.jsx
+        │   ├── Sentiment.jsx
+        │   ├── Account.jsx
+        │   ├── News.jsx
+        │   └── Landing.jsx
+        ├── components/
+        │   ├── StockIntelDrawer.jsx
+        │   ├── BottomNav.jsx
+        │   └── DemoBanner.jsx
+        ├── hooks/
+        │   └── useSwipe.js
+        └── context/
+            └── AuthContext.jsx
+```
 
 ## Disclaimer
 
