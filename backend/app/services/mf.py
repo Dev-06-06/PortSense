@@ -18,6 +18,11 @@ def _compute_fd_value(principal: float, annual_rate_pct: float, buy_date_str: st
     try:
         from datetime import date
 
+        if hasattr(buy_date_str, "date"):
+            buy_date_str = buy_date_str.date().isoformat()
+        else:
+            buy_date_str = str(buy_date_str or "")[:10]
+
         buy_date = datetime.strptime(buy_date_str[:10], "%Y-%m-%d").date()
         today = date.today()
         days = (today - buy_date).days
