@@ -134,11 +134,11 @@ async def _build_enriched_holdings(
 ) -> list[dict]:
     from app.services.mf import get_mf_nav, _compute_fd_value
 
-    db_holdings = []
+    raw_holdings = []
     async for holding in holdings_collection.find({"userId": current_user.get("_id")}):
-        db_holdings.append(holding)
+        raw_holdings.append(holding)
 
-    if not db_holdings:
+    if not raw_holdings:
         return []
 
     # Separate by asset type.
@@ -160,9 +160,25 @@ async def _build_enriched_holdings(
             return "mutual_fund"
         return "stock"
 
-    stock_holdings = [h for h in db_holdings if _infer_type(h) == "stock"]
-    mf_holdings = [h for h in db_holdings if _infer_type(h) == "mutual_fund"]
-    fd_holdings = [h for h in db_holdings if _infer_type(h) == "fd"]
+    # Normalize missing assetType on older records, then split stock vs non-stock.
+    # Keep the split criteria explicit so only stocks are passed to market pricing.
+    for holding in raw_holdings:
+        if not holding.get("assetType"):
+            holding["assetType"] = _infer_type(holding)
+
+    stock_holdings = [
+        h for h in raw_holdings
+        if str(h.get("assetType", "stock")).lower() == "stock"
+    ]
+    non_stock_holdings = [
+        h for h in raw_holdings
+        if str(h.get("assetType", "stock")).lower() != "stock"
+    ]
+
+    mf_holdings = [
+        h for h in non_stock_holdings
+        if str(h.get("assetType", "")).lower() == "mutual_fund"
+    ]
 
     # Fetch stock prices in parallel (existing pattern)
     stock_tickers = [h.get("ticker", "") for h in stock_holdings]
@@ -173,7 +189,7 @@ async def _build_enriched_holdings(
         *[get_mf_nav(str(h.get("ticker", ""))) for h in mf_holdings]
     ) if mf_holdings else []
 
-    holdings = []
+    enriched_by_id = {}
 
     # Process stocks
     for holding, stock_info in zip(stock_holdings, stock_infos):
@@ -198,58 +214,75 @@ async def _build_enriched_holdings(
             "dayChange": day_change,
             "assetType": "stock",
         })
-        holdings.append(serialized)
+        enriched_by_id[str(holding.get("_id"))] = serialized
 
-    # Process mutual funds
-    for holding, nav_data in zip(mf_holdings, mf_navs):
-        current_nav = float(nav_data.get("currentNav", 0.0))
-        previous_nav = float(nav_data.get("previousNav", current_nav))
-        quantity = float(holding.get("quantity", 0))
-        buy_nav = float(holding.get("buyPrice", 0.0))
+    mf_nav_map = {
+        str(holding.get("_id")): nav_data
+        for holding, nav_data in zip(mf_holdings, mf_navs)
+    }
 
-        current_value = current_nav * quantity
-        invested = buy_nav * quantity
-        pnl = current_value - invested
-        pnl_percent = (pnl / invested * 100.0) if invested else 0.0
-        day_change = (current_nav - previous_nav) * quantity
+    # Process non-stocks with existing MF/FD pricing logic.
+    for holding in non_stock_holdings:
+        asset_type = str(holding.get("assetType", "")).lower()
 
-        serialized = _serialize_holding(holding)
-        serialized.update({
-            "currentPrice": current_nav,
-            "currentValue": current_value,
-            "invested": invested,
-            "pnl": pnl,
-            "pnlPercent": pnl_percent,
-            "dayChange": day_change,
-            "assetType": "mutual_fund",
-            "schemeName": nav_data.get("schemeName") or holding.get("schemeName", ""),
-        })
-        holdings.append(serialized)
+        if asset_type == "mutual_fund":
+            nav_data = mf_nav_map.get(str(holding.get("_id")), {})
+            current_nav = float(nav_data.get("currentNav", 0.0))
+            previous_nav = float(nav_data.get("previousNav", current_nav))
+            quantity = float(holding.get("quantity", 0))
+            buy_nav = float(holding.get("buyPrice", 0.0))
 
-    # Process FDs
-    for holding in fd_holdings:
-        buy_price = float(holding.get("buyPrice", 0.0))  # principal
-        fd_rate = float(holding.get("fdRate", 7.0))
-        buy_date = holding.get("buyDate")
-        buy_date_str = buy_date.isoformat() if hasattr(buy_date, "isoformat") else str(buy_date)
+            current_value = current_nav * quantity
+            invested = buy_nav * quantity
+            pnl = current_value - invested
+            pnl_percent = (pnl / invested * 100.0) if invested else 0.0
+            day_change = (current_nav - previous_nav) * quantity
 
-        current_value = _compute_fd_value(buy_price, fd_rate, buy_date_str)
-        invested = buy_price
-        pnl = current_value - invested
-        pnl_percent = (pnl / invested * 100.0) if invested else 0.0
+            serialized = _serialize_holding(holding)
+            serialized.update({
+                "currentPrice": current_nav,
+                "currentValue": current_value,
+                "invested": invested,
+                "pnl": pnl,
+                "pnlPercent": pnl_percent,
+                "dayChange": day_change,
+                "assetType": "mutual_fund",
+                "schemeName": nav_data.get("schemeName") or holding.get("schemeName", ""),
+            })
+            enriched_by_id[str(holding.get("_id"))] = serialized
+            continue
 
-        serialized = _serialize_holding(holding)
-        serialized.update({
-            "currentPrice": current_value,  # FD has no unit price - use total value
-            "currentValue": current_value,
-            "invested": invested,
-            "pnl": pnl,
-            "pnlPercent": pnl_percent,
-            "dayChange": 0.0,  # FDs don't have day change
-            "assetType": "fd",
-            "fdRate": fd_rate,
-        })
-        holdings.append(serialized)
+        if asset_type == "fd":
+            buy_price = float(holding.get("buyPrice", 0.0))  # principal
+            fd_rate = float(holding.get("fdRate", 7.0))
+            buy_date = holding.get("buyDate")
+            buy_date_str = buy_date.isoformat() if hasattr(buy_date, "isoformat") else str(buy_date)
+
+            current_value = _compute_fd_value(buy_price, fd_rate, buy_date_str)
+            invested = buy_price
+            pnl = current_value - invested
+            pnl_percent = (pnl / invested * 100.0) if invested else 0.0
+
+            serialized = _serialize_holding(holding)
+            serialized.update({
+                "currentPrice": current_value,  # FD has no unit price - use total value
+                "currentValue": current_value,
+                "invested": invested,
+                "pnl": pnl,
+                "pnlPercent": pnl_percent,
+                "dayChange": 0.0,  # FDs don't have day change
+                "assetType": "fd",
+                "fdRate": fd_rate,
+            })
+            enriched_by_id[str(holding.get("_id"))] = serialized
+            continue
+
+    # Preserve original order from database fetch.
+    holdings = [
+        enriched_by_id[str(holding.get("_id"))]
+        for holding in raw_holdings
+        if str(holding.get("_id")) in enriched_by_id
+    ]
 
     return holdings
 

@@ -113,56 +113,139 @@ def _format_correlation_pairs(correlation_pairs: object) -> str:
 
 
 def build_rebalancing_prompt(portfolio_data: dict) -> str:
-    holdings_text = _format_holdings(portfolio_data.get("holdings", []))
-    sector_breakdown = portfolio_data.get("sector_breakdown", [])
-    if not sector_breakdown and isinstance(portfolio_data.get("sector_concentration"), list):
-        sector_breakdown = portfolio_data.get("sector_concentration", [])
+    holdings = portfolio_data.get("holdings", [])
 
-    if sector_breakdown:
-        sector_lines = "\n".join(
-            f"  - {s['sector']}: {(s.get('weight') * 100):.1f}%"
-            for s in sector_breakdown
-            if isinstance(s, dict) and s.get("sector") is not None and s.get("weight") is not None
+    stock_holdings = [
+        h for h in holdings
+        if str(h.get("assetType", "stock")).lower() == "stock"
+    ]
+    mf_holdings = [
+        h for h in holdings
+        if str(h.get("assetType", "stock")).lower() == "mutual_fund"
+    ]
+    fd_holdings = [
+        h for h in holdings
+        if str(h.get("assetType", "stock")).lower() == "fd"
+    ]
+
+    total_value = sum(float(h.get("currentValue", 0) or 0) for h in holdings)
+
+    # Stock holdings table
+    stock_lines = []
+    for h in stock_holdings:
+        ticker = str(h.get("ticker", "")).replace(".NS", "").replace(".BO", "")
+        avg = float(h.get("avgPrice", 0) or 0)
+        cur = float(h.get("currentPrice", 0) or 0)
+        val = float(h.get("currentValue", 0) or 0)
+        weight = round((val / total_value * 100), 1) if total_value > 0 else 0
+        pnl_pct = round(((cur - avg) / avg * 100), 1) if avg > 0 else 0
+        stock_lines.append(
+            f"  {ticker}: ₹{val:,.0f} ({weight}% wt) | avg ₹{avg:.0f} → cur ₹{cur:.0f} | P&L {pnl_pct:+.1f}%"
         )
-        if not sector_lines:
-            sector_lines = "  - N/A"
-    else:
-        sector_lines = "  - N/A"
+    stocks_text = "\n".join(stock_lines) if stock_lines else "  None"
 
+    # MF summary
+    mf_lines = []
+    for h in mf_holdings:
+        name = str(h.get("schemeName") or h.get("ticker") or "MF")[:40]
+        val = float(h.get("currentValue", 0) or 0)
+        weight = round((val / total_value * 100), 1) if total_value > 0 else 0
+        mf_lines.append(f"  {name}: ₹{val:,.0f} ({weight}% wt)")
+    mf_text = "\n".join(mf_lines) if mf_lines else "  None"
+
+    # FD summary
+    fd_lines = []
+    for h in fd_holdings:
+        name = str(h.get("ticker") or "FD")
+        val = float(h.get("currentValue", 0) or 0)
+        rate = float(h.get("fdRate", 0) or 0)
+        weight = round((val / total_value * 100), 1) if total_value > 0 else 0
+        fd_lines.append(f"  {name} @ {rate}% p.a.: ₹{val:,.0f} ({weight}% wt)")
+    fd_text = "\n".join(fd_lines) if fd_lines else "  None"
+
+    # Sector breakdown
+    sector_breakdown = portfolio_data.get("sector_breakdown", {})
+    sectors = []
+    if isinstance(sector_breakdown, dict):
+        sectors = sector_breakdown.get("sectors", [])
+    elif isinstance(sector_breakdown, list):
+        sectors = sector_breakdown
+    sector_lines = []
+    for s in sectors:
+        name = s.get("name") or s.get("sector") or "Unknown"
+        weight = float(s.get("weight") or s.get("percentage") or 0)
+        pct = round(weight * 100, 1) if weight <= 1 else round(weight, 1)
+        flag = " ⚠ OVERWEIGHT" if s.get("isOverweight") else ""
+        sector_lines.append(f"  {name}: {pct}%{flag}")
+    sector_text = "\n".join(sector_lines) if sector_lines else "  N/A"
+
+    # Risk metrics
     portfolio_beta = portfolio_data.get("portfolio_beta", "N/A")
     beta_label = portfolio_data.get("beta_label", "N/A")
     user_cagr = portfolio_data.get("user_cagr", "N/A")
     nifty_cagr = portfolio_data.get("nifty_cagr", "N/A")
-    correlation_pairs = _format_correlation_pairs(portfolio_data.get("correlation_pairs", []))
-    diversification_data = portfolio_data.get("diversification_data", {})
-    sector_score = diversification_data.get("sectorScore", "N/A")
-    size_score = diversification_data.get("sizeScore", "N/A")
-    correlation_score = diversification_data.get("correlationScore", "N/A")
-    diversification_verdict = diversification_data.get("verdict", "N/A")
 
-    return f"""
-You are a portfolio advisor giving specific rebalancing advice to an Indian retail investor.
+    div_data = portfolio_data.get("diversification_data", {})
+    div_score = div_data.get("score", "N/A")
+    div_verdict = div_data.get("verdict", "N/A")
+    sector_score = div_data.get("sectorScore", "N/A")
+    size_score = div_data.get("sizeScore", "N/A")
+    corr_score = div_data.get("correlationScore", "N/A")
 
-PORTFOLIO SNAPSHOT:
-{holdings_text}
+    # Correlation pairs
+    correlation_pairs = _format_correlation_pairs(
+        portfolio_data.get("correlation_pairs", [])
+    )
 
-RISK ANALYSIS:
-- Sector concentration:
-{sector_lines}
+    return f"""You are a senior Indian equity portfolio analyst advising a retail investor.
+Analyse this portfolio with full context and give specific, data-driven advice.
+
+═══ PORTFOLIO VALUE: ₹{total_value:,.0f} ═══
+
+STOCKS ({len(stock_holdings)} holdings):
+{stocks_text}
+
+MUTUAL FUNDS ({len(mf_holdings)} holdings):
+{mf_text}
+
+FIXED DEPOSITS ({len(fd_holdings)} holdings):
+{fd_text}
+
+SECTOR ALLOCATION:
+{sector_text}
+
+RISK METRICS:
 - Portfolio Beta: {portfolio_beta} ({beta_label})
-- Portfolio CAGR: {user_cagr}% vs Nifty 50: {nifty_cagr}%
-- Diversification breakdown: Sector Score: {sector_score}/10 | Size Score: {size_score}/10 | Correlation Score: {correlation_score}/10 → Verdict: {diversification_verdict}
-- Top 3 correlated pairs:
+- Diversification: {div_score}/10 ({div_verdict})
+  · Sector: {sector_score}/10 | Size: {size_score}/10 | Correlation: {corr_score}/10
+- Your CAGR: {user_cagr}% vs Nifty 50: {nifty_cagr}%
+
+TOP CORRELATED PAIRS:
 {correlation_pairs}
 
-OUTPUT FORMAT (follow exactly):
+INSTRUCTIONS:
+Respond in exactly this format. Do not add any other sections.
 
-**Strengths:** (2 sentences, cite specific stocks and metrics)
-**Concentration Risks:** (2 sentences, name overweight sectors and correlated pairs)
-**Rebalancing Actions:** (exactly 4 bullet points, each must mention a ticker and a ₹ action)
-**Outlook:** (1 sentence comparing portfolio CAGR to Nifty 50)
+**Strengths:**
+[2 sentences. Reference specific tickers, weights, and P&L numbers from above.]
 
-You are advising a retail investor on NSE/BSE. All amounts in INR. Do not mention US stocks or markets.
+**Concentration Risks:**
+[2 sentences. Name overweight sectors and high-beta holdings with their exact weights.]
+
+**Rebalancing Actions:**
+- [Specific action with ticker and ₹ amount e.g. "Trim HCLTECH by ₹12,000"]
+- [Specific action with ticker and ₹ amount]
+- [Specific action with ticker and ₹ amount]
+- [Specific action — may suggest adding MF/FD allocation if equity risk is high]
+
+**Outlook:**
+[1 sentence comparing your CAGR to Nifty 50 with a forward-looking note.]
+
+Rules:
+- Every rebalancing action must mention a ticker or asset name and a rupee amount
+- All amounts in INR
+- Only reference NSE/BSE stocks
+- Max 280 words total
 """
 
 

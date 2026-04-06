@@ -48,6 +48,9 @@ async def stream_sentiment(
             tickers.append(ticker)
 
     async def event_generator():
+        # Send an initial ping so Render doesn't buffer the response
+        yield ": ping\n\n"
+
         tasks = {
             asyncio.ensure_future(asyncio.to_thread(get_stock_sentiment, ticker)): ticker
             for ticker in tickers
@@ -92,7 +95,9 @@ async def stream_sentiment(
         event_generator(),
         media_type="text/event-stream",
         headers={
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-transform",
             "X-Accel-Buffering": "no",
+            "Content-Type": "text/event-stream",
+            "Connection": "keep-alive",
         },
     )
