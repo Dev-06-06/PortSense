@@ -25,12 +25,21 @@ async def connect_to_mongo() -> AsyncIOMotorClient:
         raise ValueError("MONGO_URI is not set")
 
     try:
-        _mongo_client = AsyncIOMotorClient(mongo_uri)
+        _mongo_client = AsyncIOMotorClient(
+            mongo_uri,
+            serverSelectionTimeoutMS=int(os.getenv("MONGO_SERVER_SELECTION_TIMEOUT_MS", "5000")),
+            connectTimeoutMS=int(os.getenv("MONGO_CONNECT_TIMEOUT_MS", "5000")),
+            socketTimeoutMS=int(os.getenv("MONGO_SOCKET_TIMEOUT_MS", "5000")),
+        )
         client = _mongo_client
         await _mongo_client.admin.command("ping")
         logger.info("MongoDB connected ✓")
         return _mongo_client
     except Exception:
+        if _mongo_client is not None:
+            _mongo_client.close()
+        _mongo_client = None
+        client = None
         logger.exception("MongoDB connection failed")
         raise
 

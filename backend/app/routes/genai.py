@@ -31,35 +31,84 @@ class CorrelationExplanationRequest(BaseModel):
 
 
 async def _get_user_holdings(user_id, holdings_collection: AsyncIOMotorCollection):
-
     raw_holdings = []
     async for holding in holdings_collection.find({"userId": user_id}):
         raw_holdings.append(holding)
 
-    tickers = [str(holding.get("ticker", "")).strip().upper() for holding in raw_holdings]
-    stock_infos = await gather_in_threads_bounded(tickers, get_stock_info, limit=5)
+    # Only pass stock tickers to yfinance
+    stock_raw = [
+        h for h in raw_holdings
+        if str(h.get("assetType", "stock")).strip().lower() == "stock"
+    ]
+    non_stock_raw = [
+        h for h in raw_holdings
+        if str(h.get("assetType", "stock")).strip().lower() != "stock"
+    ]
+
+    stock_tickers = [str(h.get("ticker", "")).strip().upper() for h in stock_raw]
+    stock_infos = (
+        await gather_in_threads_bounded(stock_tickers, get_stock_info, limit=5)
+        if stock_tickers else []
+    )
 
     enriched_holdings = []
-    for holding, stock_info in zip(raw_holdings, stock_infos):
-        ticker = str(holding.get("ticker", "")).strip().upper()
-        quantity = int(holding.get("quantity", 0))
-        avg_price = float(holding.get("buyPrice", 0.0))
-        buy_date = holding.get("buyDate")
 
+    # Enrich stocks with live price
+    for holding, stock_info in zip(stock_raw, stock_infos):
+        ticker = str(holding.get("ticker", "")).strip().upper()
+        quantity = float(holding.get("quantity", 0))
+        avg_price = float(holding.get("buyPrice", 0.0))
         current_price = float(stock_info.get("currentPrice", 0.0))
         current_value = current_price * quantity
+        enriched_holdings.append({
+            "ticker": ticker,
+            "quantity": quantity,
+            "avgPrice": avg_price,
+            "buyDate": holding.get("buyDate"),
+            "currentPrice": current_price,
+            "currentValue": current_value,
+            "assetType": "stock",
+        })
 
-        enriched_holdings.append(
-            {
-                "ticker": ticker,
+    # Enrich non-stocks with basic data (no yfinance)
+    from app.services.mf import get_mf_nav, _compute_fd_value
+    for holding in non_stock_raw:
+        asset_type = str(holding.get("assetType", "")).strip().lower()
+        ticker = str(holding.get("ticker", "")).strip()
+        quantity = float(holding.get("quantity", 0))
+        buy_price = float(holding.get("buyPrice", 0.0))
+
+        if asset_type == "mutual_fund":
+            nav_data = await get_mf_nav(ticker)
+            current_price = float(nav_data.get("currentNav", buy_price) or buy_price)
+            current_value = current_price * quantity
+            enriched_holdings.append({
+                "ticker": nav_data.get("schemeName") or ticker,
                 "quantity": quantity,
-                "avgPrice": avg_price,
-                "buyDate": buy_date,
+                "avgPrice": buy_price,
+                "buyDate": holding.get("buyDate"),
                 "currentPrice": current_price,
                 "currentValue": current_value,
-                "assetType": holding.get("assetType", "stock"),
-            }
-        )
+                "assetType": "mutual_fund",
+                "schemeName": nav_data.get("schemeName") or holding.get("schemeName", ticker),
+            })
+        elif asset_type == "fd":
+            buy_date = holding.get("buyDate")
+            buy_date_str = (
+                buy_date.isoformat() if hasattr(buy_date, "isoformat") else str(buy_date)
+            )
+            fd_rate = float(holding.get("fdRate", 7.0))
+            current_value = _compute_fd_value(buy_price, fd_rate, buy_date_str)
+            enriched_holdings.append({
+                "ticker": ticker,
+                "quantity": quantity,
+                "avgPrice": buy_price,
+                "buyDate": holding.get("buyDate"),
+                "currentPrice": current_value,
+                "currentValue": current_value,
+                "assetType": "fd",
+                "fdRate": fd_rate,
+            })
 
     return enriched_holdings, raw_holdings
 

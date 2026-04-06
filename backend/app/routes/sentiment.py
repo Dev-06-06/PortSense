@@ -33,7 +33,7 @@ async def get_sentiment(
     return await get_portfolio_sentiment(tickers)
 
 
-@router.get("/stream")
+@router.get("/live")
 async def stream_sentiment(
     current_user: dict = Depends(get_current_user),
     holdings_collection: AsyncIOMotorCollection = Depends(get_holdings_collection),

@@ -95,18 +95,37 @@ async def get_watchlist(
         return []
 
     tickers = [str(document.get("ticker", "")).strip().upper() for document in watchlist_docs]
-    ticker_tasks = [
-        asyncio.gather(
-            asyncio.to_thread(get_stock_info, ticker),
-            asyncio.to_thread(_get_stock_sentiment_cached, ticker),
-        )
-        for ticker in tickers
-    ]
+    ticker_tasks = []
+    ticker_is_stock = []
+    for ticker in tickers:
+        ticker = str(ticker).strip()
+        is_stock = ticker.upper().endswith(".NS") or ticker.upper().endswith(".BO")
+        is_mf = ticker.isdigit()
+
+        ticker_is_stock.append(is_stock)
+
+        if is_stock:
+            ticker_tasks.append(
+                asyncio.gather(
+                    asyncio.to_thread(get_stock_info, ticker),
+                    asyncio.to_thread(_get_stock_sentiment_cached, ticker),
+                )
+            )
+        else:
+            ticker_tasks.append(
+                asyncio.gather(
+                    asyncio.to_thread(_get_stock_sentiment_cached, ticker),
+                )
+            )
     ticker_results = await asyncio.gather(*ticker_tasks)
 
     return [
-        _build_watchlist_entry(document, stock_info, sentiment)
-        for document, (stock_info, sentiment) in zip(watchlist_docs, ticker_results)
+        _build_watchlist_entry(
+            document,
+            result[0] if is_stock else {},
+            result[-1],
+        )
+        for document, is_stock, result in zip(watchlist_docs, ticker_is_stock, ticker_results)
     ]
 
 

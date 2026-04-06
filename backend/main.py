@@ -48,8 +48,11 @@ async def warmup_yfinance_pool():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    mongo_client = await connect_to_mongo()
-    await ensure_indexes(mongo_client)
+    try:
+        mongo_client = await connect_to_mongo()
+        await ensure_indexes(mongo_client)
+    except Exception:
+        logger.warning("Starting without MongoDB; database-backed routes will return 500 until the connection is restored.", exc_info=True)
     asyncio.create_task(warmup_yfinance_pool())
     yield
     close_mongo_connection()

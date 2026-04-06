@@ -521,11 +521,11 @@ async def get_stock_intel(
 
     portfolio_context = None
     if user_holdings:
-        unique_tickers = []
-        for holding in user_holdings:
-            holding_ticker = str(holding.get("ticker", "")).strip().upper()
-            if holding_ticker and holding_ticker not in unique_tickers:
-                unique_tickers.append(holding_ticker)
+        unique_tickers = list({
+            str(h.get("ticker", "")).strip().upper()
+            for h in user_holdings
+            if str(h.get("assetType", "stock")).strip().lower() == "stock"
+        })
 
         stock_infos = await asyncio.gather(
             *[asyncio.to_thread(get_stock_info, holding_ticker) for holding_ticker in unique_tickers]

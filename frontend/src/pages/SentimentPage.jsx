@@ -144,7 +144,7 @@ const SentimentPage = () => {
     setStreamedCount(0);
 
     const token = localStorage.getItem("token");
-    const url = `${API_BASE}/api/sentiment/stream`;
+    const url = `${API_BASE}/api/sentiment/live`;
 
     const controller = new AbortController();
 

@@ -30,8 +30,8 @@ DEMO_USERNAME = "Demo Investor"
 # Benchmark: Overweight IT drags vs Nifty, Pharma provides buffer
 
 DEMO_HOLDINGS = [
-    # ── IT Sector (overweight intentionally for sector warning) ──────────────
-    # LTCG — bought Jun 2022
+    # ── IT Sector (3 stocks — strong positive correlation cluster) ────────────
+    # LTCG
     {
         "ticker": "TCS.NS",
         "buyDate": "2022-06-10",
@@ -39,7 +39,7 @@ DEMO_HOLDINGS = [
         "quantity": 5,
         "assetType": "stock",
     },
-    # LTCG — bought Jan 2023
+    # LTCG
     {
         "ticker": "INFY.NS",
         "buyDate": "2023-01-15",
@@ -47,7 +47,7 @@ DEMO_HOLDINGS = [
         "quantity": 10,
         "assetType": "stock",
     },
-    # STCG batch 2 — bought Jan 26, 2026
+    # STCG batch 2
     {
         "ticker": "HCLTECH.NS",
         "buyDate": "2026-01-26",
@@ -57,7 +57,7 @@ DEMO_HOLDINGS = [
     },
 
     # ── Banking Sector ────────────────────────────────────────────────────────
-    # LTCG — bought Nov 2022
+    # LTCG
     {
         "ticker": "HDFCBANK.NS",
         "buyDate": "2022-11-10",
@@ -65,7 +65,7 @@ DEMO_HOLDINGS = [
         "quantity": 8,
         "assetType": "stock",
     },
-    # STCG batch 1 — bought Aug 12, 2025
+    # STCG batch 1
     {
         "ticker": "ICICIBANK.NS",
         "buyDate": "2025-08-12",
@@ -75,7 +75,7 @@ DEMO_HOLDINGS = [
     },
 
     # ── Energy Sector ─────────────────────────────────────────────────────────
-    # LTCG — bought Sep 2022
+    # LTCG
     {
         "ticker": "RELIANCE.NS",
         "buyDate": "2022-09-20",
@@ -83,7 +83,7 @@ DEMO_HOLDINGS = [
         "quantity": 6,
         "assetType": "stock",
     },
-    # STCG batch 1 — bought Aug 12, 2025 (high beta ~1.4)
+    # STCG batch 1
     {
         "ticker": "ONGC.NS",
         "buyDate": "2025-08-12",
@@ -92,8 +92,8 @@ DEMO_HOLDINGS = [
         "assetType": "stock",
     },
 
-    # ── Pharma Sector ─────────────────────────────────────────────────────────
-    # LTCG — bought Feb 2023 (low correlation with IT)
+    # ── Pharma Sector (negative corr with IT, defensive) ─────────────────────
+    # LTCG
     {
         "ticker": "SUNPHARMA.NS",
         "buyDate": "2023-02-14",
@@ -101,7 +101,7 @@ DEMO_HOLDINGS = [
         "quantity": 10,
         "assetType": "stock",
     },
-    # STCG batch 2 — bought Jan 26, 2026
+    # STCG batch 2
     {
         "ticker": "DRREDDY.NS",
         "buyDate": "2026-01-26",
@@ -110,8 +110,8 @@ DEMO_HOLDINGS = [
         "assetType": "stock",
     },
 
-    # ── FMCG Sector (low beta ~0.5, negative corr with IT) ───────────────────
-    # LTCG — bought Mar 2023
+    # ── FMCG Sector (low beta ~0.5, negative corr with IT and Metal) ──────────
+    # LTCG — key negative correlation anchor
     {
         "ticker": "HINDUNILVR.NS",
         "buyDate": "2023-03-10",
@@ -119,19 +119,53 @@ DEMO_HOLDINGS = [
         "quantity": 4,
         "assetType": "stock",
     },
-
-    # ── Auto + High Beta ──────────────────────────────────────────────────────
-    # STCG batch 1 — bought Aug 12, 2025 (beta ~1.6)
+    # STCG batch 1
     {
-        "ticker": "BAJFINANCE.NS",
+        "ticker": "ITC.NS",
         "buyDate": "2025-08-12",
-        "buyPrice": 7200,
-        "quantity": 2,
+        "buyPrice": 420,
+        "quantity": 40,
         "assetType": "stock",
     },
 
-    # ── Metal Sector (high beta ~1.5, cyclical) ───────────────────────────────
-    # LTCG — bought Dec 2022
+    # ── Defence Sector (PSU, low corr with IT/FMCG, govt capex driven) ───────
+    # LTCG
+    {
+        "ticker": "HAL.NS",
+        "buyDate": "2023-05-20",
+        "buyPrice": 1850,
+        "quantity": 5,
+        "assetType": "stock",
+    },
+    # STCG batch 2
+    {
+        "ticker": "BEL.NS",
+        "buyDate": "2026-01-26",
+        "buyPrice": 280,
+        "quantity": 40,
+        "assetType": "stock",
+    },
+
+    # ── Railway / Infra Sector (PSU capex, negative corr with private IT) ────
+    # STCG batch 1
+    {
+        "ticker": "IRCTC.NS",
+        "buyDate": "2025-08-12",
+        "buyPrice": 720,
+        "quantity": 12,
+        "assetType": "stock",
+    },
+    # LTCG
+    {
+        "ticker": "LT.NS",
+        "buyDate": "2023-07-15",
+        "buyPrice": 2100,
+        "quantity": 4,
+        "assetType": "stock",
+    },
+
+    # ── Metal Sector (high beta ~1.5, cyclical, negative corr with Pharma) ───
+    # LTCG
     {
         "ticker": "TATASTEEL.NS",
         "buyDate": "2022-12-05",
@@ -139,7 +173,7 @@ DEMO_HOLDINGS = [
         "quantity": 100,
         "assetType": "stock",
     },
-    # STCG batch 2 — bought Jan 26, 2026
+    # STCG batch 2
     {
         "ticker": "JSWSTEEL.NS",
         "buyDate": "2026-01-26",
@@ -148,8 +182,18 @@ DEMO_HOLDINGS = [
         "assetType": "stock",
     },
 
+    # ── High Beta Finance (beta ~1.6) ─────────────────────────────────────────
+    # STCG batch 1
+    {
+        "ticker": "BAJFINANCE.NS",
+        "buyDate": "2025-08-12",
+        "buyPrice": 7200,
+        "quantity": 2,
+        "assetType": "stock",
+    },
+
     # ── Mutual Funds ──────────────────────────────────────────────────────────
-    # Equity MF — LTCG (bought Apr 2023)
+    # Equity MF — LTCG
     {
         "ticker": "119598",
         "buyDate": "2023-04-01",
@@ -158,7 +202,7 @@ DEMO_HOLDINGS = [
         "assetType": "mutual_fund",
         "schemeName": "Axis Bluechip Fund - Direct Plan - Growth",
     },
-    # ELSS MF — LTCG (bought Jun 2023)
+    # ELSS MF — LTCG
     {
         "ticker": "120503",
         "buyDate": "2023-06-15",
@@ -167,19 +211,19 @@ DEMO_HOLDINGS = [
         "assetType": "mutual_fund",
         "schemeName": "Axis ELSS Tax Saver Fund - Direct Plan - Growth",
     },
-    # Debt MF — STCG batch 1 (bought Aug 12, 2025)
+    # Debt MF — STCG batch 1
     {
-        "ticker": "101114",
+        "ticker": "119016",
         "buyDate": "2025-08-12",
-        "buyPrice": 45.20,
+        "buyPrice": 25.50,
         "quantity": 300,
         "assetType": "mutual_fund",
-        "schemeName": "HDFC Short Term Debt Fund - Direct Plan - Growth",
+        "schemeName": "HDFC Short Term Debt Fund - Growth Option - Direct Plan",
         "mfCategory": "debt",
     },
 
     # ── Fixed Deposits ────────────────────────────────────────────────────────
-    # SBI FD — LTCG equivalent (bought Sep 2023)
+    # LTCG equivalent
     {
         "ticker": "SBI FD",
         "buyDate": "2023-09-01",
@@ -188,7 +232,7 @@ DEMO_HOLDINGS = [
         "assetType": "fd",
         "fdRate": 7.1,
     },
-    # HDFC FD — STCG equivalent (bought Aug 12, 2025)
+    # STCG batch 1
     {
         "ticker": "HDFC FD",
         "buyDate": "2025-08-12",

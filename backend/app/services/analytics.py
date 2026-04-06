@@ -193,8 +193,14 @@ async def get_sector_breakdown(
         else:
             stock_tickers_for_api.append(ticker)
 
-    sectors = []
+    stock_holdings = []
     for holding in holdings:
+        if str(holding.get("assetType", "stock")).strip().lower() != "stock":
+            continue
+        stock_holdings.append(holding)
+
+    sectors = []
+    for holding in stock_holdings:
         ticker = str(holding.get("ticker", "")).strip().upper()
         if ticker in sector_overrides:
             sectors.append(sector_overrides[ticker])
@@ -202,7 +208,7 @@ async def get_sector_breakdown(
             sectors.append(await get_sector(ticker, db_client=active_db_client))
 
     sector_groups = {}
-    for holding, sector in zip(holdings, sectors):
+    for holding, sector in zip(stock_holdings, sectors):
         ticker = str(holding.get("ticker", "")).strip().upper()
         current_value = float(holding.get("currentValue", 0.0))
 
