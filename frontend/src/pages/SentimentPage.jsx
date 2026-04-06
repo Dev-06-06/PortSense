@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import api from "../services/api";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -135,107 +136,31 @@ const SentimentPage = () => {
     document.title = "Sentiment | PortSense";
   }, []);
 
-  const fetchSentiment = useCallback(() => {
+  const fetchSentiment = useCallback(async () => {
     setLoading(true);
     setError("");
     setStocks([]);
     setPortfolioSignal("Mixed");
-    setIsStreaming(true);
-    setStreamedCount(0);
+    setIsStreaming(false);
 
-    const token = localStorage.getItem("token");
-    const url = `${API_BASE}/api/sentiment/feed`;
-
-    const controller = new AbortController();
-
-    fetch(url, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "text/event-stream",
-      },
-      signal: controller.signal,
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error("Stream failed");
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-
-        const read = () => {
-          reader.read().then(({ done, value }) => {
-            if (done) {
-              setLoading(false);
-              setLastUpdated(new Date());
-              return;
-            }
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split("\n\n");
-            buffer = lines.pop();
-
-            for (const line of lines) {
-              const trimmed = line.replace(/^data: /, "").trim();
-              if (!trimmed) continue;
-              try {
-                const parsed = JSON.parse(trimmed);
-
-                if (parsed.type === "stock") {
-                  const item = parsed.data;
-                  if (item.headlines.length === 0 && item.confidence === 0)
-                    continue;
-                  const normalized = {
-                    ticker: String(item?.ticker || "-"),
-                    badge: String(item?.badge || "Neutral"),
-                    confidence: Number.isFinite(Number(item?.confidence))
-                      ? Number(item.confidence)
-                      : 0,
-                    headlines: Array.isArray(item?.headlines)
-                      ? item.headlines.slice(0, 8).map((h) => ({
-                          headline:
-                            typeof h === "string"
-                              ? h
-                              : String(h?.headline || ""),
-                          label:
-                            typeof h === "string"
-                              ? "neutral"
-                              : h?.label || "neutral",
-                          pubDate:
-                            typeof h === "string" ? "" : h?.pubDate || "",
-                        }))
-                      : [],
-                  };
-                  setStocks((prev) => [...prev, normalized]);
-                  setStreamedCount((prev) => prev + 1);
-                  setLoading(false);
-                }
-
-                if (parsed.type === "done") {
-                  setPortfolioSignal(parsed.portfolioSignal || "Mixed");
-                  setIsStreaming(false);
-                  setLoading(false);
-                  setLastUpdated(new Date());
-                }
-              } catch {}
-            }
-
-            read();
-          });
-        };
-
-        read();
-      })
-      .catch((err) => {
-        if (err.name === "AbortError") return;
-        setError("Unable to fetch sentiment right now. Please try again.");
-        setLoading(false);
-      });
-
-    return controller;
+    try {
+      const response = await api.get("/api/sentiment/");
+      const normalized = normalizePayload(response?.data || {});
+      setPortfolioSignal(normalized.portfolioSignal);
+      setStocks(normalized.stocks);
+      setLastUpdated(new Date());
+    } catch {
+      setError("Unable to fetch sentiment right now. Please try again.");
+      setPortfolioSignal("Mixed");
+      setStocks([]);
+    } finally {
+      setLoading(false);
+      setIsStreaming(false);
+    }
   }, []);
 
   useEffect(() => {
-    const controller = fetchSentiment();
-    return () => controller?.abort();
+    fetchSentiment();
   }, [fetchSentiment]);
 
   useEffect(() => {
