@@ -13,6 +13,7 @@ import yfinance as yf
 
 from app.deps import get_holdings_collection
 from app.middleware.auth import get_current_user
+from app.services.mf import get_mf_nav, _compute_fd_value
 from app.services.market import get_stock_info
 
 
@@ -265,6 +266,29 @@ async def get_alternative_comparison(
         earliest_date = events[0]["date"]
         today = date.today()
 
+        # Separate holdings by asset type
+        mf_cleaned = [
+            h for h in holdings  # use original holdings list, not cleaned_holdings
+            if str(h.get("assetType", "stock")).strip().lower() == "mutual_fund"
+        ]
+        fd_cleaned = [
+            h for h in holdings
+            if str(h.get("assetType", "stock")).strip().lower() == "fd"
+        ]
+
+        # Fetch MF NAVs in parallel
+        mf_nav_results = await asyncio.gather(
+            *[get_mf_nav(str(h.get("ticker", ""))) for h in mf_cleaned],
+            return_exceptions=True
+        ) if mf_cleaned else []
+
+        mf_current_by_ticker = {}
+        for h, nav_data in zip(mf_cleaned, mf_nav_results):
+            if isinstance(nav_data, dict):
+                current_nav = float(nav_data.get("currentNav", 0) or 0)
+                if current_nav > 0:
+                    mf_current_by_ticker[str(h.get("ticker", "")).strip()] = current_nav
+
         market_holdings = [
             h for h in cleaned_holdings if _is_market_ticker(h["ticker"])
         ]
@@ -283,13 +307,37 @@ async def get_alternative_comparison(
         for holding in cleaned_holdings:
             quantity = float(holding["quantity"])
             buy_price = float(holding["buyPrice"])
-            current_price = buy_price
-            info = info_by_ticker.get(holding["ticker"])
-            if isinstance(info, dict):
-                fetched = float(info.get("currentPrice", 0) or 0)
-                if fetched > 0:
-                    current_price = fetched
-            portfolio_current += current_price * quantity
+            ticker = holding["ticker"]
+
+            # Find original holding to get assetType
+            original = next(
+                (h for h in holdings
+                 if str(h.get("ticker", "")).strip().upper() == ticker),
+                None
+            )
+            asset_type = str((original or {}).get("assetType", "stock")).strip().lower()
+
+            if asset_type == "mutual_fund":
+                current_nav = mf_current_by_ticker.get(ticker.lower()) or \
+                              mf_current_by_ticker.get(ticker) or buy_price
+                portfolio_current += current_nav * quantity
+
+            elif asset_type == "fd":
+                buy_date = holding["buyDate"]
+                buy_date_str = buy_date.isoformat() if hasattr(buy_date, "isoformat") \
+                               else str(buy_date)
+                fd_rate_holding = float((original or {}).get("fdRate", 7.0) or 7.0)
+                fd_val = _compute_fd_value(buy_price, fd_rate_holding, buy_date_str)
+                portfolio_current += fd_val
+
+            else:
+                current_price = buy_price
+                info = info_by_ticker.get(ticker)
+                if isinstance(info, dict):
+                    fetched = float(info.get("currentPrice", 0) or 0)
+                    if fetched > 0:
+                        current_price = fetched
+                portfolio_current += current_price * quantity
 
         alt_symbols = {
             "nifty50": "^NSEI",
@@ -370,15 +418,39 @@ async def get_alternative_comparison(
                     continue
                 ticker = holding["ticker"]
                 quantity = float(holding["quantity"])
-                price = float(holding["buyPrice"])
-                series = ticker_series.get(ticker)
-                if series is not None:
-                    market_price = _price_on_or_after(series, month)
-                    if market_price is None or market_price <= 0:
-                        market_price = _price_on_or_before(series, month)
-                    if market_price is not None and market_price > 0:
-                        price = market_price
-                portfolio_value += quantity * price
+                buy_price = float(holding["buyPrice"])
+
+                original = next(
+                    (h for h in holdings
+                     if str(h.get("ticker", "")).strip().upper() == ticker),
+                    None
+                )
+                asset_type = str((original or {}).get("assetType", "stock")).strip().lower()
+
+                if asset_type == "mutual_fund":
+                    # Use current NAV as approximation for timeline
+                    # (historical MF NAV per month would require MFAPI history calls)
+                    current_nav = mf_current_by_ticker.get(ticker.lower()) or \
+                                  mf_current_by_ticker.get(ticker) or buy_price
+                    portfolio_value += current_nav * quantity
+
+                elif asset_type == "fd":
+                    buy_date_str = holding["buyDate"].isoformat() \
+                        if hasattr(holding["buyDate"], "isoformat") \
+                        else str(holding["buyDate"])
+                    fd_rate_holding = float((original or {}).get("fdRate", 7.0) or 7.0)
+                    portfolio_value += _compute_fd_value(buy_price, fd_rate_holding, buy_date_str)
+
+                else:
+                    price = buy_price
+                    series = ticker_series.get(ticker)
+                    if series is not None:
+                        market_price = _price_on_or_after(series, month)
+                        if market_price is None or market_price <= 0:
+                            market_price = _price_on_or_before(series, month)
+                        if market_price is not None and market_price > 0:
+                            price = market_price
+                    portfolio_value += quantity * price
 
             point["portfolio"] = round(portfolio_value, 2)
 

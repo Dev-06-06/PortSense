@@ -240,6 +240,27 @@ async def get_health_score(
     holdings_collection: AsyncIOMotorCollection = Depends(get_holdings_collection),
 ):
     try:
+        user_id = current_user["_id"]
+        holdings_count = await holdings_collection.count_documents(
+            {"userId": user_id}
+        )
+        if holdings_count == 0:
+            return {
+                "score": 0,
+                "label": "No Holdings",
+                "color": "#64748b",
+                "breakdown": {
+                    "diversification": 0,
+                    "beta": 0,
+                    "sector": 0,
+                },
+                "maxScores": {
+                    "diversification": 40,
+                    "beta": 30,
+                    "sector": 30,
+                }
+            }
+
         div_data, beta_data, sector_data = await asyncio.gather(
             get_diversification(current_user, holdings_collection),
             get_beta_analytics(current_user, holdings_collection),

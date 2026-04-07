@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { prefetchRoute } from "../routes/prefetch";
 import api from "../services/api";
 
 const features = [
@@ -58,7 +57,7 @@ const features = [
 
 function LandingPage() {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { user, login } = useAuth();
   const [demoLoading, setDemoLoading] = useState(false);
   const [demoError, setDemoError] = useState("");
 
@@ -138,15 +137,20 @@ function LandingPage() {
           </div>
 
           <div style={styles.ctaRow}>
-            <Link
-              to="/register"
-              style={{ ...styles.button, ...styles.primaryButton }}
-              onMouseEnter={() => prefetchRoute("/register")}
-              onFocus={() => prefetchRoute("/register")}
-              onTouchStart={() => prefetchRoute("/register")}
+            <button
+              onClick={() =>
+                user ? navigate("/dashboard") : navigate("/login")
+              }
+              style={{
+                ...styles.button,
+                ...styles.primaryButton,
+                border: "none",
+                cursor: "pointer",
+                fontFamily: "inherit",
+              }}
             >
               Get Started
-            </Link>
+            </button>
             <button
               onClick={handleDemoLogin}
               disabled={demoLoading}

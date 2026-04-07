@@ -10,27 +10,28 @@ const DemoBanner = () => {
       <style>{`
         .demo-banner {
           position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          z-index: 2000;
-          background: linear-gradient(90deg, #f97316, #ea580c);
-          color: white;
-          text-align: center;
-          padding: 6px 16px;
+          top: 0.5rem;
+          left: 50%;
+          transform: translateX(-50%);
+          z-index: 51;
+          display: inline-flex;
+          align-items: center;
+          gap: 0.4rem;
+          background-color: rgba(249,115,22,0.15);
+          border: 1px solid rgba(249,115,22,0.4);
+          border-radius: 999px;
+          padding: 0.3rem 0.85rem;
+          white-space: nowrap;
+          color: #fdba74;
           font-size: 12px;
           font-weight: 700;
           letter-spacing: 0.4px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
         }
         .demo-banner-dot {
           width: 6px;
           height: 6px;
           border-radius: 50%;
-          background: white;
+          background: #f97316;
           animation: blink 1.5s ease-in-out infinite;
         }
         @keyframes blink {
@@ -40,8 +41,7 @@ const DemoBanner = () => {
       `}</style>
       <div className="demo-banner">
         <span className="demo-banner-dot" />
-        DEMO MODE — Holdings reset on each login. Feel free to add, edit, or
-        delete.
+        DEMO MODE
         <span className="demo-banner-dot" />
       </div>
     </>

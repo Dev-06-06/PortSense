@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../services/api";
 import StockIntelDrawer from "../components/StockIntelDrawer";
+import TopNav from "../components/TopNav";
+import DemoBanner from "../components/DemoBanner";
 import useSwipe from "../hooks/useSwipe";
 import { useAuth } from "../context/AuthContext";
 
@@ -12,7 +14,7 @@ const shellStyle = {
   backgroundColor: "#0d1117",
   color: "#f8fafc",
   fontFamily: "'DM Sans', sans-serif",
-  padding: "4rem 1.25rem 5rem 1.25rem",
+  padding: "1.5rem 1.25rem 5rem 1.25rem",
 };
 
 const containerStyle = {
@@ -834,6 +836,8 @@ export default function DashboardPage() {
 
   return (
     <div style={shellStyle}>
+      <TopNav />
+      <DemoBanner />
       <style>{`
         .summary-grid {
           display: grid;

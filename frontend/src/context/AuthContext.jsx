@@ -49,6 +49,7 @@ export const AuthProvider = ({ children }) => {
     userData = decodeUserFromToken(receivedToken),
   ) => {
     localStorage.setItem("token", receivedToken);
+    sessionStorage.removeItem("portsense_account_cache");
     localStorage.setItem("user", JSON.stringify(userData));
     setToken(receivedToken);
     setUser(userData);
@@ -56,6 +57,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     localStorage.removeItem("token");
+    sessionStorage.removeItem("portsense_account_cache");
     localStorage.removeItem("user");
     setUsername("");
     setToken(null);

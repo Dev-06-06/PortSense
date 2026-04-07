@@ -94,7 +94,17 @@ def calculate_xirr(cash_flows: list[tuple[datetime, float]]) -> float:
         return 0.0
 
 
-async def get_sector(ticker: str, db_client=None) -> str:
+async def get_sector(ticker: str, asset_type: str = "stock", db_client=None) -> str:
+    # Short-circuit for non-stock assets.
+    normalized = str(ticker or "").strip()
+    asset = str(asset_type or "stock").strip().lower()
+
+    if asset == "fd":
+        return "Fixed Deposit"
+    if asset == "mutual_fund":
+        return "Mutual Fund"
+
+    ticker = normalized.upper()
     db = get_database_from_client(db_client) if db_client else None
 
     if db is not None:
@@ -180,35 +190,20 @@ async def get_sector_breakdown(
 ) -> list[dict]:
     active_db_client = db_client or mongo_client
     total_portfolio_value = sum(float(holding.get("currentValue", 0.0)) for holding in holdings)
-    sector_overrides = {}
-    stock_tickers_for_api = []
-
-    for holding in holdings:
-        asset_type = holding.get("assetType", "stock")
-        ticker = str(holding.get("ticker", "")).strip().upper()
-        if asset_type == "mutual_fund":
-            sector_overrides[ticker] = "Mutual Fund"
-        elif asset_type == "fd":
-            sector_overrides[ticker] = "Debt / FD"
-        else:
-            stock_tickers_for_api.append(ticker)
-
-    stock_holdings = []
-    for holding in holdings:
-        if str(holding.get("assetType", "stock")).strip().lower() != "stock":
-            continue
-        stock_holdings.append(holding)
 
     sectors = []
-    for holding in stock_holdings:
+    for holding in holdings:
         ticker = str(holding.get("ticker", "")).strip().upper()
-        if ticker in sector_overrides:
-            sectors.append(sector_overrides[ticker])
-        else:
-            sectors.append(await get_sector(ticker, db_client=active_db_client))
+        sectors.append(
+            await get_sector(
+                ticker,
+                str(holding.get("assetType", "stock")).strip().lower(),
+                db_client=active_db_client,
+            )
+        )
 
     sector_groups = {}
-    for holding, sector in zip(stock_holdings, sectors):
+    for holding, sector in zip(holdings, sectors):
         ticker = str(holding.get("ticker", "")).strip().upper()
         current_value = float(holding.get("currentValue", 0.0))
 
@@ -225,18 +220,23 @@ async def get_sector_breakdown(
 
     breakdown = []
     for sector_data in sector_groups.values():
+        sector_name = sector_data["sector"]
         percentage = (
             (sector_data["totalValue"] / total_portfolio_value) * 100.0
             if total_portfolio_value > 0
             else 0.0
         )
+        is_overweight = percentage > 30.0
+        if sector_name in ("Fixed Deposit", "Mutual Fund"):
+            is_overweight = False
+
         breakdown.append(
             {
-                "sector": sector_data["sector"],
+                "sector": sector_name,
                 "totalValue": sector_data["totalValue"],
                 "percentage": percentage,
                 "tickers": sorted(list(sector_data["tickers"])),
-                "isOverweight": percentage > 30.0,
+                "isOverweight": is_overweight,
             }
         )
 
