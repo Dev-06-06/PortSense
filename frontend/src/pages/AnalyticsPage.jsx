@@ -40,7 +40,7 @@ const shellStyle = {
 
 const containerStyle = {
   width: "100%",
-  maxWidth: "52rem",
+  maxWidth: "80rem",
   margin: "0 auto",
   display: "grid",
   gap: "1rem",
@@ -2163,7 +2163,13 @@ const AnalyticsPage = () => {
           {activeTab === "Correlation" && (
             <>
               {/* Heatmap Card */}
-              <div style={{ ...cardStyle, scrollMarginTop: "3.5rem" }}>
+              <div
+                style={{
+                  ...cardStyle,
+                  width: "100%",
+                  scrollMarginTop: "3.5rem",
+                }}
+              >
                 <h2 style={sectionTitleStyle}>Correlation Heatmap</h2>
                 <p
                   style={{

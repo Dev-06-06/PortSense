@@ -127,17 +127,24 @@ async def login(
         await holdings_collection.delete_many({"userId": user["_id"]})
 
         now = datetime.now(timezone.utc)
-        documents = [
-            {
+        documents = []
+        for item in DEMO_HOLDINGS:
+            doc = {
                 "userId": user["_id"],
                 "ticker": item["ticker"],
                 "buyDate": datetime.strptime(item["buyDate"], "%Y-%m-%d").replace(tzinfo=timezone.utc),
                 "buyPrice": item["buyPrice"],
                 "quantity": item["quantity"],
+                "assetType": item.get("assetType", "stock"),
                 "createdAt": now,
             }
-            for item in DEMO_HOLDINGS
-        ]
+            if item.get("schemeName"):
+                doc["schemeName"] = item["schemeName"]
+            if item.get("fdRate"):
+                doc["fdRate"] = item["fdRate"]
+            if item.get("mfCategory"):
+                doc["mfCategory"] = item["mfCategory"]
+            documents.append(doc)
         await holdings_collection.insert_many(documents)
 
     token = _create_access_token(str(user.get("_id")), is_demo=is_demo_user)
