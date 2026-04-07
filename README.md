@@ -4,7 +4,7 @@
 
 <div align="center">
 
-**[Live Demo](https://bit.ly/portsense)** &nbsp;·&nbsp; **[Backend API Docs](https://portsense-backend.onrender.com/docs)** &nbsp;·&nbsp; **[GitHub](https://github.com/Dev-06-06/PortSense)**
+**[Live Demo](https://bit.ly/portsense)** &nbsp;·&nbsp; **[Backend API Docs](https://portsense.onrender.com/docs)** &nbsp;·&nbsp; **[GitHub](https://github.com/Dev-06-06/PortSense)**
 
 ![PortSense Dashboard](https://github.com/user-attachments/assets/4dff3281-c2be-4f46-83db-8c22766da8a6)
 
