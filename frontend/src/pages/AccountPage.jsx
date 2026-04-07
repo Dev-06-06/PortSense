@@ -65,6 +65,36 @@ const formatMemberSince = (createdAt) => {
   return `Member since ${monthYear}`;
 };
 
+const CACHE_KEY = "portsense_account_cache";
+const CACHE_TTL_MS = 5 * 60 * 1000;
+
+const getCache = () => {
+  try {
+    const raw = sessionStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const { data, timestamp } = JSON.parse(raw);
+    if (Date.now() - timestamp > CACHE_TTL_MS) {
+      sessionStorage.removeItem(CACHE_KEY);
+      return null;
+    }
+    return data;
+  } catch {
+    return null;
+  }
+};
+
+const setCache = (data) => {
+  try {
+    sessionStorage.setItem(
+      CACHE_KEY,
+      JSON.stringify({
+        data,
+        timestamp: Date.now(),
+      }),
+    );
+  } catch {}
+};
+
 const AccountPage = () => {
   const navigate = useNavigate();
   const { logout } = useAuth();
@@ -100,6 +130,17 @@ const AccountPage = () => {
       setSinceLoading(true);
       setError("");
 
+      const cached = getCache();
+      if (cached) {
+        setUserDetails(cached.userDetails);
+        setHealthData(cached.healthData);
+        setSinceData(cached.sinceData);
+        setLoading(false);
+        setHealthLoading(false);
+        setSinceLoading(false);
+        return;
+      }
+
       try {
         const [meResponse, healthResponse, sinceResponse] = await Promise.all([
           api.get("/api/auth/me"),
@@ -110,6 +151,11 @@ const AccountPage = () => {
         setUserDetails(meResponse.data || null);
         setHealthData(healthResponse.data || null);
         setSinceData(sinceResponse.data || null);
+        setCache({
+          userDetails: meResponse.data,
+          healthData: healthResponse.data,
+          sinceData: sinceResponse.data,
+        });
         setHealthLoading(false);
         setSinceLoading(false);
       } catch {
@@ -157,6 +203,7 @@ const AccountPage = () => {
     try {
       await api.put("/api/auth/update-username", { new_username: trimmed });
       setUserDetails((prev) => (prev ? { ...prev, username: trimmed } : prev));
+      sessionStorage.removeItem("portsense_account_cache");
       setIsEditingUsername(false);
       setUsernameInput("");
       setUsernameSuccess("Username updated");
@@ -196,6 +243,7 @@ const AccountPage = () => {
         new_password: newPassword,
       });
 
+      sessionStorage.removeItem("portsense_account_cache");
       setShowPasswordForm(false);
       setCurrentPassword("");
       setNewPassword("");
