@@ -17,7 +17,7 @@
 
 ## What is PortSense?
 
-Most Indian retail investors track their portfolio in Excel or rely on broker apps that show P&L and nothing else. PortSense goes further — it runs your holdings through a **FinBERT NLP pipeline** for real-time sentiment analysis, computes **portfolio beta and diversification scores**, benchmarks your returns against Nifty 50 using XIRR, and uses **Gemini 2.5 Flash** to generate specific, rupee-amount rebalancing advice grounded in your actual data.
+Most Indian retail investors track their portfolio in Excel or rely on broker apps that show P&L and nothing else. PortSense goes further — it runs your holdings through a **FinBERT NLP pipeline** for real-time sentiment analysis using fresh GNews articles, computes **portfolio beta and diversification scores**, benchmarks your returns against Nifty 50 using XIRR, and uses **Gemini 2.5 Flash** to generate specific, rupee-amount rebalancing advice grounded in your actual data.
 
 It supports **NSE stocks**, **mutual funds** (via MFAPI), and **fixed deposits** — three asset classes in one unified analytics platform.
 
@@ -60,26 +60,26 @@ It supports **NSE stocks**, **mutual funds** (via MFAPI), and **fixed deposits**
 - Watchlist for stocks and mutual funds with live prices and sentiment badges
 
 ### Analytics
-- **Sector Breakdown** — pie chart with overweight concentration warnings. MF and FD shown as separate categories
+- **Sector Breakdown** — pie chart with overweight concentration warnings. MF and FD shown as separate categories, never grouped under "Others"
 - **Beta Analysis** — portfolio beta vs per-stock beta breakdown table
 - **Diversification Score** — composite 0–10 score across sector, size, and correlation sub-scores
-- **Benchmark Comparison** — XIRR-based line chart vs Nifty 50 across full holding period
+- **Benchmark Comparison** — XIRR-based line chart vs Nifty 50 across full holding period. Includes MF and FD in portfolio valuation
 - **Stress Test** — 6 preset market crash scenarios + custom shock input with horizontal bar visualization
 - **Risk Decomposition** — systematic vs idiosyncratic vs sector concentration risk split
-- **Correlation Heatmap** — pairwise matrix with color-coded cells. Top pairs show both strongly positive and negative correlations
+- **Correlation Heatmap** — pairwise matrix with color-coded cells. Top pairs explicitly show both strongly positive and negative correlations
 
 ### AI Features
-- **FinBERT Sentiment** — ProsusAI/finbert scores headlines per stock, aggregates to portfolio signal (Bullish/Bearish/Mixed). Cards load progressively as each stock completes scoring. Collapse/expand per stock with headline dates and staleness detection
-- **Gemini Rebalancing Advisor** — grounded in live beta, diversification, sector weights, benchmark CAGR, and correlation pairs. Returns structured advice with specific rupee amounts per action
+- **FinBERT Sentiment** — ProsusAI/finbert scores headlines per stock using real-time GNews articles (2–7 day freshness window, tier-based per stock coverage). Aggregates to portfolio signal (Bullish/Bearish/Mixed). Collapse/expand per stock showing scored headlines with source name, date, and clickable article URL. Stocks with no recent news show "No recent articles — Sentiment defaulted to Neutral" rather than stale or misleading scores
+- **Gemini Rebalancing Advisor** — grounded in live beta, diversification, sector weights, benchmark CAGR, and correlation pairs. Returns structured advice with specific rupee amounts per action across stocks, MFs, and FDs
 - **Gemini Correlation Explainer** — explains why two stocks move together or apart using fundamental business reasoning
 - **Stock Intel Drawer** — tabbed drawer (Snapshot / Technicals / Sentiment / Fundamentals / AI Analysis) with progressive reveal and TTL caching
 - **MF Info Drawer** — 30-day NAV sparkline, historical returns (1W / 1M / 3M / 1Y)
 
 ### Other Pages
-- **What If? Comparison** — compares your portfolio against Gold, Silver, Nifty 50, FD, and Nifty Index Fund using identical cash flows and buy dates. Includes MF and FD in portfolio valuation
-- **Tax & Real Returns** — LTCG/STCG classification with ₹1.25L exemption, FD slab rate, inflation-adjusted real returns per holding
-- **Market News Feed** — category-filtered financial news (Market, Banking, IT, Pharma, Auto, Energy) with inline timestamps
-- **Account Page** — Portfolio Health Score (0–100 from beta stability, diversification, sector balance), Holding Since stats, password change
+- **What If? Comparison** — compares your portfolio against Gold, Silver, Nifty 50, FD, and Nifty Index Fund using identical cash flows and buy dates. MF NAV and FD compound interest included in portfolio valuation
+- **Tax & Real Returns** — LTCG/STCG classification with ₹1.25L exemption, FD slab rate, MF debt vs equity treatment, inflation-adjusted real returns per holding
+- **Market News Feed** — 13 category filters (Market, Banking, IT, Pharma, Auto, Energy, Finance, Mutual Funds, IPO, Economy, SEBI, Govt Policy, Rupee) powered by GNews API with article thumbnails, descriptions, and source attribution. Falls back to Google RSS if GNews is unavailable
+- **Account Page** — Portfolio Health Score (0–100 derived from beta stability, diversification, sector balance), Holding Since stats, username and password change
 
 ---
 
@@ -94,9 +94,9 @@ It supports **NSE stocks**, **mutual funds** (via MFAPI), and **fixed deposits**
 | Auth | JWT (python-jose) | Stateless, works cleanly with demo mode |
 | Stock Data | yfinance | Free, covers all NSE/BSE tickers |
 | MF Data | MFAPI.in | Free Indian MF NAV API, no auth required |
-| Sentiment | FinBERT via HuggingFace | Finance-domain BERT, outperforms general models on financial text |
+| Sentiment | FinBERT via HuggingFace Inference API | Finance-domain BERT, outperforms general models on financial text |
 | AI | Gemini 2.5 Flash (3-key rotation) | Low latency, generous free tier |
-| News | Google News RSS + yfinance news | Dual-source pipeline with 30-day freshness filter |
+| News | GNews API (student access) + Google RSS fallback | Real-time Indian financial news with verified timestamps and source attribution |
 | Deployment | Render (backend) + Vercel (frontend) | Free tier, auto-deploy on push |
 
 ---
@@ -105,6 +105,12 @@ It supports **NSE stocks**, **mutual funds** (via MFAPI), and **fixed deposits**
 
 **Why FinBERT over VADER or TextBlob?**  
 General sentiment models treat "the stock fell 5% as expected after results" as negative. FinBERT was trained on financial communications and correctly classifies these as neutral. It scores per-headline and aggregates via majority vote with confidence scoring.
+
+**Why GNews API over Google RSS for sentiment?**  
+Google News RSS has no guaranteed freshness — despite the `&tbs=qdr:w` parameter, articles from 3 months ago routinely appear for active NSE stocks. FinBERT scoring stale headlines produces sentiment badges that reflect last month's market mood, not today's. GNews student API provides verified `publishedAt` timestamps and Indian-sourced articles (NDTV Profit, Economic Times, Moneycontrol). A tiered freshness window is applied — 2 days for heavily covered large-caps (TCS, INFY, HDFCBANK), 5 days for mid-caps, 7 days for defence and railway stocks — balancing recency against coverage depth.
+
+**Why show "No recent articles" instead of hiding the card?**  
+Hiding a stock card when no fresh news exists implies the stock doesn't need attention. Showing the card with an explicit "No recent articles — Sentiment defaulted to Neutral" message is more honest and helps the investor understand the confidence level of the signal.
 
 **Why avoid stock price prediction?**  
 Price prediction requires clean labeled data, significant compute, and still underperforms random walk on short horizons. PortSense focuses on explainability — beta, diversification, correlation — metrics an investor can actually act on. This design choice was deliberate.
@@ -119,10 +125,13 @@ HuggingFace's free inference API binds to the event loop on batch calls, causing
 Concurrent `yf.download` calls share underlying urllib3 connection pools and produce race conditions under asyncio. A single call with multiple tickers is thread-safe and faster.
 
 **Asset type separation throughout**  
-Every analytics route filters by `assetType` before passing tickers to yfinance. MF scheme codes and FD bank names never reach yfinance — they route to MFAPI and a compound interest formula respectively. This took multiple layers of fixing across 8 route files.
+Every analytics route filters by `assetType` before passing tickers to yfinance. MF scheme codes and FD bank names never reach yfinance — they route to MFAPI and a compound interest formula respectively. This required fixes across 8 route files.
 
 **3-tier sector detection**  
-MongoDB cache → yfinance `.info` → Gemini fallback. 33 tickers pre-seeded. MF and FD are short-circuited to "Mutual Fund" and "Fixed Deposit" labels before any API call.
+MongoDB cache → yfinance `.info` → Gemini fallback. 33 tickers pre-seeded. MF and FD are short-circuited to "Mutual Fund" and "Fixed Deposit" labels before any API call, preventing them from appearing as "Others" in the sector breakdown.
+
+**Analytics and sentiment prefetching**  
+After the Dashboard loads, analytics endpoints are prefetched silently after 3 seconds, and sentiment after 6 seconds. This ensures near-instant load times when the user navigates to those pages, trading one extra GNews quota call per session for a significantly better experience.
 
 ---
 
@@ -153,6 +162,7 @@ The demo portfolio is deliberately constructed to showcase every analytics featu
 - MongoDB Atlas account (free tier)
 - HuggingFace API key (free)
 - Gemini API keys × 3 (free tier)
+- GNews API key (free tier at [gnews.io](https://gnews.io))
 
 ### Backend
 
@@ -164,7 +174,8 @@ pip install -r requirements.txt
 
 # Create .env
 cp .env.example .env
-# Fill in: MONGO_URI, HF_API_KEY, GEMINI_API_KEY_1/2/3, JWT_SECRET
+# Fill in: MONGO_URI, HF_API_KEY, GEMINI_API_KEY_1/2/3,
+#          JWT_SECRET, GNEWS_STUDENT_KEY, GNEWS_PERSONAL_KEY
 
 # Seed demo data
 python seed.py
@@ -225,9 +236,9 @@ PortSense/
         │   ├── Analytics.jsx
         │   ├── Tax.jsx
         │   ├── Comparison.jsx
-        │   ├── Sentiment.jsx
+        │   ├── SentimentPage.jsx
         │   ├── Account.jsx
-        │   ├── News.jsx
+        │   ├── NewsPage.jsx
         │   └── Landing.jsx
         ├── components/
         │   ├── StockIntelDrawer.jsx
@@ -245,22 +256,23 @@ PortSense/
 ## Roadmap
 
 - [ ] Bond support as a first-class asset type (coupon-based, not compound)
-- [ ] Historical MF NAV per month in What If? timeline (currently uses current NAV)
+- [ ] Historical MF NAV per month in What If? timeline (currently uses current NAV as proxy)
 - [ ] Portfolio export to PDF
 - [ ] Price alerts via email for watchlist items
 - [ ] Multi-currency support for NRI investors
+- [ ] SSE streaming for sentiment progressive card reveal (currently blocked by ad-blocker heuristics on fetch endpoints)
 
 ---
 
 ## Disclaimer
 
-Tax estimates are indicative only. Sentiment analysis and rebalancing advice are AI-generated and do not constitute financial advice. Consult a SEBI-registered investment advisor before making investment decisions.
+Tax estimates are indicative only. Sentiment analysis and rebalancing advice are AI-generated and do not constitute financial advice. News articles are sourced via GNews API — PortSense does not own or modify any article content. Always attribute the original publisher when sharing. Consult a SEBI-registered investment advisor before making investment decisions.
 
 ---
 
 <div align="center">
 
-Built with FastAPI · React · FinBERT · Gemini 2.5 Flash  
+Built with FastAPI · React · FinBERT · Gemini 2.5 Flash · GNews API  
 Deployed on Render + Vercel · Data from NSE via yfinance + MFAPI
 
 **[Try the live demo →](https://bit.ly/portsense)**
