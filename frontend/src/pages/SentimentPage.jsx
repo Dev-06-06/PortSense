@@ -109,6 +109,8 @@ const normalizePayload = (payload) => {
           headline: typeof h === "string" ? h : String(h?.headline || ""),
           label: typeof h === "string" ? "neutral" : h?.label || "neutral",
           pubDate: typeof h === "string" ? "" : h?.pubDate || "",
+          sourceName: typeof h === "string" ? "" : h?.sourceName || "",
+          articleUrl: typeof h === "string" ? "" : h?.articleUrl || "",
         }))
       : [],
   }));
@@ -386,9 +388,6 @@ const SentimentPage = () => {
 
             <section className="sentiment-grid">
               {stocks.map((stock) => {
-                if (stock.headlines.length === 0 && stock.confidence === 0)
-                  return null;
-
                 const cleanTicker = stock.ticker.replace(/\.NS$/i, "");
                 const headlines = stock.headlines.slice(0, 5);
                 const isExpanded = Boolean(expandedTickers[stock.ticker]);
@@ -476,9 +475,14 @@ const SentimentPage = () => {
                           fontSize: "0.75rem",
                           color: "#475569",
                           margin: "0.5rem 0 0",
+                          lineHeight: 1.5,
                         }}
                       >
-                        No headlines available
+                        No recent news in last 48 hours.
+                        <br />
+                        <span style={{ color: "#334155" }}>
+                          Sentiment set to Neutral by default.
+                        </span>
                       </p>
                     ) : (
                       <button
@@ -518,6 +522,8 @@ const SentimentPage = () => {
                           const headline = String(item?.headline || "");
                           const label = item?.label || "neutral";
                           const pubDateStr = item?.pubDate || "";
+                          const articleUrl = item?.articleUrl || "";
+                          const sourceName = item?.sourceName || "";
                           let isStale = false;
                           if (pubDateStr) {
                             try {
@@ -550,20 +556,45 @@ const SentimentPage = () => {
                                 }}
                               />
                               <div style={{ minWidth: 0 }}>
-                                <span
-                                  style={{
-                                    color: "#94a3b8",
-                                    fontSize: "0.82rem",
-                                    lineHeight: 1.4,
-                                    display: "-webkit-box",
-                                    WebkitLineClamp: 2,
-                                    WebkitBoxOrient: "vertical",
-                                    overflow: "hidden",
-                                  }}
-                                  title={headline}
-                                >
-                                  {headline}
-                                </span>
+                                {articleUrl ? (
+                                  <a
+                                    href={articleUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    style={{ textDecoration: "none" }}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <span
+                                      style={{
+                                        color: "#94a3b8",
+                                        fontSize: "0.82rem",
+                                        lineHeight: 1.4,
+                                        display: "-webkit-box",
+                                        WebkitLineClamp: 2,
+                                        WebkitBoxOrient: "vertical",
+                                        overflow: "hidden",
+                                      }}
+                                      title={headline}
+                                    >
+                                      {headline}
+                                    </span>
+                                  </a>
+                                ) : (
+                                  <span
+                                    style={{
+                                      color: "#94a3b8",
+                                      fontSize: "0.82rem",
+                                      lineHeight: 1.4,
+                                      display: "-webkit-box",
+                                      WebkitLineClamp: 2,
+                                      WebkitBoxOrient: "vertical",
+                                      overflow: "hidden",
+                                    }}
+                                    title={headline}
+                                  >
+                                    {headline}
+                                  </span>
+                                )}
                                 {pubDateStr !== "" && (
                                   <p
                                     style={{
@@ -589,6 +620,19 @@ const SentimentPage = () => {
                                         older
                                       </span>
                                     )}
+                                  </p>
+                                )}
+                                {sourceName && (
+                                  <p
+                                    style={{
+                                      margin: "0.1rem 0 0",
+                                      fontSize: "0.68rem",
+                                      color: "#f97316",
+                                      fontWeight: 600,
+                                      opacity: 0.8,
+                                    }}
+                                  >
+                                    {sourceName}
                                   </p>
                                 )}
                               </div>

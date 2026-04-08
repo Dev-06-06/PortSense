@@ -238,6 +238,7 @@ export default function DashboardPage() {
   const [newsLoading, setNewsLoading] = useState(false);
   const [newsError, setNewsError] = useState("");
   const [newsCategory, setNewsCategory] = useState("all");
+  const [hoveredIndex, setHoveredIndex] = useState(null);
 
   // ── Computed ────────────────────────────────────────────────────────────────
 
@@ -575,6 +576,34 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchPortfolioData();
   }, []);
+
+  useEffect(() => {
+    if (loading) return;
+
+    // Prefetch analytics data silently after dashboard loads
+    // Uses a 3-second delay so it doesn't compete with dashboard
+    const analyticsTimer = setTimeout(() => {
+      // Prefetch sectors
+      api.get("/api/analytics/sectors").catch(() => {});
+      // Prefetch beta
+      api.get("/api/analytics/beta").catch(() => {});
+      // Prefetch diversification
+      api.get("/api/analytics/diversification").catch(() => {});
+      // Prefetch benchmark
+      api.get("/api/analytics/benchmark").catch(() => {});
+      // Prefetch risk decomposition
+      api.get("/api/analytics/risk-decomposition").catch(() => {});
+    }, 3000);
+
+    const sentimentTimer = setTimeout(() => {
+      api.get("/api/sentiment/").catch(() => {});
+    }, 6000);
+
+    return () => {
+      clearTimeout(analyticsTimer);
+      clearTimeout(sentimentTimer);
+    };
+  }, [loading]);
 
   useEffect(() => {
     fetchWatchlist();
@@ -3119,34 +3148,41 @@ export default function DashboardPage() {
                 }}
               >
                 {[
-                  "all",
-                  "market",
-                  "banking",
-                  "it",
-                  "pharma",
-                  "auto",
-                  "energy",
+                  { label: "All", value: "all" },
+                  { label: "Market", value: "market" },
+                  { label: "Banking", value: "banking" },
+                  { label: "IT", value: "it" },
+                  { label: "Pharma", value: "pharma" },
+                  { label: "Auto", value: "auto" },
+                  { label: "Energy", value: "energy" },
+                  { label: "Finance", value: "finance" },
+                  { label: "Mutual Funds", value: "mf" },
+                  { label: "IPO", value: "ipo" },
+                  { label: "Economy", value: "economy" },
+                  { label: "SEBI", value: "sebi" },
+                  { label: "Govt Policy", value: "policy" },
+                  { label: "Rupee", value: "rupee" },
                 ].map((cat) => (
                   <button
-                    key={cat}
+                    key={cat.value}
                     onClick={() => {
-                      setNewsCategory(cat);
+                      setNewsCategory(cat.value);
                       setNewsArticles([]);
-                      fetchNews(cat);
+                      fetchNews(cat.value);
                     }}
                     style={{
                       ...buttonBaseStyle,
                       backgroundColor:
-                        newsCategory === cat ? "#f97316" : "#1e293b",
-                      color: newsCategory === cat ? "#fff" : "#94a3b8",
+                        newsCategory === cat.value ? "#f97316" : "#1e293b",
+                      color: newsCategory === cat.value ? "#fff" : "#94a3b8",
                       border:
-                        newsCategory === cat
+                        newsCategory === cat.value
                           ? "none"
                           : "1px solid rgba(255,255,255,0.08)",
                       textTransform: "capitalize",
                     }}
                   >
-                    {cat}
+                    {cat.label}
                   </button>
                 ))}
               </div>
@@ -3208,73 +3244,127 @@ export default function DashboardPage() {
                       }
                       style={{
                         backgroundColor: "#0f172a",
-                        border: "1px solid rgba(255,255,255,0.07)",
+                        border:
+                          hoveredIndex === i
+                            ? "1px solid rgba(249,115,22,0.3)"
+                            : "1px solid rgba(255,255,255,0.07)",
                         borderRadius: "0.75rem",
-                        padding: "0.75rem 1rem",
+                        padding: "0",
                         cursor: "pointer",
+                        overflow: "hidden",
+                        display: "flex",
+                        alignItems: "stretch",
                         transition: "border-color 0.15s",
                       }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.borderColor =
-                          "rgba(249,115,22,0.3)";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.borderColor =
-                          "rgba(255,255,255,0.07)";
-                      }}
+                      onMouseEnter={() => setHoveredIndex(i)}
+                      onMouseLeave={() => setHoveredIndex(null)}
                     >
+                      {article.image && (
+                        <div
+                          style={{
+                            width: "80px",
+                            minWidth: "80px",
+                            flexShrink: 0,
+                            overflow: "hidden",
+                          }}
+                        >
+                          <img
+                            src={article.image}
+                            alt=""
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              objectFit: "cover",
+                              display: "block",
+                            }}
+                            onError={(e) => {
+                              e.currentTarget.parentElement.style.display =
+                                "none";
+                            }}
+                          />
+                        </div>
+                      )}
+
                       <div
-                        style={{
-                          fontWeight: 600,
-                          color: "#f8fafc",
-                          fontSize: 14,
-                          lineHeight: 1.4,
-                          marginBottom: 4,
-                        }}
+                        style={{ padding: "10px 12px", flex: 1, minWidth: 0 }}
                       >
-                        {article.title}
-                      </div>
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          marginTop: "0.35rem",
-                          gap: "0.5rem",
-                          flexWrap: "wrap",
-                        }}
-                      >
-                        <span style={{ color: "#64748b", fontSize: "0.72rem" }}>
-                          {article.source || "News"}
-                        </span>
-                        <span style={{ color: "#475569", fontSize: "0.72rem" }}>
-                          {article.pubDate || article.publishedAt
-                            ? (() => {
-                                try {
-                                  const d = new Date(
-                                    article.pubDate || article.publishedAt,
-                                  );
-                                  if (isNaN(d.getTime())) {
+                        <div
+                          style={{
+                            fontWeight: 600,
+                            color: "#f8fafc",
+                            fontSize: 14,
+                            lineHeight: 1.4,
+                            marginBottom: 4,
+                          }}
+                        >
+                          {article.title}
+                        </div>
+
+                        {article.description && (
+                          <p
+                            style={{
+                              margin: "0 0 6px",
+                              color: "#64748b",
+                              fontSize: "11px",
+                              lineHeight: 1.4,
+                              display: "-webkit-box",
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: "vertical",
+                              overflow: "hidden",
+                            }}
+                          >
+                            {article.description}
+                          </p>
+                        )}
+
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            marginTop: "0.35rem",
+                            gap: "0.5rem",
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          <span
+                            style={{ color: "#f97316", fontSize: "0.72rem" }}
+                          >
+                            {article.source || "News"}
+                          </span>
+                          <span
+                            style={{ color: "#475569", fontSize: "0.72rem" }}
+                          >
+                            {article.pubDate || article.publishedAt
+                              ? (() => {
+                                  try {
+                                    const d = new Date(
+                                      article.pubDate || article.publishedAt,
+                                    );
+                                    if (isNaN(d.getTime())) {
+                                      return (
+                                        article.pubDate || article.publishedAt
+                                      );
+                                    }
+                                    return d.toLocaleDateString("en-IN", {
+                                      day: "numeric",
+                                      month: "short",
+                                      year: "numeric",
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                      hour12: true,
+                                    });
+                                  } catch {
                                     return (
-                                      article.pubDate || article.publishedAt
+                                      article.pubDate ||
+                                      article.publishedAt ||
+                                      ""
                                     );
                                   }
-                                  return d.toLocaleDateString("en-IN", {
-                                    day: "numeric",
-                                    month: "short",
-                                    year: "numeric",
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                    hour12: true,
-                                  });
-                                } catch {
-                                  return (
-                                    article.pubDate || article.publishedAt || ""
-                                  );
-                                }
-                              })()
-                            : ""}
-                        </span>
+                                })()
+                              : ""}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   ))}

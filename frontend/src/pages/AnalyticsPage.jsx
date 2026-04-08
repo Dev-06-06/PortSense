@@ -682,8 +682,7 @@ const AnalyticsPage = () => {
                             <Pie
                               data={sectors.map((s) => ({
                                 name: s.name || s.sector,
-                                value:
-                                  Number(s.weight || s.percentage || 0) * 100,
+                                value: Number(s.weight || s.percentage || 0),
                               }))}
                               dataKey="value"
                               nameKey="name"

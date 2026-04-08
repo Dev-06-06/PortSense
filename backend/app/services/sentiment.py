@@ -7,21 +7,25 @@ import re
 import threading
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
+import urllib.parse
 
 import feedparser
 from cachetools import TTLCache, cached as cachetools_cached
 import httpx
 import yfinance as yf
-from dotenv import load_dotenv
+from dotenv import load_dotenv as _load_dotenv
+from pathlib import Path as _Path
 import time as _time
 
 _hf_executor = ThreadPoolExecutor(max_workers=10)
 
-load_dotenv()
+_load_dotenv(dotenv_path=_Path(__file__).resolve().parents[2] / ".env")
 
 logger = logging.getLogger(__name__)
 
 HF_API_KEY = os.getenv("HF_API_KEY")
+GNEWS_STUDENT_KEY = os.getenv("GNEWS_STUDENT_KEY", "")
+GNEWS_PERSONAL_KEY = os.getenv("GNEWS_PERSONAL_KEY", "")
 _finbert_debug_logged = False
 
 
@@ -66,6 +70,287 @@ COMPANY_SEARCH_NAMES = {
     "NESTLEIND.NS": "Nestle India stock NSE",
     "DIVISLAB.NS": "Divis Laboratories stock NSE",
 }
+
+
+SENTIMENT_QUERIES = {
+    "RELIANCE.NS": (
+        "Reliance Industries OR RIL share price OR earnings OR "
+        "results OR Jio OR Ambani OR NSE OR refinery"
+    ),
+    "INFY.NS": (
+        "Infosys OR INFY share price OR earnings OR results OR "
+        "guidance OR deal wins OR IT sector OR NSE OR buyback"
+    ),
+    "TCS.NS": (
+        '"Tata Consultancy" OR TCS share price OR earnings OR '
+        "results OR revenue OR IT sector OR NSE OR dividend OR AI"
+    ),
+    "HDFCBANK.NS": (
+        '"HDFC Bank" share price OR earnings OR results OR NPA OR '
+        "credit growth OR deposits OR NSE OR RBI OR merger"
+    ),
+    "ICICIBANK.NS": (
+        '"ICICI Bank" share price OR earnings OR results OR NPA OR '
+        "credit growth OR loans OR NSE OR RBI OR profit"
+    ),
+    "SBIN.NS": (
+        '"State Bank" OR SBI share price OR earnings OR results OR '
+        "NPA OR profit OR deposits OR NSE OR government bank"
+    ),
+    "AXISBANK.NS": (
+        '"Axis Bank" share price OR earnings OR results OR NPA OR '
+        "credit OR loans OR NSE OR profit"
+    ),
+    "KOTAKBANK.NS": (
+        '"Kotak Bank" OR "Kotak Mahindra" share price OR earnings OR '
+        "results OR NPA OR profit OR NSE OR CEO"
+    ),
+    "WIPRO.NS": (
+        "Wipro share price OR earnings OR results OR guidance OR "
+        "deal wins OR IT sector OR NSE OR revenue OR AI"
+    ),
+    "HCLTECH.NS": (
+        '"HCL Tech" OR HCLTech share price OR earnings OR results OR '
+        "deal wins OR IT sector OR NSE OR revenue OR guidance"
+    ),
+    "TECHM.NS": (
+        '"Tech Mahindra" share price OR earnings OR results OR '
+        "deal wins OR IT sector OR NSE OR revenue"
+    ),
+    "TATASTEEL.NS": (
+        '"Tata Steel" share price OR earnings OR results OR steel OR '
+        "production OR NSE OR profit OR capacity"
+    ),
+    "JSWSTEEL.NS": (
+        '"JSW Steel" share price OR earnings OR results OR steel OR '
+        "production OR NSE OR profit OR acquisition"
+    ),
+    "SUNPHARMA.NS": (
+        '"Sun Pharma" OR "Sun Pharmaceutical" share price OR earnings OR '
+        "results OR FDA OR drug OR approval OR NSE OR profit"
+    ),
+    "DRREDDY.NS": (
+        '"Dr Reddy" share price OR earnings OR results OR FDA OR '
+        "drug OR approval OR NSE OR profit OR generic"
+    ),
+    "CIPLA.NS": (
+        "Cipla share price OR earnings OR results OR FDA OR "
+        "drug OR approval OR NSE OR profit"
+    ),
+    "HINDUNILVR.NS": (
+        '"Hindustan Unilever" OR HUL share price OR earnings OR '
+        "results OR FMCG OR volume OR NSE OR profit"
+    ),
+    "ITC.NS": (
+        "ITC share price OR earnings OR results OR cigarette OR "
+        "FMCG OR NSE OR profit OR dividend OR demerger"
+    ),
+    "BAJFINANCE.NS": (
+        '"Bajaj Finance" share price OR earnings OR results OR NPA OR '
+        "AUM OR loans OR NBFC OR NSE OR profit"
+    ),
+    "BAJAJFINSV.NS": (
+        '"Bajaj Finserv" share price OR earnings OR results OR '
+        "insurance OR finance OR NSE OR profit OR AUM"
+    ),
+    "MARUTI.NS": (
+        "Maruti OR \"Maruti Suzuki\" share price OR earnings OR "
+        "results OR auto sales OR EV OR NSE OR profit"
+    ),
+    "TATAMOTORS.NS": (
+        '"Tata Motors" OR JLR share price OR earnings OR results OR '
+        "auto sales OR EV OR NSE OR profit OR Jaguar"
+    ),
+    "ONGC.NS": (
+        "ONGC OR \"Oil Natural Gas\" share price OR earnings OR "
+        "results OR oil OR gas OR NSE OR profit OR crude"
+    ),
+    "NTPC.NS": (
+        "NTPC share price OR earnings OR results OR power OR "
+        "capacity OR renewable OR NSE OR profit"
+    ),
+    "LT.NS": (
+        '"Larsen Toubro" OR L&T share price OR earnings OR '
+        "results OR order wins OR infrastructure OR NSE OR profit"
+    ),
+    "HAL.NS": (
+        "HAL OR \"Hindustan Aeronautics\" share price OR earnings OR "
+        "results OR defence OR order OR NSE OR profit OR aircraft"
+    ),
+    "BEL.NS": (
+        "BEL OR \"Bharat Electronics\" share price OR earnings OR "
+        "results OR defence OR order OR NSE OR profit"
+    ),
+    "IRCTC.NS": (
+        "IRCTC share price OR earnings OR results OR railway OR "
+        "tourism OR NSE OR profit OR bookings"
+    ),
+}
+
+
+TIER_1_TICKERS = {
+    "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS",
+    "RELIANCE.NS", "HCLTECH.NS", "WIPRO.NS", "BAJFINANCE.NS",
+    "SBIN.NS", "BHARTIARTL.NS", "TATAMOTORS.NS", "MARUTI.NS",
+}
+
+TIER_2_TICKERS = {
+    "SUNPHARMA.NS", "DRREDDY.NS", "CIPLA.NS", "ONGC.NS",
+    "TATASTEEL.NS", "JSWSTEEL.NS", "HINDUNILVR.NS", "ITC.NS",
+    "AXISBANK.NS", "KOTAKBANK.NS", "LT.NS", "NTPC.NS",
+    "TECHM.NS", "BAJAJFINSV.NS",
+}
+
+TIER_3_TICKERS = {
+    "HAL.NS", "BEL.NS", "IRCTC.NS", "DIVISLAB.NS",
+    "POWERGRID.NS", "COALINDIA.NS", "HINDALCO.NS",
+    "ADANIENT.NS", "ADANIPOWER.NS", "NESTLEIND.NS",
+    "TITAN.NS", "ASIANPAINT.NS", "ZOMATO.NS", "ULTRACEMCO.NS",
+}
+
+
+async def _fetch_gnews_for_ticker(ticker: str) -> list[dict]:
+    normalized = str(ticker).strip().upper()
+    company_raw = COMPANY_SEARCH_NAMES.get(
+        normalized,
+        normalized.replace(".NS", "").replace(".BO", "")
+    )
+    company_name = company_raw.split(" stock", 1)[0].strip()
+    query = SENTIMENT_QUERIES.get(
+        normalized,
+        f"{company_name} share price OR earnings OR results OR NSE"
+    )
+
+    for api_key in [GNEWS_STUDENT_KEY, GNEWS_PERSONAL_KEY]:
+        if not api_key:
+            continue
+        try:
+            from datetime import datetime, timedelta
+
+            from_date = (datetime.utcnow() - timedelta(days=2)).strftime(
+                "%Y-%m-%dT%H:%M:%SZ"
+            )
+            url = (
+                "https://gnews.io/api/v4/search"
+                f"?q={urllib.parse.quote(query)}"
+                "&lang=en&country=in&max=10"
+                f"&from={from_date}"
+                f"&sortby=publishedAt"
+                f"&apikey={api_key}"
+            )
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(url)
+                if resp.status_code in (401, 403, 429):
+                    continue
+                resp.raise_for_status()
+                data = resp.json()
+
+            articles = []
+            for item in data.get("articles", []):
+                pub = str(item.get("publishedAt", "") or "")
+                pub_date = ""
+                if pub:
+                    try:
+                        from datetime import datetime as _dt
+
+                        parsed = _dt.fromisoformat(pub.replace("Z", "+00:00"))
+                        pub_date = parsed.strftime("%d %b %Y")
+                    except Exception:
+                        pub_date = pub[:10]
+
+                articles.append({
+                    "title": str(item.get("title", "")).strip(),
+                    "summary": str(item.get("description", "")).strip(),
+                    "pubDate": pub_date,
+                    "sourceName": str(
+                        item.get("source", {}).get("name", "")
+                    ).strip(),
+                    "articleUrl": str(item.get("url", "")).strip(),
+                })
+            if articles:
+                return articles
+        except Exception:
+            continue
+    return []
+
+
+def _fetch_gnews_for_ticker_sync(ticker: str) -> list[dict]:
+    normalized = str(ticker).strip().upper()
+    company_raw = COMPANY_SEARCH_NAMES.get(
+        normalized,
+        normalized.replace(".NS", "").replace(".BO", ""),
+    )
+    company_name = company_raw.split(" stock", 1)[0].strip()
+    query = SENTIMENT_QUERIES.get(
+        normalized,
+        f"{company_name} share price OR earnings OR results OR NSE",
+    )
+
+    for api_key in [GNEWS_STUDENT_KEY, GNEWS_PERSONAL_KEY]:
+        if not api_key:
+            continue
+        try:
+            from datetime import datetime, timedelta
+
+            if normalized in TIER_1_TICKERS:
+                days_back = 2
+            elif normalized in TIER_2_TICKERS:
+                days_back = 5
+            elif normalized in TIER_3_TICKERS:
+                days_back = 7
+            else:
+                days_back = 5  # default for unlisted tickers
+
+            from_date = (datetime.utcnow() - timedelta(days=days_back)).strftime(
+                "%Y-%m-%dT%H:%M:%SZ"
+            )
+            url = (
+                "https://gnews.io/api/v4/search"
+                f"?q={urllib.parse.quote(query)}"
+                "&lang=en&country=in&max=10"
+                f"&from={from_date}"
+                f"&sortby=publishedAt"
+                f"&apikey={api_key}"
+            )
+            with httpx.Client(timeout=10.0) as client:
+                resp = client.get(url)
+                if resp.status_code in (401, 403, 429):
+                    continue
+                resp.raise_for_status()
+                data = resp.json()
+
+            articles = []
+            for item in data.get("articles", []):
+                pub = str(item.get("publishedAt", "") or "")
+                pub_date = ""
+                if pub:
+                    try:
+                        from datetime import datetime as _dt
+
+                        parsed = _dt.fromisoformat(pub.replace("Z", "+00:00"))
+                        pub_date = parsed.strftime("%d %b %Y")
+                    except Exception:
+                        pub_date = pub[:10]
+
+                articles.append(
+                    {
+                        "title": str(item.get("title", "")).strip(),
+                        "summary": str(item.get("description", "")).strip(),
+                        "pubDate": pub_date,
+                        "sourceName": str(
+                            item.get("source", {}).get("name", "")
+                        ).strip(),
+                        "articleUrl": str(item.get("url", "")).strip(),
+                    }
+                )
+
+            if articles:
+                return articles
+        except Exception:
+            continue
+
+    # Return empty when both keys fail or produce zero items.
+    return []
 
 
 def _truncate(text: str, max_chars: int) -> str:
@@ -177,22 +462,9 @@ def _fetch_google_news_rss(ticker: str) -> list[dict]:
 
 
 def fetch_news_articles(ticker: str) -> list[dict]:
-    """
-    Returns up to 8 articles as {title, summary}.
-    Primary: Google News RSS (more relevant for Indian stocks).
-    Supplement with yfinance if RSS returns fewer than 4 results.
-    """
-    articles = _fetch_google_news_rss(ticker)
-
-    if len(articles) < 4:
-        existing = {a["title"][:40].lower() for a in articles}
-        for item in _fetch_yfinance_news(ticker):
-            if item["title"][:40].lower() not in existing:
-                articles.append(item)
-                existing.add(item["title"][:40].lower())
-            if len(articles) >= 8:
-                break
-
+    # Strict 2-day GNews only - no RSS fallback for sentiment
+    # Stale news produces misleading FinBERT scores
+    articles = _fetch_gnews_for_ticker_sync(ticker)
     return articles[:8]
 
 
@@ -502,6 +774,8 @@ def _get_stock_sentiment_cached(ticker: str) -> dict:
             "score": sentiment["score"] if sentiment else 0.0,
         }
         headline_entry["pubDate"] = str(article.get("pubDate", "") or "")
+        headline_entry["sourceName"] = str(article.get("sourceName", "") or "")
+        headline_entry["articleUrl"] = str(article.get("articleUrl", "") or "")
         summary_text = str(article.get("summary", "") or "").strip()
         if summary_text:
             headline_entry["summary"] = _truncate(summary_text, 200)

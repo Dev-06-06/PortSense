@@ -33,6 +33,13 @@ const categories = [
   { label: "Pharma", value: "pharma" },
   { label: "Auto", value: "auto" },
   { label: "Energy", value: "energy" },
+  { label: "Finance", value: "finance" },
+  { label: "Mutual Funds", value: "mf" },
+  { label: "IPO", value: "ipo" },
+  { label: "Economy", value: "economy" },
+  { label: "SEBI", value: "sebi" },
+  { label: "Govt Policy", value: "policy" },
+  { label: "Rupee", value: "rupee" },
 ];
 
 const NewsPage = () => {
@@ -239,78 +246,150 @@ const NewsPage = () => {
             </div>
           ) : (
             <div>
-              {articles.map((article, index) => (
-                <button
-                  key={`${article.link || article.title}-${index}`}
-                  type="button"
-                  onClick={() => {
-                    if (article?.link) {
-                      window.open(
-                        article.link,
-                        "_blank",
-                        "noopener,noreferrer",
-                      );
-                    }
-                  }}
-                  onMouseEnter={() => setHoveredIndex(index)}
-                  onMouseLeave={() => setHoveredIndex(null)}
-                  style={{
-                    width: "100%",
-                    textAlign: "left",
-                    borderRadius: "12px",
-                    padding: "16px",
-                    marginBottom: "12px",
-                    border:
-                      hoveredIndex === index
-                        ? "1px solid #f97316"
-                        : "1px solid rgba(148, 163, 184, 0.22)",
-                    backgroundColor: "#111827",
-                    cursor: "pointer",
-                  }}
-                >
-                  <p
-                    style={{
-                      margin: "0 0 10px",
-                      color: "#ffffff",
-                      fontSize: "15px",
-                      fontWeight: 600,
-                      lineHeight: 1.4,
-                    }}
-                  >
-                    {article?.title || "Untitled article"}
-                  </p>
+              {articles.map((article, index) => {
+                const url = article.url || article.link;
 
-                  <div
+                return (
+                  <button
+                    key={`${url || article.title}-${index}`}
+                    type="button"
+                    onClick={() => {
+                      if (url)
+                        window.open(url, "_blank", "noopener,noreferrer");
+                    }}
+                    onMouseEnter={() => setHoveredIndex(index)}
+                    onMouseLeave={() => setHoveredIndex(null)}
                     style={{
-                      color: "#64748b",
-                      fontSize: "12px",
+                      width: "100%",
+                      textAlign: "left",
+                      borderRadius: "12px",
+                      padding: "0",
+                      marginBottom: "12px",
+                      border:
+                        hoveredIndex === index
+                          ? "1px solid rgba(249,115,22,0.5)"
+                          : "1px solid rgba(148,163,184,0.15)",
+                      backgroundColor: "#111827",
+                      cursor: "pointer",
+                      overflow: "hidden",
                       display: "flex",
-                      justifyContent: "space-between",
-                      gap: "1rem",
+                      alignItems: "stretch",
                     }}
                   >
-                    <span
-                      style={{
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                        maxWidth: "60%",
-                      }}
-                    >
-                      {article?.source || "Unknown source"}
-                    </span>
-                    <span
-                      style={{
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {article?.pubDate || ""}
-                    </span>
-                  </div>
-                </button>
-              ))}
+                    {article.image && (
+                      <div
+                        style={{
+                          width: "90px",
+                          minWidth: "90px",
+                          overflow: "hidden",
+                          flexShrink: 0,
+                        }}
+                      >
+                        <img
+                          src={article.image}
+                          alt=""
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                            display: "block",
+                          }}
+                          onError={(e) => {
+                            e.currentTarget.parentElement.style.display =
+                              "none";
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    <div style={{ padding: "12px 14px", flex: 1, minWidth: 0 }}>
+                      <p
+                        style={{
+                          margin: "0 0 6px",
+                          color: "#ffffff",
+                          fontSize: "14px",
+                          fontWeight: 600,
+                          lineHeight: 1.4,
+                          display: "-webkit-box",
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: "vertical",
+                          overflow: "hidden",
+                        }}
+                      >
+                        {article.title || "Untitled article"}
+                      </p>
+
+                      {article.description && (
+                        <p
+                          style={{
+                            margin: "0 0 8px",
+                            color: "#64748b",
+                            fontSize: "12px",
+                            lineHeight: 1.4,
+                            display: "-webkit-box",
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: "vertical",
+                            overflow: "hidden",
+                          }}
+                        >
+                          {article.description}
+                        </p>
+                      )}
+
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          gap: "0.5rem",
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        {article.source && (
+                          <span
+                            style={{
+                              fontSize: "11px",
+                              fontWeight: 700,
+                              color: "#f97316",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {article.source}
+                          </span>
+                        )}
+                        {article.pubDate && (
+                          <span
+                            style={{
+                              fontSize: "11px",
+                              color: "#475569",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {(() => {
+                              try {
+                                const d = new Date(article.pubDate);
+                                if (isNaN(d.getTime())) return article.pubDate;
+                                return d.toLocaleDateString("en-IN", {
+                                  day: "numeric",
+                                  month: "short",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                  hour12: true,
+                                });
+                              } catch {
+                                return article.pubDate;
+                              }
+                            })()}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
