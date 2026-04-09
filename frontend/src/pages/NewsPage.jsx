@@ -6,7 +6,7 @@ const shellStyle = {
   backgroundColor: "#0d1117",
   color: "#e5e7eb",
   fontFamily: "'DM Sans', sans-serif",
-  padding: "1.25rem 1rem 2rem",
+  padding: "5rem 1rem 2rem",
 };
 
 const containerStyle = {

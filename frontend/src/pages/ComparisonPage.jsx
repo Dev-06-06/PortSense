@@ -18,7 +18,8 @@ const shellStyle = {
   backgroundColor: "#0d1117",
   color: "#e5e7eb",
   fontFamily: "'DM Sans', sans-serif",
-  padding: "1.25rem 1rem 2rem",
+  padding: "2rem 1rem 2rem",
+  //paddingTop: "5rem",
 };
 
 const containerStyle = {
@@ -33,7 +34,7 @@ const cardBaseStyle = {
   background: "#111827",
   borderRadius: "12px",
   padding: "14px 16px",
-  minWidth: "160px",
+  minWidth: "140px",
   flex: "0 0 auto",
 };
 
@@ -637,7 +638,12 @@ const ComparisonPage = () => {
                 )}
               </div>
 
-              <div style={{ width: "100%", height: "300px" }}>
+              <div
+                style={{
+                  width: "100%",
+                  height: window.innerWidth < 390 ? "200px" : "300px",
+                }}
+              >
                 <ResponsiveContainer>
                   <LineChart data={data?.timeline || []}>
                     <CartesianGrid stroke="rgba(255,255,255,0.05)" />
@@ -773,7 +779,7 @@ const ComparisonPage = () => {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+                gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
                 gap: "10px",
               }}
             >

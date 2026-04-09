@@ -8,7 +8,7 @@ const shellStyle = {
   backgroundColor: "#0d1117",
   color: "#e5e7eb",
   fontFamily: "'DM Sans', sans-serif",
-  padding: "1.25rem 1rem 5rem",
+  padding: "2rem 1rem 2rem",
 };
 
 const containerStyle = {
@@ -266,6 +266,45 @@ const TaxPage = () => {
           .tax-breakdown-grid {
             grid-template-columns: 1fr;
           }
+        }
+
+        @media (max-width: 390px) {
+          .tax-table thead { display: none; }
+          .tax-table tbody tr {
+            display: block;
+            padding: 0.85rem 0.75rem;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            background: transparent;
+          }
+          .tax-table tbody tr:hover {
+            background: rgba(148,163,184,0.05);
+          }
+          .tax-table tbody td {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 0.2rem 0;
+            border: none;
+            font-size: 0.82rem;
+          }
+          .tax-table tbody td::before {
+            content: attr(data-label);
+            color: #64748b;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            min-width: 90px;
+            flex-shrink: 0;
+          }
+          .tax-table-wrap {
+            border-radius: 0.75rem;
+          }
+        }
+
+        @media (max-width: 390px) {
+          .tax-summary-grid { grid-template-columns: 1fr !important; }
+          .tax-breakdown-grid { grid-template-columns: 1fr !important; }
         }
       `}</style>
 
@@ -601,6 +640,7 @@ const TaxPage = () => {
                     {filteredHoldings.length === 0 ? (
                       <tr>
                         <td
+                          data-label="Ticker"
                           colSpan={7}
                           style={{ color: "#94a3b8", textAlign: "center" }}
                         >
@@ -665,7 +705,7 @@ const TaxPage = () => {
 
                         return (
                           <tr key={`${item.ticker}-${item.buyDate || "na"}`}>
-                            <td>
+                            <td data-label="Ticker">
                               <div
                                 style={{
                                   display: "flex",
@@ -715,8 +755,10 @@ const TaxPage = () => {
                                 </span>
                               </div>
                             </td>
-                            <td>{Number(item?.holdingDays) || 0} days</td>
-                            <td>
+                            <td data-label="Held">
+                              {Number(item?.holdingDays) || 0} days
+                            </td>
+                            <td data-label="Type">
                               <span
                                 style={{
                                   display: "inline-block",
@@ -732,6 +774,7 @@ const TaxPage = () => {
                               </span>
                             </td>
                             <td
+                              data-label="Nominal"
                               style={{
                                 color: toneForSignedValue(nominalReturn),
                                 fontWeight: 700,
@@ -739,7 +782,7 @@ const TaxPage = () => {
                             >
                               {formatPercent(nominalReturn)}
                             </td>
-                            <td>
+                            <td data-label="Real">
                               <span style={{ color: "#94a3b8" }}>
                                 Nominal:{" "}
                                 <span
@@ -760,7 +803,10 @@ const TaxPage = () => {
                                 Real: {formatPercent(realReturn)}
                               </span>
                             </td>
-                            <td style={{ color: "#fb7185", fontWeight: 700 }}>
+                            <td
+                              data-label="Tax"
+                              style={{ color: "#fb7185", fontWeight: 700 }}
+                            >
                               {showLTCGExemptionLabel ? (
                                 <span
                                   style={{
@@ -784,7 +830,7 @@ const TaxPage = () => {
                                 formatCurrency(estimatedTax)
                               )}
                             </td>
-                            <td>{ltcgLabel}</td>
+                            <td data-label="To LTCG">{ltcgLabel}</td>
                           </tr>
                         );
                       })

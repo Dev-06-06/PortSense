@@ -14,12 +14,11 @@ const shellStyle = {
   backgroundColor: "#0d1117",
   color: "#f8fafc",
   fontFamily: "'DM Sans', sans-serif",
-  padding: "1.5rem 1.25rem 5rem 1.25rem",
+  padding: "3rem 1rem 3rem 1rem",
 };
 
 const containerStyle = {
   width: "100%",
-  maxWidth: "72rem",
   margin: "0 auto",
   display: "grid",
   gap: "1rem",
@@ -879,6 +878,44 @@ export default function DashboardPage() {
           .pnl-arrow { display: none; }
           .pnl-sign { display: inline; }
         }
+        @media (max-width: 430px) {
+          .holdings-table {
+            min-width: 500px !important;
+            font-size: 12px !important;
+          }
+          .holdings-table th,
+          .holdings-table td {
+            padding: 0.5rem 0.35rem !important;
+          }
+        }
+        @media (max-width: 390px) {
+          .holdings-table thead { display: none; }
+          .holding-row {
+            display: block !important;
+            padding: 0.75rem;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+          }
+          .holding-row td {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.25rem 0;
+            border: none;
+            white-space: normal;
+          }
+          .holding-row td:first-child {
+            font-size: 1rem;
+            font-weight: 800;
+            padding-bottom: 0.4rem;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            margin-bottom: 0.25rem;
+          }
+          .holding-row td:last-child {
+            justify-content: flex-end;
+            padding-top: 0.4rem;
+          }
+          .mobile-hide-col { display: none !important; }
+        }
         @media (min-width: 641px) {
           .pnl-sign { display: none; }
         }
@@ -899,6 +936,16 @@ export default function DashboardPage() {
           padding: 1rem 0.75rem;
           border-bottom: 1px solid rgba(255,255,255,0.04);
           white-space: nowrap;
+        }
+        @media (max-width: 390px) {
+          .holding-row td[data-label]::before {
+            content: attr(data-label);
+            color: #64748b;
+            font-size: 0.72rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+          }
         }
         .holding-row:hover { background: rgba(255,255,255,0.03); }
         .animate-pulse {
@@ -930,188 +977,196 @@ export default function DashboardPage() {
 
       <div style={containerStyle}>
         {/* ── SUMMARY CARD ── */}
-        <div style={{ ...cardStyle, padding: "1rem" }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: "1rem",
-              marginBottom: "1rem",
-            }}
-          >
+        <div style={{ width: "100%", overflow: "hidden" }}>
+          <div style={{ ...cardStyle, padding: "1rem" }}>
             <div
               style={{
-                fontSize: 18,
-                fontWeight: 700,
-                color: "#f8fafc",
-                fontFamily: "Barlow Condensed",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "1rem",
+                marginBottom: "1rem",
               }}
             >
-              {displayName}'s Portfolio
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                logout();
-                navigate("/", { replace: true });
-              }}
-              style={{
-                backgroundColor: "rgba(239,68,68,0.1)",
-                border: "1px solid rgba(239,68,68,0.3)",
-                color: "#f87171",
-                borderRadius: "20px",
-                padding: "5px 14px",
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
-            >
-              Sign Out
-            </button>
-          </div>
-          <div className="summary-grid">
-            {/* Total Invested */}
-            <div style={{ padding: "0.5rem 0.25rem" }}>
-              <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4 }}>
-                Total Invested
-              </div>
               <div
                 style={{
-                  ...numberStyle,
-                  fontSize: 20,
-                  fontWeight: 700,
-                  color: "#f8fafc",
-                }}
-              >
-                {loading ? (
-                  <span
-                    className="animate-pulse"
-                    style={{
-                      display: "inline-block",
-                      width: 90,
-                      height: 20,
-                      backgroundColor: "rgba(255,255,255,0.07)",
-                      borderRadius: 4,
-                    }}
-                  />
-                ) : (
-                  formatCurrency(summary.totalInvested)
-                )}
-              </div>
-            </div>
-            {/* Current Value */}
-            <div style={{ padding: "0.5rem 0.25rem" }}>
-              <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4 }}>
-                Current Value
-              </div>
-              <div
-                style={{
-                  ...numberStyle,
-                  fontSize: 20,
-                  fontWeight: 700,
-                  color: "#f8fafc",
-                }}
-              >
-                {loading ? (
-                  <span
-                    className="animate-pulse"
-                    style={{
-                      display: "inline-block",
-                      width: 90,
-                      height: 20,
-                      backgroundColor: "rgba(255,255,255,0.07)",
-                      borderRadius: 4,
-                    }}
-                  />
-                ) : (
-                  formatCurrency(summary.totalCurrentValue)
-                )}
-              </div>
-            </div>
-            {/* Total P&L */}
-            <div style={{ padding: "0.5rem 0.25rem" }}>
-              <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4 }}>
-                Total P&amp;L
-              </div>
-              <div
-                style={{
-                  ...numberStyle,
                   fontSize: 18,
                   fontWeight: 700,
-                  color: loading ? "#94a3b8" : pnlColor(summary.totalPnl),
+                  color: "#f8fafc",
+                  fontFamily: "Barlow Condensed",
                 }}
               >
-                {loading ? (
-                  <span
-                    className="animate-pulse"
-                    style={{
-                      display: "inline-block",
-                      width: 80,
-                      height: 20,
-                      backgroundColor: "rgba(255,255,255,0.07)",
-                      borderRadius: 4,
-                    }}
-                  />
-                ) : (
-                  <>
-                    {formatCurrency(summary.totalPnl)}{" "}
-                    <span style={{ fontSize: 12 }}>
-                      ({(summary.totalPnlPercent ?? 0).toFixed(2)}%)
+                {displayName}'s Portfolio
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  logout();
+                  navigate("/", { replace: true });
+                }}
+                style={{
+                  backgroundColor: "rgba(239,68,68,0.1)",
+                  border: "1px solid rgba(239,68,68,0.3)",
+                  color: "#f87171",
+                  borderRadius: "20px",
+                  padding: "5px 14px",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Sign Out
+              </button>
+            </div>
+            <div className="summary-grid">
+              {/* Total Invested */}
+              <div style={{ padding: "0.5rem 0.25rem" }}>
+                <div
+                  style={{ fontSize: 11, color: "#64748b", marginBottom: 4 }}
+                >
+                  Total Invested
+                </div>
+                <div
+                  style={{
+                    ...numberStyle,
+                    fontSize: 20,
+                    fontWeight: 700,
+                    color: "#f8fafc",
+                  }}
+                >
+                  {loading ? (
+                    <span
+                      className="animate-pulse"
+                      style={{
+                        display: "inline-block",
+                        width: 90,
+                        height: 20,
+                        backgroundColor: "rgba(255,255,255,0.07)",
+                        borderRadius: 4,
+                      }}
+                    />
+                  ) : (
+                    formatCurrency(summary.totalInvested)
+                  )}
+                </div>
+              </div>
+              {/* Current Value */}
+              <div style={{ padding: "0.5rem 0.25rem" }}>
+                <div
+                  style={{ fontSize: 11, color: "#64748b", marginBottom: 4 }}
+                >
+                  Current Value
+                </div>
+                <div
+                  style={{
+                    ...numberStyle,
+                    fontSize: 20,
+                    fontWeight: 700,
+                    color: "#f8fafc",
+                  }}
+                >
+                  {loading ? (
+                    <span
+                      className="animate-pulse"
+                      style={{
+                        display: "inline-block",
+                        width: 90,
+                        height: 20,
+                        backgroundColor: "rgba(255,255,255,0.07)",
+                        borderRadius: 4,
+                      }}
+                    />
+                  ) : (
+                    formatCurrency(summary.totalCurrentValue)
+                  )}
+                </div>
+              </div>
+              {/* Total P&L */}
+              <div style={{ padding: "0.5rem 0.25rem" }}>
+                <div
+                  style={{ fontSize: 11, color: "#64748b", marginBottom: 4 }}
+                >
+                  Total P&amp;L
+                </div>
+                <div
+                  style={{
+                    ...numberStyle,
+                    fontSize: 18,
+                    fontWeight: 700,
+                    color: loading ? "#94a3b8" : pnlColor(summary.totalPnl),
+                  }}
+                >
+                  {loading ? (
+                    <span
+                      className="animate-pulse"
+                      style={{
+                        display: "inline-block",
+                        width: 80,
+                        height: 20,
+                        backgroundColor: "rgba(255,255,255,0.07)",
+                        borderRadius: 4,
+                      }}
+                    />
+                  ) : (
+                    <>
+                      {formatCurrency(summary.totalPnl)}{" "}
+                      <span style={{ fontSize: 12 }}>
+                        ({(summary.totalPnlPercent ?? 0).toFixed(2)}%)
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
+              {/* Today's P&L */}
+              <div style={{ padding: "0.5rem 0.25rem" }}>
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: "#64748b",
+                    marginBottom: 4,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  Today&apos;s P&amp;L
+                  {silentRefreshing && (
+                    <span style={{ fontSize: 10, color: "#64748b" }}>
+                      updating…
                     </span>
-                  </>
-                )}
-              </div>
-            </div>
-            {/* Today's P&L */}
-            <div style={{ padding: "0.5rem 0.25rem" }}>
-              <div
-                style={{
-                  fontSize: 11,
-                  color: "#64748b",
-                  marginBottom: 4,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-              >
-                Today&apos;s P&amp;L
-                {silentRefreshing && (
-                  <span style={{ fontSize: 10, color: "#64748b" }}>
-                    updating…
-                  </span>
-                )}
-              </div>
-              <div
-                style={{
-                  ...numberStyle,
-                  fontSize: 18,
-                  fontWeight: 700,
-                  color: loading ? "#94a3b8" : pnlColor(totalDayChange),
-                }}
-              >
-                {loading ? (
-                  <span
-                    className="animate-pulse"
-                    style={{
-                      display: "inline-block",
-                      width: 80,
-                      height: 20,
-                      backgroundColor: "rgba(255,255,255,0.07)",
-                      borderRadius: 4,
-                    }}
-                  />
-                ) : (
-                  <>
-                    <span className="pnl-arrow">
-                      {isDayPositive ? "▲" : "▼"}
-                    </span>{" "}
-                    <span className="pnl-sign">
-                      {isDayPositive ? "+" : "−"}
-                    </span>{" "}
-                    {formatCurrency(Math.abs(totalDayChange))}
-                  </>
-                )}
+                  )}
+                </div>
+                <div
+                  style={{
+                    ...numberStyle,
+                    fontSize: 18,
+                    fontWeight: 700,
+                    color: loading ? "#94a3b8" : pnlColor(totalDayChange),
+                  }}
+                >
+                  {loading ? (
+                    <span
+                      className="animate-pulse"
+                      style={{
+                        display: "inline-block",
+                        width: 80,
+                        height: 20,
+                        backgroundColor: "rgba(255,255,255,0.07)",
+                        borderRadius: 4,
+                      }}
+                    />
+                  ) : (
+                    <>
+                      <span className="pnl-arrow">
+                        {isDayPositive ? "▲" : "▼"}
+                      </span>{" "}
+                      <span className="pnl-sign">
+                        {isDayPositive ? "+" : "−"}
+                      </span>{" "}
+                      {formatCurrency(Math.abs(totalDayChange))}
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -1481,7 +1536,14 @@ export default function DashboardPage() {
                     )}
 
                     {/* Table */}
-                    <div style={{ overflowX: "auto" }}>
+                    <div
+                      style={{
+                        overflowX: "auto",
+                        WebkitOverflowScrolling: "touch",
+                        width: "100%",
+                        maxWidth: "calc(100vw - 2rem)",
+                      }}
+                    >
                       <table
                         className="holdings-table"
                         style={{
@@ -1533,6 +1595,7 @@ export default function DashboardPage() {
                                 }}
                               >
                                 <td
+                                  data-label="Ticker"
                                   style={{
                                     fontWeight: 700,
                                     color: "#f97316",
@@ -1541,28 +1604,40 @@ export default function DashboardPage() {
                                 >
                                   {h.ticker.replace(".NS", "")}
                                 </td>
-                                <td style={{ color: "#f8fafc" }}>
+                                <td
+                                  data-label="Qty"
+                                  style={{ color: "#f8fafc" }}
+                                >
                                   {formatNumber(h.quantity)}
                                 </td>
-                                <td style={{ color: "#94a3b8" }}>
+                                <td
+                                  data-label="Buy"
+                                  style={{ color: "#94a3b8" }}
+                                >
                                   {formatCurrency(h.buyPrice)}
                                 </td>
-                                <td style={{ color: "#f8fafc" }}>
+                                <td
+                                  data-label="Price"
+                                  style={{ color: "#f8fafc" }}
+                                >
                                   {formatCurrency(h.currentPrice)}
                                 </td>
                                 <td
+                                  data-label="Invested"
                                   className="mobile-hide-col"
                                   style={{ color: "#94a3b8" }}
                                 >
                                   {formatCurrency(h.invested)}
                                 </td>
                                 <td
+                                  data-label="Value"
                                   className="mobile-hide-col"
                                   style={{ color: "#f8fafc" }}
                                 >
                                   {formatCurrency(h.currentValue)}
                                 </td>
                                 <td
+                                  data-label="P&L"
                                   style={{
                                     color: pnlColor(h.pnl),
                                     fontWeight: 600,
@@ -1577,6 +1652,7 @@ export default function DashboardPage() {
                                   {formatCurrency(Math.abs(h.pnl ?? 0))}
                                 </td>
                                 <td
+                                  data-label="P&L%"
                                   style={{
                                     color: pnlColor(h.pnlPercent),
                                     fontWeight: 600,
@@ -1590,7 +1666,7 @@ export default function DashboardPage() {
                                   </span>{" "}
                                   {Math.abs(h.pnlPercent ?? 0).toFixed(2)}%
                                 </td>
-                                <td>
+                                <td data-label="Actions">
                                   <div style={{ display: "flex", gap: 4 }}>
                                     <button
                                       title="Edit"

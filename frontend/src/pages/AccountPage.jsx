@@ -8,7 +8,7 @@ const shellStyle = {
   backgroundColor: "#0d1117",
   color: "#e5e7eb",
   fontFamily: "'DM Sans', sans-serif",
-  padding: "1.25rem",
+  padding: "2rem 1rem 2rem 1rem",
 };
 
 const containerStyle = {
@@ -269,7 +269,7 @@ const AccountPage = () => {
       <style>{`
         .account-grid {
           display: grid;
-          grid-template-columns: repeat(1, minmax(0, 1fr));
+          grid-template-columns: 1fr;
           gap: 0.75rem;
         }
 
@@ -309,7 +309,14 @@ const AccountPage = () => {
             Sign Out
           </button>
 
-          <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
+          <div
+            style={{
+              display: "flex",
+              gap: "1rem",
+              alignItems: "center",
+              flexWrap: "wrap",
+            }}
+          >
             <div
               style={{
                 width: "72px",
@@ -536,6 +543,7 @@ const AccountPage = () => {
                       style={{
                         display: "flex",
                         justifyContent: "space-between",
+                        fontSize: "0.75rem",
                         marginBottom: "3px",
                       }}
                     >

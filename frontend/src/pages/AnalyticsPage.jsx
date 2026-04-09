@@ -35,7 +35,8 @@ const shellStyle = {
   backgroundColor: "#0d1117",
   color: "#e5e7eb",
   fontFamily: "'DM Sans', sans-serif",
-  padding: "1.25rem 1rem 2rem",
+  padding: "2rem 1rem 2rem",
+  paddingTop: "5rem",
 };
 
 const containerStyle = {
@@ -512,13 +513,17 @@ const AnalyticsPage = () => {
       <style>{`
         .analytics-spin { animation: analytics-spin 0.9s linear infinite; }
         .correlation-spin { animation: analytics-spin 0.9s linear infinite; }
+        .analytics-tab-bar::-webkit-scrollbar { display: none; }
+        @media (max-width: 390px) {
+          .analytics-container { padding: 0 0.5rem !important; }
+        }
         @keyframes analytics-spin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
         }
       `}</style>
 
-      <div style={containerStyle}>
+      <div className="analytics-container" style={containerStyle}>
         <div
           style={{
             display: "flex",
@@ -572,6 +577,7 @@ const AnalyticsPage = () => {
         </div>
 
         <div
+          className="analytics-tab-bar"
           style={{
             position: "sticky",
             top: 0,
@@ -582,6 +588,9 @@ const AnalyticsPage = () => {
             gap: "8px",
             padding: "10px 16px",
             overflowX: "auto",
+            WebkitOverflowScrolling: "touch",
+            scrollbarWidth: "none",
+            msOverflowStyle: "none",
           }}
         >
           {ANALYTICS_TABS.map((tab) => (
@@ -2236,6 +2245,7 @@ const AnalyticsPage = () => {
                   <div
                     style={{
                       overflowX: "auto",
+                      WebkitOverflowScrolling: "touch",
                       paddingBottom: "0.25rem",
                       display: "flex",
                       justifyContent: "center",
