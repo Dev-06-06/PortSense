@@ -36,7 +36,7 @@ const shellStyle = {
   color: "#e5e7eb",
   fontFamily: "'DM Sans', sans-serif",
   padding: "2rem 1rem 2rem",
-  paddingTop: "5rem",
+  paddingTop: "2rem",
 };
 
 const containerStyle = {
