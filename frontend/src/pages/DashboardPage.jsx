@@ -1,10 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../services/api";
 import StockIntelDrawer from "../components/StockIntelDrawer";
 import TopNav from "../components/TopNav";
 import DemoBanner from "../components/DemoBanner";
-import useSwipe from "../hooks/useSwipe";
 import { useAuth } from "../context/AuthContext";
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
@@ -81,9 +80,6 @@ const EMPTY_SUMMARY = {
   totalPnl: 0,
   totalPnlPercent: 0,
 };
-
-const HOLDINGS_TABS = ["Stocks", "Mutual Funds", "FD"];
-const WATCHLIST_TABS = ["Stocks", "Mutual Funds"];
 
 const NSE_TICKERS = [
   { symbol: "RELIANCE", full: "Reliance Industries" },
@@ -188,8 +184,6 @@ export default function DashboardPage() {
   const [dashTab, setDashTab] = useState("Holdings");
   const [holdingsSubTab, setHoldingsSubTab] = useState("Stocks");
   const [watchlistSubTab, setWatchlistSubTab] = useState("Stocks");
-  const holdingsSwipeRef = useRef(null);
-  const watchlistSwipeRef = useRef(null);
 
   // MF form
   const [showMfForm, setShowMfForm] = useState(false);
@@ -660,22 +654,24 @@ export default function DashboardPage() {
   const pnlColor = (v) => (v >= 0 ? "#22c55e" : "#ef4444");
 
   const handleHoldingsSwipeLeft = () => {
+    const holdingsTabs = ["Stocks", "Mutual Funds", "FD"];
     setHoldingsSubTab((prev) => {
-      const currentIndex = HOLDINGS_TABS.indexOf(prev);
-      if (currentIndex === -1 || currentIndex >= HOLDINGS_TABS.length - 1) {
+      const currentIndex = holdingsTabs.indexOf(prev);
+      if (currentIndex === -1 || currentIndex >= holdingsTabs.length - 1) {
         return prev;
       }
-      return HOLDINGS_TABS[currentIndex + 1];
+      return holdingsTabs[currentIndex + 1];
     });
   };
 
   const handleHoldingsSwipeRight = () => {
+    const holdingsTabs = ["Stocks", "Mutual Funds", "FD"];
     setHoldingsSubTab((prev) => {
-      const currentIndex = HOLDINGS_TABS.indexOf(prev);
+      const currentIndex = holdingsTabs.indexOf(prev);
       if (currentIndex <= 0) {
         return prev;
       }
-      return HOLDINGS_TABS[currentIndex - 1];
+      return holdingsTabs[currentIndex - 1];
     });
   };
 
@@ -690,13 +686,6 @@ export default function DashboardPage() {
       setWatchlistSubTab("Stocks");
     }
   };
-
-  useSwipe(holdingsSwipeRef, handleHoldingsSwipeLeft, handleHoldingsSwipeRight);
-  useSwipe(
-    watchlistSwipeRef,
-    handleWatchlistSwipeLeft,
-    handleWatchlistSwipeRight,
-  );
 
   // Tab pill
   const tabPill = (label, active, onClick, accent = "#f97316") => (
@@ -1253,7 +1242,7 @@ export default function DashboardPage() {
                 ))}
               </div>
 
-              <div ref={holdingsSwipeRef} style={{ touchAction: "pan-y" }}>
+              <div>
                 {/* ── STOCKS ── */}
                 {holdingsSubTab === "Stocks" && (
                   <>
@@ -2535,7 +2524,7 @@ export default function DashboardPage() {
                   alignItems: "center",
                 }}
               >
-                {WATCHLIST_TABS.map((sub) => (
+                {["Stocks", "Mutual Funds"].map((sub) => (
                   <button
                     key={sub}
                     type="button"
@@ -2562,7 +2551,7 @@ export default function DashboardPage() {
                 ))}
               </div>
 
-              <div ref={watchlistSwipeRef} style={{ touchAction: "pan-y" }}>
+              <div>
                 {watchlistSubTab === "Stocks" && (
                   <>
                     {showWatchlistInput && (
