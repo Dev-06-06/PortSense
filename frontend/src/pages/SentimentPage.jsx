@@ -478,7 +478,7 @@ const SentimentPage = () => {
                           lineHeight: 1.5,
                         }}
                       >
-                        No recent news in last 48 hours.
+                        No relevant news items were identified within the last seven days.
                         <br />
                         <span style={{ color: "#334155" }}>
                           Sentiment set to Neutral by default.

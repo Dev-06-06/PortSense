@@ -293,13 +293,13 @@ def _fetch_gnews_for_ticker_sync(ticker: str) -> list[dict]:
             from datetime import datetime, timedelta
 
             if normalized in TIER_1_TICKERS:
-                days_back = 2
+                days_back = 7
             elif normalized in TIER_2_TICKERS:
-                days_back = 5
+                days_back = 7
             elif normalized in TIER_3_TICKERS:
                 days_back = 7
             else:
-                days_back = 5  # default for unlisted tickers
+                days_back = 7  # default for unlisted tickers
 
             from_date = (datetime.utcnow() - timedelta(days=days_back)).strftime(
                 "%Y-%m-%dT%H:%M:%SZ"
