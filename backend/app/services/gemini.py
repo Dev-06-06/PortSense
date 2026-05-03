@@ -284,10 +284,6 @@ def get_rebalancing_advice(portfolio_data: dict) -> str:
         prompt = build_rebalancing_prompt(portfolio_data)
         raw = get_gemini_response(prompt)
 
-        print("=== RAW GEMINI OUTPUT START ===")
-        print(repr(raw))
-        print("=== RAW GEMINI OUTPUT END ===")
-
         # Split into lines and rebuild, dropping Rebalancing Steps section
         lines = raw.split('\n')
         output_lines = []

@@ -74,7 +74,6 @@ def calculate_xirr(cash_flows: list[tuple[datetime, float]]) -> float:
     # Remove None/NaN/Inf cash flows before computation
     cleaned = [(d, a) for d, a in cash_flows if a is not None and np.isfinite(a)]
     if len(cleaned) < 2:
-        logger.debug("[calculate_xirr] Insufficient valid cash flows: %s", len(cleaned))
         return 0.0
 
     dates = [cf[0] for cf in cleaned]
@@ -84,21 +83,16 @@ def calculate_xirr(cash_flows: list[tuple[datetime, float]]) -> float:
     t0 = dates[0]
     years = [(d - t0).days / 365.0 for d in dates]
 
-    logger.debug("[calculate_xirr] Cash flows: %s", list(zip(dates, amounts)))
-    logger.debug("[calculate_xirr] Years: %s", years)
-
     # Calculate simple total return as fallback if XIRR fails (use only valid flows)
     total_invested = sum(abs(a) for a in amounts[:-1])  # Sum of all outflows
     final_value = amounts[-1]  # Final inflow
     total_days = (dates[-1] - dates[0]).days
     
     if total_days < 1 or total_invested <= 0:
-        logger.debug("[calculate_xirr] Insufficient time period or invested amount for XIRR")
         return 0.0
     
     simple_return = (final_value - total_invested) / total_invested if total_invested > 0 else 0.0
     simple_annual_return = (1 + simple_return) ** (365.0 / total_days) - 1 if total_days > 0 else 0.0
-    logger.debug("[calculate_xirr] Fallback simple return: %s", simple_annual_return)
 
     def npv(rate: float) -> float:
         """Net present value at a given discount rate."""
@@ -108,12 +102,9 @@ def calculate_xirr(cash_flows: list[tuple[datetime, float]]) -> float:
         # Find the rate where NPV = 0 using Brent's method
         # Try the range [-0.999, 100.0] which covers most real-world returns
         result = float(brentq(npv, -0.999, 100.0, maxiter=1000))
-        logger.debug("[calculate_xirr] Calculated XIRR: %s", result)
         return result
     except (ValueError, RuntimeError) as e:
         # If brentq fails (no sign change or other error), use simple return as fallback
-        logger.debug("[calculate_xirr] XIRR calculation failed: %s %s", type(e).__name__, str(e))
-        logger.debug("[calculate_xirr] Using simple return fallback: %s", simple_annual_return)
         return simple_annual_return
 
 
@@ -222,15 +213,8 @@ async def get_sector_breakdown(
         if str(h.get("assetType", "stock")).strip().lower() == "mutual_fund"
     ]
     
-    logger.debug(
-        "[get_sector_breakdown] Input holdings: %s, Equity: %s, FD: %s, MF: %s",
-        len(holdings), len(equity_holdings), len(fd_holdings), len(mf_holdings),
-    )
-    
     # Calculate total portfolio value from ALL holdings
     total_portfolio_value = sum(float(holding.get("currentValue", 0.0)) for holding in holdings)
-    
-    logger.debug("[get_sector_breakdown] Total portfolio value: %s", total_portfolio_value)
 
     # Get sectors ONLY for equity holdings
     sectors = []
@@ -242,12 +226,6 @@ async def get_sector_breakdown(
             db_client=active_db_client,
         )
         sectors.append(sector)
-        logger.debug(
-            "[get_sector_breakdown] Equity holding %s: sector=%s, value=%s",
-            ticker,
-            sector,
-            holding.get("currentValue"),
-        )
 
     # Group equity holdings by sector
     sector_groups = {}
@@ -274,7 +252,6 @@ async def get_sector_breakdown(
             "totalValue": fd_total_value,
             "tickers": {str(h.get("ticker", "")).strip().upper() for h in fd_holdings if h.get("ticker")},
         }
-        logger.debug("[get_sector_breakdown] Added Fixed Deposit sector: value=%s", fd_total_value)
 
     if mf_holdings:
         mf_total_value = sum(float(h.get("currentValue", 0.0)) for h in mf_holdings)
@@ -283,12 +260,6 @@ async def get_sector_breakdown(
             "totalValue": mf_total_value,
             "tickers": {str(h.get("ticker", "")).strip().upper() for h in mf_holdings if h.get("ticker")},
         }
-        logger.debug("[get_sector_breakdown] Added Mutual Fund sector: value=%s", mf_total_value)
-
-    logger.debug(
-        "[get_sector_breakdown] Sector groups before percentage calc: %s",
-        [(k, v["totalValue"]) for k, v in sector_groups.items()],
-    )
 
     breakdown = []
     for sector_data in sector_groups.values():
@@ -313,12 +284,6 @@ async def get_sector_breakdown(
         )
 
     breakdown.sort(key=lambda item: item["totalValue"], reverse=True)
-    logger.debug(
-        "[get_sector_breakdown] Final breakdown: %s",
-        [(b["sector"], b["percentage"]) for b in breakdown],
-    )
-    total_pct = sum(b["percentage"] for b in breakdown)
-    logger.debug("[get_sector_breakdown] Total percentage: %s%% (should be ~100%%)", total_pct)
     return breakdown
 
 

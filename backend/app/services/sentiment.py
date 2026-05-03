@@ -40,7 +40,6 @@ def _next_hf_key() -> str | None:
 
 GNEWS_STUDENT_KEY = os.getenv("GNEWS_STUDENT_KEY", "")
 GNEWS_PERSONAL_KEY = os.getenv("GNEWS_PERSONAL_KEY", "")
-_finbert_debug_logged = False
 _gnews_semaphore = asyncio.Semaphore(3)
 
 
@@ -592,11 +591,6 @@ async def run_finbert_scored(headlines: list[str]) -> list[dict]:
             continue
         results.append(result)
 
-    global _finbert_debug_logged
-    if not _finbert_debug_logged:
-        logger.debug(f"[FINBERT] {len(results)} headlines scored: {results}")
-        _finbert_debug_logged = True
-
     return results
 
 
@@ -615,7 +609,6 @@ async def _score_single_headline(
         current_key = hf_api_key if attempt == 0 else _next_hf_key()
         if not current_key:
             return default_result
-        logger.debug(f"[FINBERT] scored headline key: '{headline}'")
         try:
             response = await session.post(
                 "https://router.huggingface.co/hf-inference/models/ProsusAI/finbert",
@@ -628,7 +621,6 @@ async def _score_single_headline(
 
             response.raise_for_status()
             payload = response.json()
-            logger.debug(f"[FINBERT] payload for '{str(headline)[:40]}': {payload}")
 
             if isinstance(payload, list) and len(payload) > 0:
                 label_scores = payload[0] if isinstance(payload[0], list) else payload

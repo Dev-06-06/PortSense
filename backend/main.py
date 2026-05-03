@@ -61,6 +61,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+
+@app.get("/health")
+async def health():
+    return {"status": "ok", "service": "portsense", "timestamp": datetime.utcnow().isoformat()}
+
 origins = [origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",") if origin.strip()]
 
 app.add_middleware(SelectiveGZipMiddleware, minimum_size=1000)

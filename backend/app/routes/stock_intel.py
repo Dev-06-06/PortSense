@@ -655,9 +655,6 @@ async def get_stock_intel(
             "score": sc.get("score", 0.0),
         })
 
-    logger.debug(f"[SENTIMENT] score_lookup keys: {list(score_lookup.keys())}")
-    logger.debug(f"[SENTIMENT] sentiment_input labels: {[s['label'] for s in sentiment_input]}")
-    logger.debug(f"[SENTIMENT] sentiment_input count: {len(sentiment_input)}")
     sentiment_badge, sentiment_confidence, top_headlines = _build_sentiment(
         sentiment_input
     )
