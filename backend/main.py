@@ -26,6 +26,7 @@ from app.routes.watchlist import router as watchlist_router
 
 logging.basicConfig(level=logging.INFO)
 logging.getLogger("app.services.analytics").setLevel(logging.DEBUG)
+logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 

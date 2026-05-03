@@ -8,6 +8,7 @@ import { useAuth } from "./context/AuthContext";
 const LandingPage = lazy(() => import("./pages/LandingPage"));
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const RegisterPage = lazy(() => import("./pages/RegisterPage"));
+const VerifyEmailPage = lazy(() => import("./pages/VerifyEmailPage"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const AnalyticsPage = lazy(() => import("./pages/AnalyticsPage"));
 const ComparisonPage = lazy(() => import("./pages/ComparisonPage"));
@@ -77,6 +78,14 @@ function App() {
             element={
               <PageTransition>
                 <RegisterPage />
+              </PageTransition>
+            }
+          />
+          <Route
+            path="/verify-email"
+            element={
+              <PageTransition>
+                <VerifyEmailPage />
               </PageTransition>
             }
           />

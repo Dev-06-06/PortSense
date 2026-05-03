@@ -123,6 +123,14 @@ async def ensure_indexes(client: AsyncIOMotorClient) -> None:
         unique=True,
         background=True,
     )
+    # Ensure googleId is unique when present. Use sparse=True so documents
+    # without a googleId (or with null) do not conflict on the unique constraint.
+    await users_collection.create_index(
+        "googleId",
+        unique=True,
+        sparse=True,
+        background=True,
+    )
 
     await holdings_collection.create_index(
         [("userId", ASCENDING)],

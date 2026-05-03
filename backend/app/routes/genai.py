@@ -35,6 +35,8 @@ async def _get_user_holdings(user_id, holdings_collection: AsyncIOMotorCollectio
     async for holding in holdings_collection.find({"userId": user_id}):
         raw_holdings.append(holding)
 
+    
+
     # Only pass stock tickers to yfinance
     stock_raw = [
         h for h in raw_holdings
@@ -44,6 +46,8 @@ async def _get_user_holdings(user_id, holdings_collection: AsyncIOMotorCollectio
         h for h in raw_holdings
         if str(h.get("assetType", "stock")).strip().lower() != "stock"
     ]
+
+    
 
     stock_tickers = [str(h.get("ticker", "")).strip().upper() for h in stock_raw]
     stock_infos = (
@@ -70,6 +74,8 @@ async def _get_user_holdings(user_id, holdings_collection: AsyncIOMotorCollectio
             "assetType": "stock",
         })
 
+    
+
     # Enrich non-stocks with basic data (no yfinance)
     from app.services.mf import get_mf_nav, _compute_fd_value
     for holding in non_stock_raw:
@@ -92,6 +98,7 @@ async def _get_user_holdings(user_id, holdings_collection: AsyncIOMotorCollectio
                 "assetType": "mutual_fund",
                 "schemeName": nav_data.get("schemeName") or holding.get("schemeName", ticker),
             })
+            
         elif asset_type == "fd":
             buy_date = holding.get("buyDate")
             buy_date_str = (
@@ -109,6 +116,30 @@ async def _get_user_holdings(user_id, holdings_collection: AsyncIOMotorCollectio
                 "assetType": "fd",
                 "fdRate": fd_rate,
             })
+            
+        else:
+            # FIX: Handle unexpected assetType - treat as fallback asset type
+            # This prevents holdings with unexpected assetType from being silently skipped
+            
+            buy_date = holding.get("buyDate")
+            buy_date_str = (
+                buy_date.isoformat() if hasattr(buy_date, "isoformat") else str(buy_date)
+            )
+            # Default to FD if assetType is neither "mutual_fund" nor "fd"
+            fd_rate = float(holding.get("fdRate", 7.0))
+            current_value = _compute_fd_value(buy_price, fd_rate, buy_date_str)
+            enriched_holdings.append({
+                "ticker": ticker,
+                "quantity": quantity,
+                "avgPrice": buy_price,
+                "buyDate": holding.get("buyDate"),
+                "currentPrice": current_value,
+                "currentValue": current_value,
+                "assetType": "fd",  # Force to fd as fallback
+                "fdRate": fd_rate,
+            })
+
+    
 
     return enriched_holdings, raw_holdings
 
@@ -157,6 +188,8 @@ async def rebalance_portfolio(
         "verdict": verdict,
     }
 
+    
+
     portfolio_data = {
         "holdings": enriched_holdings,
         "sector_breakdown": sector_breakdown,
@@ -172,6 +205,8 @@ async def rebalance_portfolio(
         "nifty_cagr": benchmark_data.get("niftyCAGR", "N/A"),
         "correlation_pairs": correlation_data.get("pairs", []),
     }
+
+    
 
     advice = await asyncio.to_thread(get_rebalancing_advice, portfolio_data)
     return {"advice": advice}

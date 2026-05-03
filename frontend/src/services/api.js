@@ -35,3 +35,8 @@ api.interceptors.response.use(
 );
 
 export default api;
+
+export async function googleLogin(idToken) {
+  const response = await api.post("/api/auth/google", { idToken });
+  return response.data;
+}

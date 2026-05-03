@@ -106,11 +106,8 @@ const AccountPage = () => {
   const [sinceLoading, setSinceLoading] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [isEditingUsername, setIsEditingUsername] = useState(false);
   const [usernameInput, setUsernameInput] = useState("");
   const [usernameError, setUsernameError] = useState("");
-  const [isSavingUsername, setIsSavingUsername] = useState(false);
-  const [usernameSuccess, setUsernameSuccess] = useState("");
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -118,6 +115,11 @@ const AccountPage = () => {
   const [passwordError, setPasswordError] = useState("");
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [passwordSuccess, setPasswordSuccess] = useState("");
+  const [photoUrl, setPhotoUrl] = useState("");
+  const [profileName, setProfileName] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileSuccess, setProfileSuccess] = useState("");
+  const [profileError, setProfileError] = useState("");
 
   useEffect(() => {
     document.title = "Account | PortSense";
@@ -174,50 +176,75 @@ const AccountPage = () => {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    if (userDetails) {
+      setProfileName(userDetails.username || "");
+      setUsernameInput(userDetails.username || "");
+      setPhotoUrl(userDetails.photoUrl || "");
+    }
+  }, [userDetails]);
+
   const displayName = userDetails?.username?.trim() || "User";
   const avatarLetter = (displayName.charAt(0) || "U").toUpperCase();
 
-  const beginEditUsername = () => {
-    setIsEditingUsername(true);
-    setUsernameInput(displayName);
-    setUsernameError("");
-  };
+  const handleProfileSave = async () => {
+    const trimmedUsername = usernameInput.trim();
+    const trimmedPhotoUrl = photoUrl.trim();
+    const currentPhotoUrl = userDetails?.photoUrl || "";
 
-  const cancelEditUsername = () => {
-    setIsEditingUsername(false);
-    setUsernameInput("");
-    setUsernameError("");
-  };
-
-  const saveUsername = async () => {
-    const trimmed = usernameInput.trim();
-
-    if (trimmed.length < 3 || trimmed.length > 30) {
+    if (trimmedUsername.length < 3 || trimmedUsername.length > 30) {
       setUsernameError("Username must be between 3 and 30 characters");
       return;
     }
 
     setUsernameError("");
-    setIsSavingUsername(true);
+    setProfileError("");
+    setSavingProfile(true);
 
     try {
-      await api.put("/api/auth/update-username", { new_username: trimmed });
-      setUserDetails((prev) => (prev ? { ...prev, username: trimmed } : prev));
+      if (trimmedUsername !== displayName) {
+        await api.put("/api/auth/update-username", {
+          new_username: trimmedUsername,
+        });
+      }
+
+      if (trimmedPhotoUrl !== currentPhotoUrl) {
+        await api.put("/api/auth/update-profile", {
+          photoUrl: trimmedPhotoUrl,
+        });
+      }
+
+      setUserDetails((prev) =>
+        prev
+          ? {
+              ...prev,
+              username:
+                trimmedUsername !== displayName
+                  ? trimmedUsername
+                  : prev.username,
+              photoUrl:
+                trimmedPhotoUrl !== currentPhotoUrl
+                  ? trimmedPhotoUrl
+                  : prev.photoUrl,
+            }
+          : prev,
+      );
       sessionStorage.removeItem("portsense_account_cache");
-      setIsEditingUsername(false);
-      setUsernameInput("");
-      setUsernameSuccess("Username updated");
-      window.setTimeout(() => setUsernameSuccess(""), 2000);
+      setProfileName(trimmedUsername);
+      setUsernameInput(trimmedUsername);
+      setPhotoUrl(trimmedPhotoUrl);
+      setProfileSuccess("Profile updated");
+      window.setTimeout(() => setProfileSuccess(""), 2000);
     } catch (err) {
       if (err?.response?.status === 409) {
         setUsernameError("Username already taken");
       } else {
-        setUsernameError(
-          err?.response?.data?.detail || "Unable to update username",
+        setProfileError(
+          err?.response?.data?.detail || "Unable to update profile",
         );
       }
     } finally {
-      setIsSavingUsername(false);
+      setSavingProfile(false);
     }
   };
 
@@ -309,18 +336,33 @@ const AccountPage = () => {
             Sign Out
           </button>
 
+          <div style={{ marginBottom: "1rem" }}>
+            <p
+              style={{
+                margin: 0,
+                color: "#f97316",
+                fontSize: "0.65rem",
+                fontWeight: 800,
+                letterSpacing: "0.2em",
+                textTransform: "uppercase",
+              }}
+            >
+              User Profile
+            </p>
+          </div>
+
           <div
             style={{
               display: "flex",
-              gap: "1rem",
-              alignItems: "center",
+              gap: "1.5rem",
+              alignItems: "flex-start",
               flexWrap: "wrap",
             }}
           >
             <div
               style={{
-                width: "72px",
-                height: "72px",
+                width: "80px",
+                height: "80px",
                 borderRadius: "9999px",
                 background: "rgba(249, 115, 22, 0.2)",
                 border: "1px solid rgba(249, 115, 22, 0.45)",
@@ -332,136 +374,152 @@ const AccountPage = () => {
                 fontWeight: 700,
                 lineHeight: 1,
                 flexShrink: 0,
+                overflow: "hidden",
               }}
               aria-label="Avatar"
             >
-              {avatarLetter}
+              {photoUrl.trim() ? (
+                <img
+                  src={photoUrl.trim()}
+                  alt={profileName || "User avatar"}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    borderRadius: "50%",
+                  }}
+                />
+              ) : (
+                avatarLetter
+              )}
             </div>
 
-            <div style={{ minWidth: 0 }}>
-              {!isEditingUsername ? (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <h1
-                    style={{
-                      margin: 0,
-                      color: "#ffffff",
-                      fontSize: "1.5rem",
-                      fontFamily: "'Barlow Condensed', 'DM Sans', sans-serif",
-                      fontWeight: 600,
-                      lineHeight: 1.05,
-                    }}
-                  >
-                    {displayName}
-                  </h1>
-                  <button
-                    type="button"
-                    onClick={beginEditUsername}
-                    aria-label="Edit username"
-                    style={{
-                      background: "transparent",
-                      border: "1px solid rgba(249, 115, 22, 0.4)",
-                      borderRadius: "0.5rem",
-                      cursor: "pointer",
-                      color: "#fb923c",
-                      fontSize: "0.9rem",
-                      padding: "0.2rem 0.45rem",
-                      lineHeight: 1,
-                    }}
-                  >
-                    ✏️
-                  </button>
-                </div>
-              ) : (
-                <div style={{ marginBottom: "0.35rem" }}>
-                  <input
-                    type="text"
-                    value={usernameInput}
-                    onChange={(event) => setUsernameInput(event.target.value)}
-                    style={inputStyle}
-                    maxLength={30}
-                    autoFocus
-                  />
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: "0.5rem",
-                      marginTop: "0.5rem",
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <button
-                      type="button"
-                      onClick={saveUsername}
-                      disabled={isSavingUsername}
-                      style={{
-                        ...outlineButtonStyle,
-                        border: "1px solid rgba(249, 115, 22, 0.45)",
-                        color: "#fb923c",
-                      }}
-                    >
-                      {isSavingUsername ? "Saving..." : "Save"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={cancelEditUsername}
-                      style={{
-                        ...outlineButtonStyle,
-                        border: "1px solid rgba(148, 163, 184, 0.45)",
-                        color: "#cbd5e1",
-                      }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                  {usernameError && (
-                    <p
-                      style={{
-                        margin: "0.5rem 0 0",
-                        color: "#f87171",
-                        fontSize: "0.85rem",
-                      }}
-                    >
-                      {usernameError}
-                    </p>
-                  )}
-                </div>
-              )}
-              {usernameSuccess && (
+            <div
+              style={{
+                display: "flex",
+                flex: 1,
+                flexDirection: "column",
+                gap: "0.75rem",
+                minWidth: 0,
+              }}
+            >
+              <div>
                 <p
                   style={{
-                    margin: "0.35rem 0 0",
+                    margin: "0 0 0.35rem",
+                    color: "#94a3b8",
+                    fontSize: "0.82rem",
+                  }}
+                >
+                  NAME
+                </p>
+                <input
+                  type="text"
+                  value={usernameInput}
+                  onChange={(event) => setUsernameInput(event.target.value)}
+                  style={inputStyle}
+                  maxLength={30}
+                />
+                {usernameError && (
+                  <p
+                    style={{
+                      margin: "0.45rem 0 0",
+                      color: "#f87171",
+                      fontSize: "0.85rem",
+                    }}
+                  >
+                    {usernameError}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <p
+                  style={{
+                    margin: "0 0 0.35rem",
+                    color: "#94a3b8",
+                    fontSize: "0.82rem",
+                  }}
+                >
+                  EMAIL
+                </p>
+                <input
+                  type="text"
+                  value={userDetails?.email || "-"}
+                  disabled
+                  style={{
+                    ...inputStyle,
+                    opacity: 0.6,
+                    cursor: "not-allowed",
+                  }}
+                />
+              </div>
+
+              <div>
+                <p
+                  style={{
+                    margin: "0 0 0.35rem",
+                    color: "#94a3b8",
+                    fontSize: "0.82rem",
+                  }}
+                >
+                  AVATAR URL
+                </p>
+                <input
+                  type="url"
+                  value={photoUrl}
+                  onChange={(event) => setPhotoUrl(event.target.value)}
+                  placeholder="https://..."
+                  style={inputStyle}
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={handleProfileSave}
+                disabled={savingProfile}
+                style={{
+                  width: "100%",
+                  background: "#f97316",
+                  color: "#ffffff",
+                  border: "none",
+                  borderRadius: "0.75rem",
+                  padding: "0.85rem 1rem",
+                  fontFamily: "'Barlow Condensed', 'DM Sans', sans-serif",
+                  fontSize: "0.95rem",
+                  fontWeight: 900,
+                  letterSpacing: "0.15em",
+                  textTransform: "uppercase",
+                  cursor: "pointer",
+                  opacity: savingProfile ? 0.75 : 1,
+                }}
+              >
+                {savingProfile ? "Saving..." : "Save Profile"}
+              </button>
+
+              {profileSuccess && (
+                <p
+                  style={{
+                    margin: 0,
                     color: "#22c55e",
                     fontSize: "0.85rem",
                   }}
                 >
-                  {usernameSuccess}
+                  {profileSuccess}
                 </p>
               )}
-              <p
-                style={{
-                  margin: "0.35rem 0 0",
-                  color: "#94a3b8",
-                  fontSize: "0.95rem",
-                }}
-              >
-                {userDetails?.email || "-"}
-              </p>
-              <p
-                style={{
-                  margin: "0.35rem 0 0",
-                  color: "#94a3b8",
-                  fontSize: "0.85rem",
-                }}
-              >
-                {formatMemberSince(userDetails?.createdAt)}
-              </p>
+
+              {profileError && (
+                <p
+                  style={{
+                    margin: 0,
+                    color: "#f87171",
+                    fontSize: "0.85rem",
+                  }}
+                >
+                  {profileError}
+                </p>
+              )}
             </div>
           </div>
         </div>

@@ -1,4 +1,5 @@
 import asyncio
+import itertools
 import email.utils as _email_utils
 import html
 import logging
@@ -23,10 +24,24 @@ _load_dotenv(dotenv_path=_Path(__file__).resolve().parents[2] / ".env")
 
 logger = logging.getLogger(__name__)
 
-HF_API_KEY = os.getenv("HF_API_KEY")
+_HF_KEY_1 = os.getenv("HF_API_KEY_1") or os.getenv("HF_API_KEY")
+_HF_KEY_2 = os.getenv("HF_API_KEY_2")
+_HF_KEYS = [k for k in [_HF_KEY_1, _HF_KEY_2] if k]
+_hf_key_cycle = itertools.cycle(_HF_KEYS) if _HF_KEYS else None
+_hf_key_lock = threading.Lock()
+
+
+def _next_hf_key() -> str | None:
+    if not _hf_key_cycle:
+        return None
+    with _hf_key_lock:
+        return next(_hf_key_cycle)
+
+
 GNEWS_STUDENT_KEY = os.getenv("GNEWS_STUDENT_KEY", "")
 GNEWS_PERSONAL_KEY = os.getenv("GNEWS_PERSONAL_KEY", "")
 _finbert_debug_logged = False
+_gnews_semaphore = asyncio.Semaphore(3)
 
 
 class HFColdModelError(RuntimeError):
@@ -170,7 +185,7 @@ SENTIMENT_QUERIES = {
         "capacity OR renewable OR NSE OR profit"
     ),
     "LT.NS": (
-        '"Larsen Toubro" OR L&T share price OR earnings OR '
+        '"Larsen Toubro" OR "L and T" share price OR earnings OR '
         "results OR order wins OR infrastructure OR NSE OR profit"
     ),
     "HAL.NS": (
@@ -210,68 +225,72 @@ TIER_3_TICKERS = {
 
 
 async def _fetch_gnews_for_ticker(ticker: str) -> list[dict]:
-    normalized = str(ticker).strip().upper()
-    company_raw = COMPANY_SEARCH_NAMES.get(
-        normalized,
-        normalized.replace(".NS", "").replace(".BO", "")
-    )
-    company_name = company_raw.split(" stock", 1)[0].strip()
-    query = SENTIMENT_QUERIES.get(
-        normalized,
-        f"{company_name} share price OR earnings OR results OR NSE"
-    )
+    async with _gnews_semaphore:
+        normalized = str(ticker).strip().upper()
+        company_raw = COMPANY_SEARCH_NAMES.get(
+            normalized,
+            normalized.replace(".NS", "").replace(".BO", "")
+        )
+        company_name = company_raw.split(" stock", 1)[0].strip()
+        query = SENTIMENT_QUERIES.get(
+            normalized,
+            f"{company_name} share price OR earnings OR results OR NSE"
+        )
 
-    for api_key in [GNEWS_STUDENT_KEY, GNEWS_PERSONAL_KEY]:
-        if not api_key:
-            continue
-        try:
-            from datetime import datetime, timedelta
+        for api_key in [GNEWS_STUDENT_KEY, GNEWS_PERSONAL_KEY]:
+            if not api_key:
+                continue
+            try:
+                from datetime import datetime, timedelta
 
-            from_date = (datetime.utcnow() - timedelta(days=2)).strftime(
-                "%Y-%m-%dT%H:%M:%SZ"
-            )
-            url = (
-                "https://gnews.io/api/v4/search"
-                f"?q={urllib.parse.quote(query)}"
-                "&lang=en&country=in&max=10"
-                f"&from={from_date}"
-                f"&sortby=publishedAt"
-                f"&apikey={api_key}"
-            )
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.get(url)
-                if resp.status_code in (401, 403, 429):
-                    continue
-                resp.raise_for_status()
-                data = resp.json()
+                from_date = (datetime.utcnow() - timedelta(days=2)).strftime(
+                    "%Y-%m-%dT%H:%M:%SZ"
+                )
+                url = (
+                    "https://gnews.io/api/v4/search"
+                    f"?q={urllib.parse.quote(query)}"
+                    "&lang=en&country=in&max=10"
+                    f"&from={from_date}"
+                    f"&sortby=publishedAt"
+                    f"&apikey={api_key}"
+                )
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    resp = await client.get(url)
+                    if resp.status_code in (401, 403):
+                        continue
+                    if resp.status_code == 429:
+                        await asyncio.sleep(2)
+                        continue
+                    resp.raise_for_status()
+                    data = resp.json()
 
-            articles = []
-            for item in data.get("articles", []):
-                pub = str(item.get("publishedAt", "") or "")
-                pub_date = ""
-                if pub:
-                    try:
-                        from datetime import datetime as _dt
+                articles = []
+                for item in data.get("articles", []):
+                    pub = str(item.get("publishedAt", "") or "")
+                    pub_date = ""
+                    if pub:
+                        try:
+                            from datetime import datetime as _dt
 
-                        parsed = _dt.fromisoformat(pub.replace("Z", "+00:00"))
-                        pub_date = parsed.strftime("%d %b %Y")
-                    except Exception:
-                        pub_date = pub[:10]
+                            parsed = _dt.fromisoformat(pub.replace("Z", "+00:00"))
+                            pub_date = parsed.strftime("%d %b %Y")
+                        except Exception:
+                            pub_date = pub[:10]
 
-                articles.append({
-                    "title": str(item.get("title", "")).strip(),
-                    "summary": str(item.get("description", "")).strip(),
-                    "pubDate": pub_date,
-                    "sourceName": str(
-                        item.get("source", {}).get("name", "")
-                    ).strip(),
-                    "articleUrl": str(item.get("url", "")).strip(),
-                })
-            if articles:
-                return articles
-        except Exception:
-            continue
-    return []
+                    articles.append({
+                        "title": str(item.get("title", "")).strip(),
+                        "summary": str(item.get("description", "")).strip(),
+                        "pubDate": pub_date,
+                        "sourceName": str(
+                            item.get("source", {}).get("name", "")
+                        ).strip(),
+                        "articleUrl": str(item.get("url", "")).strip(),
+                    })
+                if articles:
+                    return articles
+            except Exception:
+                continue
+        return []
 
 
 def _fetch_gnews_for_ticker_sync(ticker: str) -> list[dict]:
@@ -314,7 +333,10 @@ def _fetch_gnews_for_ticker_sync(ticker: str) -> list[dict]:
             )
             with httpx.Client(timeout=10.0) as client:
                 resp = client.get(url)
-                if resp.status_code in (401, 403, 429):
+                if resp.status_code in (401, 403):
+                    continue
+                if resp.status_code == 429:
+                    _time.sleep(1)
                     continue
                 resp.raise_for_status()
                 data = resp.json()
@@ -544,14 +566,14 @@ async def run_finbert_scored(headlines: list[str]) -> list[dict]:
     if not headlines:
         return []
 
-    if not HF_API_KEY:
-        logger.error("Missing HF_API_KEY environment variable")
+    if not _HF_KEYS:
+        logger.error("Missing HF_API_KEY / HF_API_KEY_1 environment variable")
         return []
 
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             gathered = await asyncio.gather(
-                *[_score_single_headline(client, headline, HF_API_KEY) for headline in headlines],
+                *[_score_single_headline(client, headline, _next_hf_key()) for headline in headlines],
                 return_exceptions=True,
             )
     except asyncio.CancelledError:
@@ -590,11 +612,14 @@ async def _score_single_headline(
     }
 
     for attempt in range(3):
+        current_key = hf_api_key if attempt == 0 else _next_hf_key()
+        if not current_key:
+            return default_result
         logger.debug(f"[FINBERT] scored headline key: '{headline}'")
         try:
             response = await session.post(
                 "https://router.huggingface.co/hf-inference/models/ProsusAI/finbert",
-                headers={"Authorization": f"Bearer {hf_api_key}"},
+                headers={"Authorization": f"Bearer {current_key}"},
                 json={"inputs": headline},
             )
 
@@ -641,8 +666,8 @@ async def _score_single_headline(
 def _run_finbert_scored_sync(headlines: list[str]) -> list[dict]:
     if not headlines:
         return []
-    if not HF_API_KEY:
-        logger.error("Missing HF_API_KEY")
+    if not _HF_KEYS:
+        logger.error("Missing HF_API_KEY / HF_API_KEY_1 environment variable")
         return []
 
     import requests as _requests
@@ -653,9 +678,9 @@ def _run_finbert_scored_sync(headlines: list[str]) -> list[dict]:
             try:
                 resp = _requests.post(
                     "https://router.huggingface.co/hf-inference/models/ProsusAI/finbert",
-                    headers={"Authorization": f"Bearer {HF_API_KEY}"},
+                    headers={"Authorization": f"Bearer {_next_hf_key()}"},
                     json={"inputs": headline},
-                    timeout=10,
+                    timeout=30,
                 )
                 if resp.status_code == 503:
                     if attempt < 2:
@@ -811,6 +836,7 @@ def _get_stock_sentiment_cached(ticker: str) -> dict:
 
 
 async def _get_sentiment_bounded(ticker: str) -> dict:
+    await asyncio.sleep(0.3)
     return await asyncio.to_thread(get_stock_sentiment, ticker)
 
 

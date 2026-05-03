@@ -83,7 +83,7 @@ def seed_sectors() -> None:
                 upsert=True,
             )
 
-        print(f"Seeded {len(KNOWN_SECTORS)} sectors into sector_cache")
+        
     finally:
         client.close()
 

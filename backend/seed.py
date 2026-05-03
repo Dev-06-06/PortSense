@@ -268,6 +268,13 @@ async def main() -> None:
                     "email": DEMO_EMAIL,
                     "password": hashed_password,
                     "is_demo": True,
+                    "isVerified": True,
+                    "authProvider": "local",
+                    "googleId": None,
+                    "emailOTP": None,
+                    "emailOTPExpiry": None,
+                    "passwordResetOTP": None,
+                    "passwordResetExpiry": None,
                     "createdAt": now,
                 }
             )
@@ -276,7 +283,19 @@ async def main() -> None:
             user_id = demo_user["_id"]
             await users_collection.update_one(
                 {"_id": user_id},
-                {"$set": {"password": hashed_password, "is_demo": True}},
+                {
+                    "$set": {
+                        "password": hashed_password,
+                        "is_demo": True,
+                        "isVerified": True,
+                        "authProvider": "local",
+                        "googleId": None,
+                        "emailOTP": None,
+                        "emailOTPExpiry": None,
+                        "passwordResetOTP": None,
+                        "passwordResetExpiry": None,
+                    }
+                },
             )
 
         await holdings_collection.delete_many({"userId": user_id})
@@ -306,7 +325,6 @@ async def main() -> None:
             documents.append(doc)
 
         await holdings_collection.insert_many(documents)
-        print(f"Seed complete ✓ — {len(documents)} holdings inserted for demo user")
 
     finally:
         client.close()

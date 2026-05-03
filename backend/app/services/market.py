@@ -45,17 +45,8 @@ def get_stock_info(ticker: str) -> dict:
 
         try:
             previousClose = fast_info.previous_close or currentPrice
-            if previousClose == currentPrice:
-                logger.debug(
-                    "Using previousClose fallback for %s because fast_info.previous_close was unavailable",
-                    ticker,
-                )
         except Exception:
             previousClose = currentPrice
-            logger.debug(
-                "Using previousClose fallback for %s because fast_info.previous_close fetch failed",
-                ticker,
-            )
 
         return {
             "currentPrice": float(currentPrice) if currentPrice is not None else 0.0,

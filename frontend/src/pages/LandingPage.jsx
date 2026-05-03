@@ -423,7 +423,7 @@ export default function LandingPage() {
             PORT<span style={{ color: "#f97316" }}>SENSE</span>
           </p>
           <p style={s.footerText}>
-            Built for Indian retail investors · devtry55@gmail.com
+            Built for Indian retail investors · devprojects.notify@gmail.com
           </p>
           <p style={s.footerDisclaimer}>
             Not financial advice. Tax estimates are indicative only.

@@ -71,15 +71,34 @@ def calculate_xirr(cash_flows: list[tuple[datetime, float]]) -> float:
     Returns:
         Annualized rate as a decimal (e.g., 0.12 for 12%), or 0.0 if calculation fails
     """
-    if len(cash_flows) < 2:
+    # Remove None/NaN/Inf cash flows before computation
+    cleaned = [(d, a) for d, a in cash_flows if a is not None and np.isfinite(a)]
+    if len(cleaned) < 2:
+        logger.debug("[calculate_xirr] Insufficient valid cash flows: %s", len(cleaned))
         return 0.0
 
-    dates = [cf[0] for cf in cash_flows]
-    amounts = [cf[1] for cf in cash_flows]
+    dates = [cf[0] for cf in cleaned]
+    amounts = [float(cf[1]) for cf in cleaned]
 
     # Use the earliest date as the time reference (t=0)
     t0 = dates[0]
     years = [(d - t0).days / 365.0 for d in dates]
+
+    logger.debug("[calculate_xirr] Cash flows: %s", list(zip(dates, amounts)))
+    logger.debug("[calculate_xirr] Years: %s", years)
+
+    # Calculate simple total return as fallback if XIRR fails (use only valid flows)
+    total_invested = sum(abs(a) for a in amounts[:-1])  # Sum of all outflows
+    final_value = amounts[-1]  # Final inflow
+    total_days = (dates[-1] - dates[0]).days
+    
+    if total_days < 1 or total_invested <= 0:
+        logger.debug("[calculate_xirr] Insufficient time period or invested amount for XIRR")
+        return 0.0
+    
+    simple_return = (final_value - total_invested) / total_invested if total_invested > 0 else 0.0
+    simple_annual_return = (1 + simple_return) ** (365.0 / total_days) - 1 if total_days > 0 else 0.0
+    logger.debug("[calculate_xirr] Fallback simple return: %s", simple_annual_return)
 
     def npv(rate: float) -> float:
         """Net present value at a given discount rate."""
@@ -88,10 +107,14 @@ def calculate_xirr(cash_flows: list[tuple[datetime, float]]) -> float:
     try:
         # Find the rate where NPV = 0 using Brent's method
         # Try the range [-0.999, 100.0] which covers most real-world returns
-        return float(brentq(npv, -0.999, 100.0, maxiter=1000))
-    except (ValueError, RuntimeError):
-        # If brentq fails (no sign change or other error), return 0.0
-        return 0.0
+        result = float(brentq(npv, -0.999, 100.0, maxiter=1000))
+        logger.debug("[calculate_xirr] Calculated XIRR: %s", result)
+        return result
+    except (ValueError, RuntimeError) as e:
+        # If brentq fails (no sign change or other error), use simple return as fallback
+        logger.debug("[calculate_xirr] XIRR calculation failed: %s %s", type(e).__name__, str(e))
+        logger.debug("[calculate_xirr] Using simple return fallback: %s", simple_annual_return)
+        return simple_annual_return
 
 
 async def get_sector(ticker: str, asset_type: str = "stock", db_client=None) -> str:
@@ -109,14 +132,12 @@ async def get_sector(ticker: str, asset_type: str = "stock", db_client=None) -> 
 
     if db is not None:
         cached = await db.sector_cache.find_one({"ticker": ticker})
-        logger.debug(f"[SECTOR] {ticker} → DB hit: {cached}")
         if cached and cached.get("sector"):
             return cached["sector"]
 
     try:
         info = await asyncio.to_thread(lambda: yf.Ticker(ticker).info)
         raw = (info.get("sector") or info.get("industryDisp") or "") if info else ""
-        logger.debug(f"[SECTOR] {ticker} → yfinance returned: {raw}")
         if raw:
             sector = _normalize_sector(str(raw))
             if db is not None:
@@ -132,7 +153,6 @@ async def get_sector(ticker: str, asset_type: str = "stock", db_client=None) -> 
                     },
                     upsert=True,
                 )
-            logger.debug(f"[SECTOR] {ticker} → final: {sector}")
             return sector
     except Exception as e:
         logger.warning(f"[SECTOR] yfinance failed for {ticker}: {e}")
@@ -158,7 +178,6 @@ async def get_sector(ticker: str, asset_type: str = "stock", db_client=None) -> 
             f"Materials, NBFC, Infrastructure, Conglomerate"
         )
         raw = await asyncio.to_thread(get_gemini_response, prompt)
-        logger.debug(f"[SECTOR] {ticker} → Gemini returned: {raw}")
         sector = _normalize_sector(raw.strip())
         if sector in valid:
             if db is not None:
@@ -174,12 +193,10 @@ async def get_sector(ticker: str, asset_type: str = "stock", db_client=None) -> 
                     },
                     upsert=True,
                 )
-            logger.debug(f"[SECTOR] {ticker} → final: {sector}")
             return sector
     except Exception as e:
         logger.warning(f"[SECTOR] Gemini failed for {ticker}: {e}")
 
-    logger.debug(f"[SECTOR] {ticker} → final: Other")
     return "Other"
 
 
@@ -189,21 +206,52 @@ async def get_sector_breakdown(
     db_client: AsyncIOMotorClient | None = None,
 ) -> list[dict]:
     active_db_client = db_client or mongo_client
+    
+    # FIX: Filter out FD/MF holdings from equity sector calculation to prevent double-counting
+    # FD and MF holdings are tracked separately and should not be included in equity sector calculations
+    equity_holdings = [
+        h for h in holdings
+        if str(h.get("assetType", "stock")).strip().lower() == "stock"
+    ]
+    fd_holdings = [
+        h for h in holdings
+        if str(h.get("assetType", "stock")).strip().lower() == "fd"
+    ]
+    mf_holdings = [
+        h for h in holdings
+        if str(h.get("assetType", "stock")).strip().lower() == "mutual_fund"
+    ]
+    
+    logger.debug(
+        "[get_sector_breakdown] Input holdings: %s, Equity: %s, FD: %s, MF: %s",
+        len(holdings), len(equity_holdings), len(fd_holdings), len(mf_holdings),
+    )
+    
+    # Calculate total portfolio value from ALL holdings
     total_portfolio_value = sum(float(holding.get("currentValue", 0.0)) for holding in holdings)
+    
+    logger.debug("[get_sector_breakdown] Total portfolio value: %s", total_portfolio_value)
 
+    # Get sectors ONLY for equity holdings
     sectors = []
-    for holding in holdings:
+    for holding in equity_holdings:
         ticker = str(holding.get("ticker", "")).strip().upper()
-        sectors.append(
-            await get_sector(
-                ticker,
-                str(holding.get("assetType", "stock")).strip().lower(),
-                db_client=active_db_client,
-            )
+        sector = await get_sector(
+            ticker,
+            str(holding.get("assetType", "stock")).strip().lower(),
+            db_client=active_db_client,
+        )
+        sectors.append(sector)
+        logger.debug(
+            "[get_sector_breakdown] Equity holding %s: sector=%s, value=%s",
+            ticker,
+            sector,
+            holding.get("currentValue"),
         )
 
+    # Group equity holdings by sector
     sector_groups = {}
-    for holding, sector in zip(holdings, sectors):
+    for holding, sector in zip(equity_holdings, sectors):
         ticker = str(holding.get("ticker", "")).strip().upper()
         current_value = float(holding.get("currentValue", 0.0))
 
@@ -217,6 +265,30 @@ async def get_sector_breakdown(
         sector_groups[sector]["totalValue"] += current_value
         if ticker:
             sector_groups[sector]["tickers"].add(ticker)
+
+    # Add FD and MF as separate sector categories
+    if fd_holdings:
+        fd_total_value = sum(float(h.get("currentValue", 0.0)) for h in fd_holdings)
+        sector_groups["Fixed Deposit"] = {
+            "sector": "Fixed Deposit",
+            "totalValue": fd_total_value,
+            "tickers": {str(h.get("ticker", "")).strip().upper() for h in fd_holdings if h.get("ticker")},
+        }
+        logger.debug("[get_sector_breakdown] Added Fixed Deposit sector: value=%s", fd_total_value)
+
+    if mf_holdings:
+        mf_total_value = sum(float(h.get("currentValue", 0.0)) for h in mf_holdings)
+        sector_groups["Mutual Fund"] = {
+            "sector": "Mutual Fund",
+            "totalValue": mf_total_value,
+            "tickers": {str(h.get("ticker", "")).strip().upper() for h in mf_holdings if h.get("ticker")},
+        }
+        logger.debug("[get_sector_breakdown] Added Mutual Fund sector: value=%s", mf_total_value)
+
+    logger.debug(
+        "[get_sector_breakdown] Sector groups before percentage calc: %s",
+        [(k, v["totalValue"]) for k, v in sector_groups.items()],
+    )
 
     breakdown = []
     for sector_data in sector_groups.values():
@@ -241,6 +313,12 @@ async def get_sector_breakdown(
         )
 
     breakdown.sort(key=lambda item: item["totalValue"], reverse=True)
+    logger.debug(
+        "[get_sector_breakdown] Final breakdown: %s",
+        [(b["sector"], b["percentage"]) for b in breakdown],
+    )
+    total_pct = sum(b["percentage"] for b in breakdown)
+    logger.debug("[get_sector_breakdown] Total percentage: %s%% (should be ~100%%)", total_pct)
     return breakdown
 
 
@@ -277,8 +355,6 @@ def get_stock_beta(ticker: str, close_data: pd.DataFrame) -> float:
         beta = max(-3.0, min(5.0, beta))
 
         _beta_cache[normalized] = beta
-
-        logger.debug(f"[BETA] SUCCESS {normalized}: beta={beta}")
         return beta
 
     except Exception as e:
@@ -725,8 +801,6 @@ async def get_benchmark_comparison(holdings: list) -> dict:
                 }
             )
 
-        logger.debug("Valid dated holdings: %s", len(dated_holdings))
-
         if not dated_holdings:
             return {}
 
@@ -867,8 +941,9 @@ async def get_benchmark_comparison(holdings: list) -> dict:
             return {}
 
         # Calculate user XIRR (money-weighted internal rate of return)
-        # Build cash flows: outflows for each buy, inflow for current value
+        # Build cash flows: outflows for each buy (skip NaN prices), inflow = current value of included holdings
         xirr_flows = []
+        valid_holdings = []
         for item in available_holdings:
             ticker = item["ticker"]
             qty = float(item["quantity"])
@@ -876,26 +951,49 @@ async def get_benchmark_comparison(holdings: list) -> dict:
 
             buy_ts = pd.Timestamp(buy_date)
             stock_series = portfolio_close[ticker]
-            
-            # Get the closing price on or after the buy date (using ffill)
-            if buy_ts in stock_series.index:
-                buy_price = float(stock_series.loc[buy_ts])
-            else:
-                # Find the first date >= buy_ts
+
+            buy_price = None
+            # Try the buy date and up to 4 days forward for the next trading day
+            for offset in range(5):
+                check_ts = buy_ts + pd.Timedelta(days=offset)
+                if check_ts in stock_series.index:
+                    p = stock_series.loc[check_ts]
+                    if pd.notna(p) and np.isfinite(p):
+                        buy_price = float(p)
+                        break
+
+            # Fallback: first available date >= buy_ts (older behavior)
+            if buy_price is None:
                 mask = stock_series.index >= buy_ts
                 if mask.any():
-                    buy_price = float(stock_series[mask].iloc[0])
-                else:
-                    buy_price = float(stock_series.iloc[-1])  # Fallback to last available
-            
-            # Outflow: negative cash flow for purchase
+                    p = stock_series[mask].iloc[0]
+                    if pd.notna(p) and np.isfinite(p):
+                        buy_price = float(p)
+
+            if buy_price is None:
+                logger.warning(f"[XIRR] No valid price for {ticker} on/after {buy_date}, skipping holding")
+                continue
+
             xirr_flows.append((buy_date, -qty * buy_price))
+            valid_holdings.append({**item, "buy_price": buy_price})
 
-        # Inflow: current portfolio value (as of today)
-        xirr_flows.append((today, final_portfolio))
-        xirr_flows.sort(key=lambda x: x[0])
+        # Compute final portfolio value only for holdings with valid buy prices
+        final_portfolio_valid = 0.0
+        for vh in valid_holdings:
+            t = vh["ticker"]
+            q = float(vh["quantity"])
+            cur_p = portfolio_close[t].iloc[-1]
+            if pd.notna(cur_p) and np.isfinite(cur_p):
+                final_portfolio_valid += q * float(cur_p)
+            else:
+                logger.warning(f"[XIRR] Current price NaN for {t}, excluding from final value")
 
-        user_xirr = calculate_xirr(xirr_flows)
+        if not valid_holdings:
+            user_xirr = 0.0
+        else:
+            xirr_flows.append((today, final_portfolio_valid))
+            xirr_flows.sort(key=lambda x: x[0])
+            user_xirr = calculate_xirr(xirr_flows)
 
         # Nifty CAGR: anchored to the earliest buy date (standard retail benchmark)
         if is_short_period:
@@ -904,23 +1002,13 @@ async def get_benchmark_comparison(holdings: list) -> dict:
             nifty_cagr = (final_nifty / initial_nifty) ** (1 / years) - 1
 
 
-        # Pass 2: sum invested amount using only available holdings.
+        # Pass 2: sum invested amount using only holdings that had valid buy prices
         total_invested = 0.0
-        for item in available_holdings:
+        for item in (valid_holdings if 'valid_holdings' in locals() else []):
             qty = float(item["quantity"])
             ticker = item["ticker"]
-
-            stock_series = portfolio_close[ticker]
-            buy_ts = pd.Timestamp(item["buyDate"])
-            if buy_ts in stock_series.index:
-                buy_price = float(stock_series.loc[buy_ts])
-            else:
-                mask = stock_series.index >= buy_ts
-                if mask.any():
-                    buy_price = float(stock_series[mask].iloc[0])
-                else:
-                    buy_price = float(stock_series.iloc[-1])
-
+            # Use buy_price captured earlier when available
+            buy_price = float(item.get("buy_price") or 0.0)
             total_invested += qty * buy_price
 
         if total_invested <= 0:

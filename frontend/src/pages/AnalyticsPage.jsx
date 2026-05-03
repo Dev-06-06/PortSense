@@ -2113,30 +2113,32 @@ const AnalyticsPage = () => {
                       {parsedAdvice.risks || "No details provided."}
                     </p>
                   </div>
-                  <div style={{ display: "grid", gap: "0.3rem" }}>
-                    <h3
-                      style={{
-                        margin: 0,
-                        fontSize: "1rem",
-                        fontWeight: 700,
-                        color: "#f97316",
-                      }}
-                    >
-                      Rebalancing Steps
-                    </h3>
-                    <p
-                      style={{
-                        margin: 0,
-                        color: "#ffffff",
-                        fontSize: "0.95rem",
-                        lineHeight: 1.7,
-                        whiteSpace: "pre-wrap",
-                        fontFamily: "'DM Sans', sans-serif",
-                      }}
-                    >
-                      {parsedAdvice.steps || "No details provided."}
-                    </p>
-                  </div>
+                  {parsedAdvice.steps && (
+                    <div style={{ display: "grid", gap: "0.3rem" }}>
+                      <h3
+                        style={{
+                          margin: 0,
+                          fontSize: "1rem",
+                          fontWeight: 700,
+                          color: "#f97316",
+                        }}
+                      >
+                        Portfolio Considerations
+                      </h3>
+                      <p
+                        style={{
+                          margin: 0,
+                          color: "#ffffff",
+                          fontSize: "0.95rem",
+                          lineHeight: 1.7,
+                          whiteSpace: "pre-wrap",
+                          fontFamily: "'DM Sans', sans-serif",
+                        }}
+                      >
+                        {parsedAdvice.steps}
+                      </p>
+                    </div>
+                  )}
                   {parsedAdvice.outlook && (
                     <div style={{ display: "grid", gap: "0.3rem" }}>
                       <h3

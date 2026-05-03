@@ -28,23 +28,9 @@ async def main():
     client = await connect_to_mongo()
     db = get_database_from_client(client)
 
-    print("\n=== Calling get_sector() for each ticker ===\n")
     for ticker in TICKERS:
-        print(f"--- {ticker} ---")
         result = await get_sector(ticker, db_client=client)
-        print(f"    get_sector() returned: {result}\n")
-
-    print("\n=== MongoDB sector_cache check ===\n")
-    for ticker in TICKERS:
-        doc = await db.sector_cache.find_one({"ticker": ticker})
-        if doc:
-            print(
-                f"  {ticker}: sector={doc.get('sector')!r}  "
-                f"source={doc.get('source')!r}  "
-                f"updatedAt={doc.get('updatedAt')}"
-            )
-        else:
-            print(f"  {ticker}: NOT FOUND in sector_cache")
+        _ = result
 
     client.close()
 

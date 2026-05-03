@@ -1,5 +1,6 @@
 import os
 import itertools
+import re
 from pathlib import Path
 from dotenv import load_dotenv
 from google import genai
@@ -174,7 +175,12 @@ def build_rebalancing_prompt(portfolio_data: dict) -> str:
     for s in sectors:
         name = s.get("name") or s.get("sector") or "Unknown"
         weight = float(s.get("weight") or s.get("percentage") or 0)
-        pct = round(weight * 100, 1) if weight <= 1 else round(weight, 1)
+        # If the incoming weight is a tiny fraction (e.g. 0.0039 -> 0.39%),
+        # multiply by 100. Otherwise assume the value is already a percentage.
+        if weight < 0.01:
+            pct = round(weight * 100, 1)
+        else:
+            pct = round(weight, 1)
         flag = " ⚠ OVERWEIGHT" if s.get("isOverweight") else ""
         sector_lines.append(f"  {name}: {pct}%{flag}")
     sector_text = "\n".join(sector_lines) if sector_lines else "  N/A"
@@ -197,8 +203,7 @@ def build_rebalancing_prompt(portfolio_data: dict) -> str:
         portfolio_data.get("correlation_pairs", [])
     )
 
-    return f"""You are a senior Indian equity portfolio analyst advising a retail investor.
-Analyse this portfolio with full context and give specific, data-driven advice.
+    return f"""You are a senior Indian equity portfolio analyst explaining a retail investor's portfolio to them. Your goal is to help them understand their portfolio — not to give trading instructions.
 
 ═══ PORTFOLIO VALUE: ₹{total_value:,.0f} ═══
 
@@ -224,28 +229,36 @@ TOP CORRELATED PAIRS:
 {correlation_pairs}
 
 INSTRUCTIONS:
+This is an EXPLANATION, not a trading recommendation.
+Do not add any section not listed below.
 Respond in exactly this format. Do not add any other sections.
 
 **Strengths:**
 [2 sentences. Reference specific tickers, weights, and P&L numbers from above.]
 
 **Concentration Risks:**
-[2 sentences. Name overweight sectors and high-beta holdings with their exact weights.]
+[2 sentences. Name overweight sectors and high-beta holdings with their exact weights.
+Explain WHY this concentration is a risk — what scenario would hurt this portfolio.]
 
-**Rebalancing Actions:**
-- [Specific action with ticker and ₹ amount e.g. "Trim HCLTECH by ₹12,000"]
-- [Specific action with ticker and ₹ amount]
-- [Specific action with ticker and ₹ amount]
-- [Specific action — may suggest adding MF/FD allocation if equity risk is high]
+**Portfolio Considerations:**
+- [One observation about a holding or sector where the current risk-return balance has shifted from the original investment thesis. Explain the mechanism — what has changed fundamentally or technically. Example: "HDFCBANK's post-merger integration has compressed NIMs over 4 quarters; the risk profile has shifted from a growth story to a recovery play, which changes its role in a diversified portfolio."]
+- [One observation about the Fixed Deposit / Mutual Fund allocation relative to current interest rate environment and inflation. Explain the real return implication.]
+- [One observation about a sector pair that has high correlation or concentration — explain what macro scenario would stress this.]
+- [One forward-looking observation about the portfolio's positioning relative to current market cycle — capex cycle, rate cycle, global IT spending cycle, commodity cycle — whichever is most relevant to THIS portfolio's actual holdings.]
 
 **Outlook:**
-[1 sentence comparing your CAGR to Nifty 50 with a forward-looking note.]
+[1 sentence comparing your CAGR to Nifty 50 with a forward-looking note grounded 
+in the current portfolio composition.]
 
 Rules:
-- Every rebalancing action must mention a ticker or asset name and a rupee amount
-- All amounts in INR
-- Only reference NSE/BSE stocks
-- Max 280 words total
+- Output ONLY these four sections: Strengths, Concentration Risks, Portfolio Considerations, Outlook. Nothing else. No other headers.
+- Never use Buy, Sell, Trim, Add, Reduce, Increase
+- Never use: Buy, Sell, Trim, Add, Reduce, Increase, Consider, Should
+- Each point must reference a specific ticker or sector from above
+- Focus on explaining WHAT IS HAPPENING and WHY — not what to do
+- Never write "No details provided" or leave a bullet empty
+- If uncertain, write the most relevant macro observation for this portfolio
+- Max 350 words total
 """
 
 
@@ -269,7 +282,43 @@ Be specific to these companies. Do not be generic.
 def get_rebalancing_advice(portfolio_data: dict) -> str:
     try:
         prompt = build_rebalancing_prompt(portfolio_data)
-        return get_gemini_response(prompt)
+        raw = get_gemini_response(prompt)
+
+        print("=== RAW GEMINI OUTPUT START ===")
+        print(repr(raw))
+        print("=== RAW GEMINI OUTPUT END ===")
+
+        # Split into lines and rebuild, dropping Rebalancing Steps section
+        lines = raw.split('\n')
+        output_lines = []
+        skip = False
+
+        for line in lines:
+            stripped = line.strip().lower()
+            # Detect start of unwanted section (any variation)
+            if 'rebalancing steps' in stripped or 'rebalancing action' in stripped:
+                skip = True
+                continue
+            # Detect start of a new known section — stop skipping
+            if skip and any(
+                keyword in stripped for keyword in [
+                    'strengths', 'concentration risk', 'portfolio consideration',
+                    'outlook', 'what you did'
+                ]
+            ):
+                skip = False
+            if not skip:
+                output_lines.append(line)
+
+        cleaned = '\n'.join(output_lines)
+
+        # Remove orphaned "No details provided"
+        cleaned = re.sub(
+            r'\nNo details provided\.?\n?', '', 
+            cleaned, flags=re.IGNORECASE
+        ).strip()
+
+        return cleaned
     except Exception as exc:
         logger.exception("Failed to generate rebalancing advice: %s", exc)
         return "Unable to generate advice at this time."
