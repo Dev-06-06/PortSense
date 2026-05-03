@@ -17,6 +17,7 @@ const TaxPage = lazy(() => import("./pages/TaxPage"));
 const CorrelationPage = lazy(() => import("./pages/CorrelationPage"));
 const SentimentPage = lazy(() => import("./pages/SentimentPage"));
 const AccountPage = lazy(() => import("./pages/AccountPage"));
+const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
 
 const routeTransitionStyle = {
   animation: "fadeIn 0.2s ease-in",
@@ -78,6 +79,14 @@ function App() {
             element={
               <PageTransition>
                 <RegisterPage />
+              </PageTransition>
+            }
+          />
+          <Route
+            path="/reset-password"
+            element={
+              <PageTransition>
+                <ResetPasswordPage />
               </PageTransition>
             }
           />

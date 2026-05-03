@@ -113,7 +113,7 @@ export default function ResetPasswordPage() {
                     width: 32,
                     height: 32,
                     borderRadius: "50%",
-                    background: "#2563eb",
+                    background: "#f97316",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -125,24 +125,28 @@ export default function ResetPasswordPage() {
                     P
                   </span>
                 </div>
-                <span
+                <div
                   style={{
                     fontFamily: "'Barlow Condensed', sans-serif",
-                    fontSize: 18,
+                    fontSize: "1.6rem",
                     fontWeight: 900,
                     letterSpacing: "0.18em",
                     textTransform: "uppercase",
-                    color: "#fff",
+                    display: "flex",
                   }}
                 >
-                  PortSense
-                </span>
+                  <span style={{ color: "#fff" }}>PORT</span>
+                  <span style={{ color: "#f97316" }}>SENSE</span>
+                </div>
               </div>
             </button>
           </div>
 
           <div className="mb-5">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#2563eb]">
+            <p
+              className="text-[10px] font-black uppercase tracking-[0.2em]"
+              style={{ color: "#f97316" }}
+            >
               PortSense Access
             </p>
             <h1 className="score-num mt-2 text-4xl font-extrabold uppercase tracking-wide text-white">
@@ -179,7 +183,20 @@ export default function ResetPasswordPage() {
                   type="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
-                  className="w-full rounded-xl border border-white/8 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none transition-all focus:ring-2 focus:ring-[#2563eb]"
+                  className="w-full rounded-xl border border-white/8 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none transition-all"
+                  style={{
+                    boxShadow:
+                      "0 0 0 2px rgba(0,0,0,0), 0 0 0 2px rgba(249, 115, 22, 0) inset",
+                  }}
+                  onFocus={(e) => {
+                    e.target.style.boxShadow =
+                      "0 0 0 3px rgba(249, 115, 22, 0.4)";
+                    e.target.style.borderColor = "rgba(249, 115, 22, 0.6)";
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.boxShadow = "";
+                    e.target.style.borderColor = "rgba(255,255,255,0.08)";
+                  }}
                   placeholder="you@example.com"
                   autoComplete="email"
                   required
@@ -189,7 +206,27 @@ export default function ResetPasswordPage() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full rounded-xl border border-[#2563eb]/40 bg-[#2563eb] px-4 py-2.5 text-sm font-black uppercase tracking-widest text-white transition-all hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                style={{
+                  width: "100%",
+                  borderRadius: "0.75rem",
+                  border: "1px solid rgba(249, 115, 22, 0.4)",
+                  backgroundColor: "#f97316",
+                  padding: "0.625rem 1rem",
+                  fontSize: "0.875rem",
+                  fontWeight: 900,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.15em",
+                  color: "#0d1117",
+                  transition: "all 0.2s",
+                  cursor: submitting ? "not-allowed" : "pointer",
+                  opacity: submitting ? 0.6 : 1,
+                }}
+                onMouseEnter={(e) =>
+                  !submitting && (e.target.style.backgroundColor = "#ea580c")
+                }
+                onMouseLeave={(e) =>
+                  !submitting && (e.target.style.backgroundColor = "#f97316")
+                }
               >
                 {submitting ? "Sending..." : "Send OTP"}
               </button>
@@ -210,7 +247,20 @@ export default function ResetPasswordPage() {
                   type="text"
                   value={otp}
                   onChange={(event) => setOtp(event.target.value)}
-                  className="w-full rounded-xl border border-white/8 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none transition-all focus:ring-2 focus:ring-[#2563eb]"
+                  className="w-full rounded-xl border border-white/8 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none transition-all"
+                  style={{
+                    boxShadow:
+                      "0 0 0 2px rgba(0,0,0,0), 0 0 0 2px rgba(249, 115, 22, 0) inset",
+                  }}
+                  onFocus={(e) => {
+                    e.target.style.boxShadow =
+                      "0 0 0 3px rgba(249, 115, 22, 0.4)";
+                    e.target.style.borderColor = "rgba(249, 115, 22, 0.6)";
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.boxShadow = "";
+                    e.target.style.borderColor = "rgba(255,255,255,0.08)";
+                  }}
                   placeholder="Enter OTP"
                   required
                 />
@@ -229,14 +279,31 @@ export default function ResetPasswordPage() {
                     type={showPassword ? "text" : "password"}
                     value={newPassword}
                     onChange={(event) => setNewPassword(event.target.value)}
-                    className="w-full rounded-xl border border-white/8 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none transition-all focus:ring-2 focus:ring-[#2563eb]"
+                    className="w-full rounded-xl border border-white/8 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none transition-all"
+                    style={{
+                      boxShadow:
+                        "0 0 0 2px rgba(0,0,0,0), 0 0 0 2px rgba(249, 115, 22, 0) inset",
+                      paddingRight: "3.5rem",
+                    }}
+                    onFocus={(e) => {
+                      e.target.style.boxShadow =
+                        "0 0 0 3px rgba(249, 115, 22, 0.4)";
+                      e.target.style.borderColor = "rgba(249, 115, 22, 0.6)";
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.boxShadow = "";
+                      e.target.style.borderColor = "rgba(255,255,255,0.08)";
+                    }}
                     placeholder="Min. 6 characters"
                     required
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword((prev) => !prev)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-[#2563eb]"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-colors"
+                    style={{ color: "inherit" }}
+                    onMouseEnter={(e) => (e.target.style.color = "#f97316")}
+                    onMouseLeave={(e) => (e.target.style.color = "#94a3b8")}
                     tabIndex={-1}
                   >
                     {showPassword ? (
@@ -278,7 +345,27 @@ export default function ResetPasswordPage() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full rounded-xl border border-[#2563eb]/40 bg-[#2563eb] px-4 py-2.5 text-sm font-black uppercase tracking-widest text-white transition-all hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                style={{
+                  width: "100%",
+                  borderRadius: "0.75rem",
+                  border: "1px solid rgba(249, 115, 22, 0.4)",
+                  backgroundColor: "#f97316",
+                  padding: "0.625rem 1rem",
+                  fontSize: "0.875rem",
+                  fontWeight: 900,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.15em",
+                  color: "#0d1117",
+                  transition: "all 0.2s",
+                  cursor: submitting ? "not-allowed" : "pointer",
+                  opacity: submitting ? 0.6 : 1,
+                }}
+                onMouseEnter={(e) =>
+                  !submitting && (e.target.style.backgroundColor = "#ea580c")
+                }
+                onMouseLeave={(e) =>
+                  !submitting && (e.target.style.backgroundColor = "#f97316")
+                }
               >
                 {submitting ? "Resetting..." : "Reset Password"}
               </button>
@@ -288,7 +375,10 @@ export default function ResetPasswordPage() {
           <p className="mt-5 text-center text-sm text-slate-400">
             <Link
               to="/login"
-              className="font-semibold text-[#2563eb] hover:text-blue-500"
+              className="font-semibold"
+              style={{ color: "#f97316", textDecoration: "none" }}
+              onMouseEnter={(e) => (e.target.style.opacity = "0.8")}
+              onMouseLeave={(e) => (e.target.style.opacity = "1")}
             >
               ← Back to Login
             </Link>

@@ -43,7 +43,10 @@ export default function VerifyEmailPage() {
 
   const handlePaste = (e) => {
     e.preventDefault();
-    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    const pasted = e.clipboardData
+      .getData("text")
+      .replace(/\D/g, "")
+      .slice(0, 6);
     if (pasted.length === 6) {
       setOtp(pasted.split(""));
       inputRefs.current[5]?.focus();
@@ -52,7 +55,10 @@ export default function VerifyEmailPage() {
 
   const handleVerify = async () => {
     const otpString = otp.join("");
-    if (otpString.length !== 6) { setError("Please enter the complete 6-digit OTP"); return; }
+    if (otpString.length !== 6) {
+      setError("Please enter the complete 6-digit OTP");
+      return;
+    }
     setError("");
     setSubmitting(true);
     try {
@@ -99,14 +105,16 @@ export default function VerifyEmailPage() {
   const otpFilled = otp.join("").length === 6;
 
   return (
-    <div style={{
-      minHeight: "100vh",
-      backgroundColor: "#0d1117",
-      display: "grid",
-      placeItems: "center",
-      padding: "1.5rem",
-      fontFamily: "'DM Sans', sans-serif",
-    }}>
+    <div
+      style={{
+        minHeight: "100vh",
+        backgroundColor: "#0d1117",
+        display: "grid",
+        placeItems: "center",
+        padding: "1.5rem",
+        fontFamily: "'DM Sans', sans-serif",
+      }}
+    >
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Barlow+Condensed:wght@600;700;800;900&display=swap');
         .otp-input {
@@ -130,33 +138,53 @@ export default function VerifyEmailPage() {
         }
       `}</style>
 
-      <div style={{
-        width: "100%",
-        maxWidth: "26rem",
-        backgroundColor: "#111827",
-        border: "1px solid rgba(255,255,255,0.1)",
-        borderRadius: "1.25rem",
-        padding: "2rem",
-        color: "#fff",
-        boxShadow: "0 25px 50px rgba(0,0,0,0.5)",
-      }}>
-
+      <div
+        style={{
+          width: "100%",
+          maxWidth: "26rem",
+          backgroundColor: "#111827",
+          border: "1px solid rgba(255,255,255,0.1)",
+          borderRadius: "1.25rem",
+          padding: "2rem",
+          color: "#fff",
+          boxShadow: "0 25px 50px rgba(0,0,0,0.5)",
+        }}
+      >
         {/* Logo */}
         <div
           onClick={() => navigate("/")}
-          style={{ cursor: "pointer", marginBottom: "1.75rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.6rem" }}
+          style={{
+            cursor: "pointer",
+            marginBottom: "1.75rem",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "0.6rem",
+          }}
         >
-          <div style={{
-            width: 32, height: 32, borderRadius: "50%",
-            background: "#f97316", display: "flex",
-            alignItems: "center", justifyContent: "center",
-          }}>
-            <span style={{ fontSize: 14, fontWeight: 900, color: "#0d1117" }}>P</span>
+          <div
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: "50%",
+              background: "#f97316",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <span style={{ fontSize: 14, fontWeight: 900, color: "#0d1117" }}>
+              P
+            </span>
           </div>
-          <span style={{
-            fontFamily: "'Barlow Condensed', sans-serif",
-            fontSize: "1.6rem", fontWeight: 900, letterSpacing: "0.12em",
-          }}>
+          <span
+            style={{
+              fontFamily: "'Barlow Condensed', sans-serif",
+              fontSize: "1.6rem",
+              fontWeight: 900,
+              letterSpacing: "0.12em",
+            }}
+          >
             <span style={{ color: "#fff" }}>PORT</span>
             <span style={{ color: "#f97316" }}>SENSE</span>
           </span>
@@ -164,45 +192,76 @@ export default function VerifyEmailPage() {
 
         {/* Heading */}
         <div style={{ textAlign: "center", marginBottom: "1.75rem" }}>
-          <p style={{ margin: "0 0 0.25rem", fontSize: "0.65rem", fontWeight: 800, letterSpacing: "0.2em", textTransform: "uppercase", color: "#f97316" }}>
+          <p
+            style={{
+              margin: "0 0 0.25rem",
+              fontSize: "0.65rem",
+              fontWeight: 800,
+              letterSpacing: "0.2em",
+              textTransform: "uppercase",
+              color: "#f97316",
+            }}
+          >
             One Step Left
           </p>
-          <h1 style={{
-            margin: "0 0 0.5rem",
-            fontFamily: "'Barlow Condensed', sans-serif",
-            fontSize: "2.5rem", fontWeight: 900, textTransform: "uppercase",
-            letterSpacing: "0.05em", color: "#fff",
-          }}>
+          <h1
+            style={{
+              margin: "0 0 0.5rem",
+              fontFamily: "'Barlow Condensed', sans-serif",
+              fontSize: "2.5rem",
+              fontWeight: 900,
+              textTransform: "uppercase",
+              letterSpacing: "0.05em",
+              color: "#fff",
+            }}
+          >
             Verify Email
           </h1>
           <p style={{ margin: 0, fontSize: "0.85rem", color: "#64748b" }}>
             We sent a 6-digit OTP to
           </p>
-          <p style={{ margin: "0.2rem 0 0", fontSize: "0.875rem", fontWeight: 700, color: "#fff" }}>
+          <p
+            style={{
+              margin: "0.2rem 0 0",
+              fontSize: "0.875rem",
+              fontWeight: 700,
+              color: "#fff",
+            }}
+          >
             {email}
           </p>
         </div>
 
         {/* Error */}
         {error && (
-          <div style={{
-            marginBottom: "1rem", padding: "0.65rem 0.9rem",
-            backgroundColor: "rgba(239,68,68,0.1)",
-            border: "1px solid rgba(239,68,68,0.3)",
-            borderRadius: "0.75rem", color: "#fca5a5", fontSize: "0.85rem",
-          }}>
+          <div
+            style={{
+              marginBottom: "1rem",
+              padding: "0.65rem 0.9rem",
+              backgroundColor: "rgba(239,68,68,0.1)",
+              border: "1px solid rgba(239,68,68,0.3)",
+              borderRadius: "0.75rem",
+              color: "#fca5a5",
+              fontSize: "0.85rem",
+            }}
+          >
             {error}
           </div>
         )}
 
         {/* Success */}
         {success && (
-          <div style={{
-            marginBottom: "1rem", padding: "0.65rem 0.9rem",
-            backgroundColor: "rgba(16,185,129,0.1)",
-            border: "1px solid rgba(16,185,129,0.3)",
-            borderRadius: "0.75rem", color: "#6ee7b7", fontSize: "0.85rem",
-          }}>
+          <div
+            style={{
+              marginBottom: "1rem",
+              padding: "0.65rem 0.9rem",
+              backgroundColor: "rgba(16,185,129,0.1)",
+              border: "1px solid rgba(16,185,129,0.3)",
+              borderRadius: "0.75rem",
+              color: "#6ee7b7",
+              fontSize: "0.85rem",
+            }}
+          >
             {success}
           </div>
         )}
@@ -210,7 +269,12 @@ export default function VerifyEmailPage() {
         {/* OTP Boxes */}
         <div
           onPaste={handlePaste}
-          style={{ display: "flex", justifyContent: "center", gap: "0.5rem", marginBottom: "1.5rem" }}
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            gap: "0.5rem",
+            marginBottom: "1.5rem",
+          }}
         >
           {otp.map((digit, index) => (
             <input
@@ -233,13 +297,19 @@ export default function VerifyEmailPage() {
           onClick={handleVerify}
           disabled={submitting || !otpFilled}
           style={{
-            width: "100%", border: "none", borderRadius: "0.75rem",
+            width: "100%",
+            border: "none",
+            borderRadius: "0.75rem",
             padding: "0.85rem 1rem",
-            backgroundColor: (!otpFilled || submitting) ? "#7c3a10" : "#f97316",
-            color: "#fff", textTransform: "uppercase", fontWeight: 900,
-            letterSpacing: "0.15em", cursor: (!otpFilled || submitting) ? "not-allowed" : "pointer",
-            fontSize: "0.85rem", fontFamily: "'DM Sans', sans-serif",
-            opacity: (!otpFilled || submitting) ? 0.6 : 1,
+            backgroundColor: !otpFilled || submitting ? "#7c3a10" : "#f97316",
+            color: "#fff",
+            textTransform: "uppercase",
+            fontWeight: 900,
+            letterSpacing: "0.15em",
+            cursor: !otpFilled || submitting ? "not-allowed" : "pointer",
+            fontSize: "0.85rem",
+            fontFamily: "'DM Sans', sans-serif",
+            opacity: !otpFilled || submitting ? 0.6 : 1,
             transition: "background-color 0.2s",
           }}
         >
@@ -253,25 +323,44 @@ export default function VerifyEmailPage() {
             onClick={handleResend}
             disabled={countdown > 0 || resending}
             style={{
-              background: "none", border: "none", cursor: countdown > 0 ? "not-allowed" : "pointer",
+              background: "none",
+              border: "none",
+              cursor: countdown > 0 ? "not-allowed" : "pointer",
               color: countdown > 0 ? "#475569" : "#f97316",
-              fontSize: "0.85rem", fontFamily: "'DM Sans', sans-serif",
+              fontSize: "0.85rem",
+              fontFamily: "'DM Sans', sans-serif",
               opacity: countdown > 0 ? 0.6 : 1,
             }}
           >
-            {resending ? "Sending..." : countdown > 0 ? `Resend OTP in ${countdown}s` : "Resend OTP"}
+            {resending
+              ? "Sending..."
+              : countdown > 0
+                ? `Resend OTP in ${countdown}s`
+                : "Resend OTP"}
           </button>
         </div>
 
         {/* Wrong email */}
-        <p style={{ marginTop: "1rem", marginBottom: 0, textAlign: "center", fontSize: "0.875rem", color: "#64748b" }}>
+        <p
+          style={{
+            marginTop: "1rem",
+            marginBottom: 0,
+            textAlign: "center",
+            fontSize: "0.875rem",
+            color: "#64748b",
+          }}
+        >
           Wrong email?{" "}
           <button
             type="button"
             onClick={() => navigate("/register")}
             style={{
-              background: "none", border: "none", cursor: "pointer",
-              color: "#f97316", fontWeight: 700, fontSize: "0.875rem",
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              color: "#f97316",
+              fontWeight: 700,
+              fontSize: "0.875rem",
               fontFamily: "'DM Sans', sans-serif",
             }}
           >

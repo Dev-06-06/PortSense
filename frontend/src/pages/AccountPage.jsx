@@ -108,18 +108,14 @@ const AccountPage = () => {
   const [error, setError] = useState("");
   const [usernameInput, setUsernameInput] = useState("");
   const [usernameError, setUsernameError] = useState("");
-  const [showPasswordForm, setShowPasswordForm] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmNewPassword, setConfirmNewPassword] = useState("");
-  const [passwordError, setPasswordError] = useState("");
-  const [isChangingPassword, setIsChangingPassword] = useState(false);
-  const [passwordSuccess, setPasswordSuccess] = useState("");
   const [photoUrl, setPhotoUrl] = useState("");
   const [profileName, setProfileName] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileSuccess, setProfileSuccess] = useState("");
   const [profileError, setProfileError] = useState("");
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   useEffect(() => {
     document.title = "Account | PortSense";
@@ -248,47 +244,22 @@ const AccountPage = () => {
     }
   };
 
-  const submitPasswordChange = async (event) => {
-    event.preventDefault();
-    setPasswordError("");
-
-    if (newPassword.length < 8) {
-      setPasswordError("New password must be at least 8 characters");
-      return;
-    }
-
-    if (newPassword !== confirmNewPassword) {
-      setPasswordError("New password and confirm password must match");
-      return;
-    }
-
-    setIsChangingPassword(true);
-
-    try {
-      await api.put("/api/auth/change-password", {
-        current_password: currentPassword,
-        new_password: newPassword,
-      });
-
-      sessionStorage.removeItem("portsense_account_cache");
-      setShowPasswordForm(false);
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmNewPassword("");
-      setPasswordSuccess("Password changed successfully");
-      window.setTimeout(() => setPasswordSuccess(""), 2000);
-    } catch (err) {
-      setPasswordError(
-        err?.response?.data?.detail || "Unable to change password",
-      );
-    } finally {
-      setIsChangingPassword(false);
-    }
-  };
-
   const onLogout = () => {
     logout();
     navigate("/", { replace: true });
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeletingAccount(true);
+    setDeleteError("");
+    try {
+      await api.delete("/api/auth/delete-account");
+      logout();
+      navigate("/", { replace: true });
+    } catch (err) {
+      setDeleteError(err?.response?.data?.detail || "Unable to delete account");
+      setDeletingAccount(false);
+    }
   };
 
   return (
@@ -749,149 +720,92 @@ const AccountPage = () => {
         </div>
 
         <div style={{ ...cardStyle, padding: "1rem" }}>
-          {!showPasswordForm ? (
-            <button
-              type="button"
-              onClick={() => {
-                setShowPasswordForm(true);
-                setPasswordError("");
-              }}
-              style={{
-                ...outlineButtonStyle,
-                width: "100%",
-                border: "1px solid rgba(249, 115, 22, 0.45)",
-                color: "#fb923c",
-                padding: "0.85rem 1rem",
-                fontSize: "0.95rem",
-              }}
-            >
-              Change Password
-            </button>
-          ) : (
-            <form onSubmit={submitPasswordChange}>
-              <div style={{ display: "grid", gap: "0.65rem" }}>
-                <div>
-                  <p
-                    style={{
-                      margin: "0 0 0.35rem",
-                      color: "#94a3b8",
-                      fontSize: "0.82rem",
-                    }}
-                  >
-                    Current Password
-                  </p>
-                  <input
-                    type="password"
-                    value={currentPassword}
-                    onChange={(event) => setCurrentPassword(event.target.value)}
-                    style={inputStyle}
-                    required
-                  />
-                </div>
-                <div>
-                  <p
-                    style={{
-                      margin: "0 0 0.35rem",
-                      color: "#94a3b8",
-                      fontSize: "0.82rem",
-                    }}
-                  >
-                    New Password
-                  </p>
-                  <input
-                    type="password"
-                    value={newPassword}
-                    onChange={(event) => setNewPassword(event.target.value)}
-                    style={inputStyle}
-                    required
-                  />
-                </div>
-                <div>
-                  <p
-                    style={{
-                      margin: "0 0 0.35rem",
-                      color: "#94a3b8",
-                      fontSize: "0.82rem",
-                    }}
-                  >
-                    Confirm New Password
-                  </p>
-                  <input
-                    type="password"
-                    value={confirmNewPassword}
-                    onChange={(event) =>
-                      setConfirmNewPassword(event.target.value)
-                    }
-                    style={inputStyle}
-                    required
-                  />
-                </div>
-              </div>
+          <button
+            type="button"
+            onClick={() => navigate("/reset-password")}
+            style={{
+              ...outlineButtonStyle,
+              width: "100%",
+              border: "1px solid rgba(249, 115, 22, 0.45)",
+              color: "#fb923c",
+              padding: "0.85rem 1rem",
+              fontSize: "0.95rem",
+            }}
+          >
+            Change Password
+          </button>
+        </div>
 
-              {passwordError && (
-                <p
-                  style={{
-                    margin: "0.65rem 0 0",
-                    color: "#f87171",
-                    fontSize: "0.85rem",
-                  }}
-                >
-                  {passwordError}
-                </p>
-              )}
-
-              <div
+        {/* Only show delete option if not demo user */}
+        {userDetails?.email !== "demo@portsense.in" && (
+          <div style={{ ...cardStyle, padding: "1rem" }}>
+            {!showDeleteConfirm ? (
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(true)}
                 style={{
-                  display: "flex",
-                  gap: "0.5rem",
-                  marginTop: "0.8rem",
-                  flexWrap: "wrap",
+                  ...outlineButtonStyle,
+                  width: "100%",
+                  border: "1px solid rgba(239,68,68,0.45)",
+                  color: "#f87171",
+                  padding: "0.85rem 1rem",
+                  fontSize: "0.95rem",
                 }}
               >
-                <button
-                  type="submit"
-                  disabled={isChangingPassword}
+                Delete Account
+              </button>
+            ) : (
+              <div style={{ display: "grid", gap: "0.75rem" }}>
+                <p
                   style={{
-                    ...outlineButtonStyle,
-                    border: "1px solid rgba(249, 115, 22, 0.45)",
-                    color: "#fb923c",
+                    margin: 0,
+                    color: "#f87171",
+                    fontSize: "0.9rem",
+                    fontWeight: 600,
                   }}
                 >
-                  {isChangingPassword ? "Updating..." : "Save"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowPasswordForm(false);
-                    setCurrentPassword("");
-                    setNewPassword("");
-                    setConfirmNewPassword("");
-                    setPasswordError("");
-                  }}
-                  style={{
-                    ...outlineButtonStyle,
-                    border: "1px solid rgba(148, 163, 184, 0.45)",
-                    color: "#cbd5e1",
-                  }}
-                >
-                  Cancel
-                </button>
+                  Are you sure? This action is permanent and cannot be undone.
+                </p>
+                {deleteError && (
+                  <p
+                    style={{ margin: 0, color: "#f87171", fontSize: "0.85rem" }}
+                  >
+                    {deleteError}
+                  </p>
+                )}
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  <button
+                    type="button"
+                    onClick={handleDeleteAccount}
+                    disabled={deletingAccount}
+                    style={{
+                      ...outlineButtonStyle,
+                      border: "1px solid rgba(239,68,68,0.6)",
+                      color: "#f87171",
+                      backgroundColor: "rgba(239,68,68,0.1)",
+                    }}
+                  >
+                    {deletingAccount ? "Deleting..." : "Yes, Delete My Account"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowDeleteConfirm(false);
+                      setDeleteError("");
+                    }}
+                    style={{
+                      ...outlineButtonStyle,
+                      border: "1px solid rgba(148,163,184,0.45)",
+                      color: "#cbd5e1",
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
-            </form>
-          )}
-
-          {passwordSuccess && (
-            <p
-              style={{
-                margin: "0.65rem 0 0",
-                color: "#22c55e",
-                fontSize: "0.85rem",
-              }}
-            >
-              {passwordSuccess}
-            </p>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
         {loading && (
           <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.9rem" }}>

@@ -615,3 +615,27 @@ async def change_password(
     )
 
     return {"message": "Password changed successfully"}
+
+
+@router.delete("/delete-account")
+async def delete_account(
+    current_user: dict = Depends(get_current_user),
+    users_collection: AsyncIOMotorCollection = Depends(get_users_collection),
+):
+    # Prevent demo user deletion
+    if current_user.get("email") == "demo@portsense.in":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Demo account cannot be deleted",
+        )
+
+    db = get_database()
+    holdings_collection = db["holdings"]
+
+    # Delete holdings for this user
+    await holdings_collection.delete_many({"userId": current_user.get("_id")})
+
+    # Delete user document
+    await users_collection.delete_one({"_id": current_user.get("_id")})
+
+    return {"message": "Account deleted successfully"}
