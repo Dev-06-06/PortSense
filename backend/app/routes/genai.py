@@ -191,6 +191,7 @@ async def rebalance_portfolio(
     
 
     portfolio_data = {
+        "user_id": str(current_user.get("_id")),
         "holdings": enriched_holdings,
         "sector_breakdown": sector_breakdown,
         "portfolio_beta_data": portfolio_beta_data,

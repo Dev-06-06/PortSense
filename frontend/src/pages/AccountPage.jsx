@@ -3,6 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import api from "../services/api";
 
+const ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL || "")
+  .trim()
+  .toLowerCase();
+
 const shellStyle = {
   minHeight: "100vh",
   backgroundColor: "#0d1117",
@@ -735,6 +739,25 @@ const AccountPage = () => {
             Change Password
           </button>
         </div>
+
+        {userDetails?.email?.trim().toLowerCase() === ADMIN_EMAIL && (
+          <div style={{ ...cardStyle, padding: "1rem" }}>
+            <button
+              type="button"
+              onClick={() => navigate("/knowledge-base")}
+              style={{
+                ...outlineButtonStyle,
+                width: "100%",
+                border: "1px solid rgba(249, 115, 22, 0.45)",
+                color: "#fb923c",
+                padding: "0.85rem 1rem",
+                fontSize: "0.95rem",
+              }}
+            >
+              Open Knowledge Base
+            </button>
+          </div>
+        )}
 
         {/* Only show delete option if not demo user */}
         {userDetails?.email !== "demo@portsense.in" && (

@@ -18,6 +18,7 @@ const CorrelationPage = lazy(() => import("./pages/CorrelationPage"));
 const SentimentPage = lazy(() => import("./pages/SentimentPage"));
 const AccountPage = lazy(() => import("./pages/AccountPage"));
 const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
+const KnowledgeBasePage = lazy(() => import("./pages/KnowledgeBase"));
 
 const routeTransitionStyle = {
   animation: "fadeIn 0.2s ease-in",
@@ -172,6 +173,16 @@ function App() {
               <ProtectedLayout>
                 <PageTransition>
                   <AccountPage />
+                </PageTransition>
+              </ProtectedLayout>
+            }
+          />
+          <Route
+            path="/knowledge-base"
+            element={
+              <ProtectedLayout>
+                <PageTransition>
+                  <KnowledgeBasePage />
                 </PageTransition>
               </ProtectedLayout>
             }

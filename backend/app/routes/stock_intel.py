@@ -4,16 +4,17 @@ import logging
 import re
 import threading
 from collections import Counter
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Any
 
 from cachetools import TTLCache
 import yfinance as yf
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends
 from motor.motor_asyncio import AsyncIOMotorCollection
 
 from app.deps import get_holdings_collection
 from app.middleware.auth import get_current_user
+from app.rag.news_embedder import embed_and_store_articles
 from app.services.gemini import get_gemini_response
 from app.services.market import get_stock_info
 from app.services.sentiment import (
@@ -42,6 +43,31 @@ RIPPLE_EFFECT_FALLBACK = (
     "Current developments do not yet show a clear second-order spillover across the market. "
     "Watch sector peers, key suppliers/customers, and benchmark indices for confirmation."
 )
+
+
+def _parse_published_at(value: Any) -> datetime | None:
+    if value is None:
+        return None
+
+    if isinstance(value, datetime):
+        return value
+
+    text = str(value).strip()
+    if not text:
+        return None
+
+    for format_string in ("%d %b %Y", "%Y-%m-%d", "%Y-%m-%dT%H:%M:%S%z"):
+        try:
+            parsed = datetime.strptime(text, format_string)
+            return parsed.replace(tzinfo=timezone.utc)
+        except Exception:
+            continue
+
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+    except Exception:
+        return None
 
 
 def _to_float(value: Any, digits: int | None = None) -> float | None:
@@ -485,6 +511,7 @@ def _parse_gemini_json(raw_text: str) -> dict:
 @router.get("/{ticker}")
 async def get_stock_intel(
     ticker: str,
+    background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
     holdings_collection: AsyncIOMotorCollection = Depends(get_holdings_collection),
 ):
@@ -659,6 +686,26 @@ async def get_stock_intel(
         sentiment_input
     )
     gemini_data = _parse_gemini_json(gemini_raw)
+
+    enriched_articles = []
+    score_by_title = {item["headline"]: item for item in sentiment_input}
+    for article in articles:
+        title = str(article.get("title", "")).strip()
+        score_item = score_by_title.get(title, {})
+        enriched_articles.append({
+            "ticker": normalized_ticker,
+            "company": normalized_ticker.replace(".NS", "").replace(".BO", ""),
+            "title": title,
+            "description": str(article.get("summary", "") or "").strip() or None,
+            "content": None,
+            "url": str(article.get("articleUrl", "") or "").strip(),
+            "publisher": str(article.get("sourceName", "") or "").strip(),
+            "published_at": _parse_published_at(article.get("pubDate")),
+            "sentiment": str(score_item.get("label", "neutral") or "neutral"),
+            "sentiment_score": float(score_item.get("score", 0.0) or 0.0),
+        })
+
+    background_tasks.add_task(embed_and_store_articles, enriched_articles)
 
     return {
         "price_snapshot": {

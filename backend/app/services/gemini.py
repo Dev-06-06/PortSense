@@ -7,6 +7,8 @@ from google import genai
 from google.genai import types
 import logging
 
+from app.rag import embeddings, rag_service
+
 ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
 load_dotenv(dotenv_path=ENV_PATH)
 
@@ -113,7 +115,111 @@ def _format_correlation_pairs(correlation_pairs: object) -> str:
     return str(correlation_pairs)
 
 
-def build_rebalancing_prompt(portfolio_data: dict) -> str:
+def _normalize_portfolio_ticker(ticker: str) -> str:
+    normalized = str(ticker or "").strip().upper()
+    if not normalized:
+        return ""
+    return normalized.replace(".NS", "").replace(".BO", "")
+
+
+def _extract_portfolio_tickers(holdings: list[dict]) -> list[str]:
+    tickers: list[str] = []
+    seen: set[str] = set()
+
+    for holding in holdings:
+        ticker = _normalize_portfolio_ticker(holding.get("ticker", ""))
+        if not ticker or ticker in seen:
+            continue
+        seen.add(ticker)
+        tickers.append(ticker)
+
+    return tickers
+
+
+def _dedupe_retrieved_chunks(chunks: list[dict]) -> list[dict]:
+    deduped: list[dict] = []
+    seen_text: set[str] = set()
+
+    for chunk in chunks:
+        text = str(chunk.get("text", "") or "").strip()
+        if not text or text in seen_text:
+            continue
+        seen_text.add(text)
+        deduped.append(chunk)
+
+    return deduped[:5]
+
+
+def _format_retrieved_context(chunks: list[dict]) -> str:
+    if not chunks:
+        return ""
+
+    sections: list[str] = ["==================================================", "", "RETRIEVED KNOWLEDGE", ""]
+
+    for chunk in chunks:
+        published_at = chunk.get("published_at")
+        doc_name = str(chunk.get("doc_name", "") or "").strip()
+        if hasattr(published_at, "isoformat"):
+            published_text = published_at.isoformat()
+        else:
+            published_text = str(published_at).strip()
+
+        sentiment = chunk.get("sentiment")
+        sections.extend(
+            [
+                "---",
+                f"Source: {chunk.get('source', 'N/A')}",
+                f"Company: {chunk.get('company', 'N/A')}",
+                f"Ticker: {chunk.get('ticker', 'N/A')}",
+                f"Document Type: {chunk.get('document_type', 'N/A')}",
+                f"Date: {published_text if published_text else doc_name}",
+                f"Sentiment: {sentiment if sentiment is not None else 'N/A'}",
+                "Content:",
+                str(chunk.get("text", "") or "").strip(),
+                "",
+            ]
+        )
+
+    sections.extend(["---", "=================================================="])
+    return "\n".join(sections)
+
+
+def _build_retrieved_context(portfolio_data: dict) -> str:
+    holdings = portfolio_data.get("holdings", [])
+    user_id = portfolio_data.get("user_id")
+    tickers = _extract_portfolio_tickers(holdings)
+
+    if not tickers or not user_id:
+        return ""
+
+    query_string = (
+        "Portfolio analysis and investment advice for holdings: "
+        f"{', '.join(tickers)}. Consider annual reports, company fundamentals and recent news."
+    )
+
+    try:
+        # Query embedding for portfolio-specific RAG retrieval.
+        query_embedding = embeddings.embed_query(query_string)
+
+        # Vector retrieval for the current user's holdings and matching tickers.
+        retrieved_chunks = rag_service.retrieve_context(
+            query_embedding=query_embedding,
+            user_id=str(user_id),
+            tickers=tickers,
+            limit=8,
+        )
+
+        if not retrieved_chunks:
+            return ""
+
+        deduped_chunks = _dedupe_retrieved_chunks(retrieved_chunks)
+        return _format_retrieved_context(deduped_chunks)
+    except Exception:
+        logger.exception("Failed to build RAG context for rebalancing advice")
+        return ""
+
+
+def build_rebalancing_prompt(portfolio_data: dict, retrieved_context: str = "") -> str:
     holdings = portfolio_data.get("holdings", [])
 
     stock_holdings = [
@@ -203,7 +309,9 @@ def build_rebalancing_prompt(portfolio_data: dict) -> str:
         portfolio_data.get("correlation_pairs", [])
     )
 
-    return f"""You are a senior Indian equity portfolio analyst explaining a retail investor's portfolio to them. Your goal is to help them understand their portfolio — not to give trading instructions.
+    prompt_prefix = "You are a senior Indian equity portfolio analyst explaining a retail investor's portfolio to them. Your goal is to help them understand their portfolio — not to give trading instructions."
+
+    prompt_body = f"""
 
 ═══ PORTFOLIO VALUE: ₹{total_value:,.0f} ═══
 
@@ -261,6 +369,11 @@ Rules:
 - Max 350 words total
 """
 
+    if not retrieved_context:
+        return f"{prompt_prefix}{prompt_body}"
+
+    return f"{prompt_prefix}\n\n{retrieved_context}\n{prompt_body}"
+
 
 def build_correlation_prompt(ticker1: str, ticker2: str, correlation: float, strength: str) -> str:
     movement = "together" if correlation >= 0 else "opposite"
@@ -281,7 +394,9 @@ Be specific to these companies. Do not be generic.
 
 def get_rebalancing_advice(portfolio_data: dict) -> str:
     try:
-        prompt = build_rebalancing_prompt(portfolio_data)
+        # Prompt augmentation with retrieved context happens here.
+        retrieved_context = _build_retrieved_context(portfolio_data)
+        prompt = build_rebalancing_prompt(portfolio_data, retrieved_context=retrieved_context)
         raw = get_gemini_response(prompt)
 
         # Split into lines and rebuild, dropping Rebalancing Steps section
