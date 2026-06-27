@@ -1,6 +1,6 @@
 # PortSense 📊
 
-> AI-powered portfolio analytics platform for Indian retail investors
+> AI-powered portfolio analytics platform for Indian retail investors — now with RAG-grounded intelligence
 
 <div align="center">
 
@@ -17,7 +17,9 @@
 
 ## What is PortSense?
 
-Most Indian retail investors track their portfolio in Excel or rely on broker apps that show P&L and nothing else. PortSense goes further — it runs your holdings through a **FinBERT NLP pipeline** for real-time sentiment analysis using fresh GNews articles, computes **portfolio beta and diversification scores**, benchmarks your returns against Nifty 50 using XIRR, and uses **Gemini 2.5 Flash** to generate specific, rupee-amount rebalancing advice grounded in your actual data.
+Most Indian retail investors track their portfolio in Excel or rely on broker apps that show P&L and nothing else. PortSense goes further — it runs your holdings through a **FinBERT NLP pipeline** for real-time sentiment analysis using fresh GNews articles, computes **portfolio beta and diversification scores**, benchmarks your returns against Nifty 50 using XIRR, and uses **Gemini 2.5 Flash** to generate specific, rupee-amount rebalancing advice.
+
+What separates PortSense from a standard analytics dashboard is its **RAG (Retrieval-Augmented Generation) pipeline** — Gemini's rebalancing advice is grounded in real retrieved context: earnings reports, research documents, and recent news articles fetched from a vector store, not just LLM priors. Users can also upload their own research documents and ask questions over them in a private, isolated knowledge base.
 
 It supports **NSE stocks**, **mutual funds** (via MFAPI), and **fixed deposits** — three asset classes in one unified analytics platform.
 
@@ -46,6 +48,16 @@ It supports **NSE stocks**, **mutual funds** (via MFAPI), and **fixed deposits**
       <br/><sub><b>Tax & Real Returns</b></sub>
     </td>
   </tr>
+  <tr>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/68afd490-7874-4532-a90b-b1cd89baddab" alt="AI Knowledge Center"/>
+      <br/><sub><b>AI Knowledge Center</b></sub>
+    </td>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/0c672d26-ad9f-4d29-82e2-de279dbe6e8a" alt="RAG-Grounded Q&A"/>
+      <br/><sub><b>RAG-Grounded Q&A</b></sub>
+    </td>
+  </tr>
 </table>
 
 ---
@@ -68,9 +80,14 @@ It supports **NSE stocks**, **mutual funds** (via MFAPI), and **fixed deposits**
 - **Risk Decomposition** — systematic vs idiosyncratic vs sector concentration risk split
 - **Correlation Heatmap** — pairwise matrix with color-coded cells. Top pairs explicitly show both strongly positive and negative correlations
 
-### AI Features
+### AI & RAG Features
 - **FinBERT Sentiment** — ProsusAI/finbert scores headlines per stock using real-time GNews articles (2–7 day freshness window, tier-based per stock coverage). Aggregates to portfolio signal (Bullish/Bearish/Mixed). Collapse/expand per stock showing scored headlines with source name, date, and clickable article URL. Stocks with no recent news show "No recent articles — Sentiment defaulted to Neutral" rather than stale or misleading scores
-- **Gemini Rebalancing Advisor** — grounded in live beta, diversification, sector weights, benchmark CAGR, and correlation pairs. Returns structured advice with specific rupee amounts per action across stocks, MFs, and FDs
+- **Gemini Rebalancing Advisor (RAG-grounded)** — before generating advice, retrieves the top 5 semantically relevant chunks from the vector store (earnings reports, research docs, recent news) scoped to tickers in the user's portfolio. Retrieved context is injected under a `RETRIEVED KNOWLEDGE` block in the prompt. Gemini reasons over live beta, diversification, sector weights, benchmark CAGR, correlation pairs, *and* the retrieved grounding context to return structured advice with specific rupee amounts per action across stocks, MFs, and FDs
+- **AI Knowledge Center** — dedicated section in the bottom nav with two capabilities:
+  - *Ask AI over your documents* — upload a PDF or text file (earnings call, research article, annual report) and ask natural language questions. The backend embeds the question, retrieves the top matching chunks from your private document store, and sends them to Gemini with a strict "Answer ONLY from retrieved context" instruction. Response includes source attribution (doc name, ticker, chunk index, relevance score)
+  - *Admin Knowledge Base* — admin-uploaded documents (annual reports, quarterly results, earnings call transcripts, presentations) are publicly accessible to all users during retrieval, enriching the rebalancing advisor for everyone
+- **Multi-tenant RAG isolation** — user-uploaded documents are scoped strictly by `user_id` at retrieval time. A metadata filter in the `$vectorSearch` stage ensures User A's documents are never surfaced in User B's results, even though all documents share one collection
+- **GNews auto-embedding** — after FinBERT sentiment runs on fetched articles, each article is batch-embedded in a background task and upserted into the vector store (deduplicated by URL hash). These articles feed into the rebalancing advisor's retrieved context with a 1-year TTL applied at query time via a `published_at` filter
 - **Gemini Correlation Explainer** — explains why two stocks move together or apart using fundamental business reasoning
 - **Stock Intel Drawer** — tabbed drawer (Snapshot / Technicals / Sentiment / Fundamentals / AI Analysis) with progressive reveal and TTL caching
 - **MF Info Drawer** — 30-day NAV sparkline, historical returns (1W / 1M / 3M / 1Y)
@@ -83,6 +100,108 @@ It supports **NSE stocks**, **mutual funds** (via MFAPI), and **fixed deposits**
 
 ---
 
+## RAG Pipeline
+
+PortSense uses a production RAG pipeline built on MongoDB Atlas Vector Search and Gemini Embedding. All three document types — admin knowledge base, user private documents, and GNews articles — share a single collection with metadata-based isolation.
+
+### Architecture
+
+```
+INGESTION
+─────────────────────────────────────────────────────────────
+Admin PDF/TXT upload  ──► extract text (pdfplumber)
+                          ──► chunk (500 words, 50-word overlap)
+                          ──► batch embed (gemini-embedding-001, 768-dim)
+                          ──► store in Atlas  { source: "admin_doc" }
+
+User PDF/TXT upload   ──► same pipeline
+                          ──► store in Atlas  { source: "user_doc", user_id: "..." }
+
+GNews article fetch   ──► FinBERT sentiment (existing pipeline, unchanged)
+                          ──► background task fires after response returned
+                          ──► batch embed article text
+                          ──► upsert in Atlas { source: "gnews", url_hash: md5(url) }
+
+RETRIEVAL  (on every Gemini call)
+─────────────────────────────────────────────────────────────
+Portfolio tickers  ──► build query string
+                   ──► embed_query (task_type: RETRIEVAL_QUERY)
+                   ──► $vectorSearch with pre-filter:
+                         source == "admin_doc"
+                         OR (source == "gnews" AND published_at >= now - 365d)
+                         OR (source == "user_doc" AND user_id == requesting_user)
+                         AND ticker IN portfolio_tickers
+                   ──► top 8 chunks, sorted by cosine score
+                   ──► deduplicate + trim to 5 unique chunks
+                   ──► inject as RETRIEVED KNOWLEDGE block into Gemini prompt
+```
+
+### Vector Store Configuration
+
+| Parameter | Value |
+|---|---|
+| Database | `portsense_rag` |
+| Collection | `rag_documents` |
+| Index name | `rag_vector_index` |
+| Embedding model | `gemini-embedding-001` |
+| Dimensions | 768 |
+| Similarity | Cosine |
+| numCandidates | 100 |
+| Default limit | 8 |
+| Filter fields indexed | `source`, `user_id`, `published_at`, `ticker` |
+
+### Document Schemas
+
+**Admin / User Doc Chunk**
+```json
+{
+  "text": "Revenue grew 12% YoY...",
+  "embedding": [0.021, -0.043, ...],
+  "doc_id": "uuid4",
+  "doc_name": "Infosys_Q4_2026.pdf",
+  "document_type": "quarterly_report",
+  "ticker": "INFY",
+  "company": "Infosys",
+  "source": "admin_doc",
+  "user_id": null,
+  "chunk_index": 3,
+  "total_chunks": 24,
+  "created_at": "2026-06-27T10:00:00Z",
+  "uploaded_by": "admin"
+}
+```
+
+**GNews Article**
+```json
+{
+  "text": "Infosys Q4 revenue...",
+  "embedding": [0.011, -0.067, ...],
+  "ticker": "INFY",
+  "company": "Infosys",
+  "title": "Infosys beats Q4 estimates...",
+  "url": "https://...",
+  "url_hash": "md5_of_url",
+  "publisher": "Economic Times",
+  "published_at": "2026-06-20T10:30:00Z",
+  "created_at": "2026-06-26T14:22:00Z",
+  "sentiment": "Positive",
+  "sentiment_score": 0.91,
+  "source": "gnews"
+}
+```
+
+### Isolation Model
+
+All documents live in one collection. Retrieval isolation is enforced entirely through metadata pre-filters in the `$vectorSearch` stage — no separate namespaces or collections needed. The filter logic:
+
+- `admin_doc` → accessible to all users, always included
+- `gnews` → accessible to all users, filtered to last 365 days via `published_at`
+- `user_doc` → accessible only when `user_id` in the filter matches the requesting user's ID
+
+Deduplication for GNews articles is enforced via a unique Atlas index on `url_hash` combined with `upsert=True` on `url_hash` — the same article fetched by multiple users is stored exactly once.
+
+---
+
 ## Tech Stack
 
 | Layer | Technology | Reason |
@@ -91,17 +210,35 @@ It supports **NSE stocks**, **mutual funds** (via MFAPI), and **fixed deposits**
 | Charts | Recharts | Composable, works well with React state |
 | Backend | FastAPI + Python | Async-native, automatic OpenAPI docs |
 | Database | MongoDB Atlas + Motor | Flexible schema for mixed asset types |
+| Vector Store | MongoDB Atlas Vector Search | Native to existing cluster, no extra infra |
+| Embeddings | gemini-embedding-001 (768-dim) | Free tier, MRL support, finance-domain quality |
 | Auth | JWT (python-jose) | Stateless, works cleanly with demo mode |
 | Stock Data | yfinance | Free, covers all NSE/BSE tickers |
 | MF Data | MFAPI.in | Free Indian MF NAV API, no auth required |
 | Sentiment | FinBERT via HuggingFace Inference API | Finance-domain BERT, outperforms general models on financial text |
 | AI | Gemini 2.5 Flash (3-key rotation) | Low latency, generous free tier |
 | News | GNews API (student access) + Google RSS fallback | Real-time Indian financial news with verified timestamps and source attribution |
+| PDF Parsing | pdfplumber | Reliable text extraction, paragraph boundary preservation |
 | Deployment | Render (backend) + Vercel (frontend) | Free tier, auto-deploy on push |
 
 ---
 
 ## Architecture Decisions
+
+**Why RAG over pure prompt engineering for rebalancing advice?**  
+Without RAG, Gemini's rebalancing advice is grounded only in the portfolio data passed in the prompt and its training priors. With RAG, it reasons over retrieved earnings report excerpts and recent news articles scoped to the user's actual holdings — the advice cites real, current data rather than generalised LLM knowledge. The difference is observable: advice for a portfolio holding INFY will reference actual Q4 figures if an earnings report has been uploaded, not a generic "IT sector is volatile" statement.
+
+**Why a single collection instead of separate collections per source type?**  
+One collection with a `source` + `user_id` metadata filter is simpler to operate than three collections, avoids fan-out queries, and lets Atlas resolve the filter inside a single `$vectorSearch` stage. Multi-tenant isolation is fully enforced in the pre-filter — no collection-level separation is needed.
+
+**Why 768 dimensions instead of 3072 (default)?**  
+`gemini-embedding-001` supports Matryoshka Representation Learning — dimensions can be truncated from 3072 to 768 with negligible quality loss at this data scale. 768-dim vectors are 4× smaller in storage and faster to index and query. For thousands of documents the difference in retrieval quality is unmeasurable.
+
+**Why batch embedding?**  
+A 10-page PDF produces ~20–30 chunks. Sequential embedding API calls would take 6–8 seconds. Batching all chunks into one API call reduces this to ~1–2 seconds. The same applies to GNews articles — all articles from a single fetch are batched into one embedding call.
+
+**Why BackgroundTasks for GNews embedding?**  
+The user should never wait for embedding latency on a news fetch. FastAPI's `BackgroundTasks` fires the embedding pipeline after the response is already returned to the client. The articles appear in the vector store for future Gemini calls without adding any perceived latency to the news feed.
 
 **Why FinBERT over VADER or TextBlob?**  
 General sentiment models treat "the stock fell 5% as expected after results" as negative. FinBERT was trained on financial communications and correctly classifies these as neutral. It scores per-headline and aggregates via majority vote with confidence scoring.
@@ -159,7 +296,7 @@ The demo portfolio is deliberately constructed to showcase every analytics featu
 ### Prerequisites
 - Python 3.11+
 - Node.js 18+
-- MongoDB Atlas account (free tier)
+- MongoDB Atlas account (free tier) with Vector Search enabled
 - HuggingFace API key (free)
 - Gemini API keys × 3 (free tier)
 - GNews API key (free tier at [gnews.io](https://gnews.io))
@@ -175,7 +312,8 @@ pip install -r requirements.txt
 # Create .env
 cp .env.example .env
 # Fill in: MONGO_URI, HF_API_KEY, GEMINI_API_KEY_1/2/3,
-#          JWT_SECRET, GNEWS_STUDENT_KEY, GNEWS_PERSONAL_KEY
+#          JWT_SECRET, GNEWS_STUDENT_KEY, GNEWS_PERSONAL_KEY,
+#          ADMIN_EMAIL, RAG_DB, RAG_COLLECTION
 
 # Seed demo data
 python seed.py
@@ -184,12 +322,40 @@ python seed.py
 uvicorn app.main:app --reload
 ```
 
+### Atlas Vector Search Index
+
+In your Atlas cluster, create a vector search index on `portsense_rag.rag_documents` with this definition:
+
+```json
+{
+  "name": "rag_vector_index",
+  "type": "vectorSearch",
+  "definition": {
+    "fields": [
+      {
+        "type": "vector",
+        "path": "embedding",
+        "numDimensions": 768,
+        "similarity": "cosine"
+      },
+      { "type": "filter", "path": "source" },
+      { "type": "filter", "path": "user_id" },
+      { "type": "filter", "path": "ticker" },
+      { "type": "filter", "path": "published_at" }
+    ]
+  }
+}
+```
+
+Also create a unique index on `url_hash` for GNews deduplication.
+
 ### Frontend
 
 ```bash
 cd frontend
 npm install
 echo "VITE_API_BASE_URL=http://localhost:8000" > .env
+echo "VITE_ADMIN_EMAIL=your@email.com" >> .env
 npm run dev
 ```
 
@@ -203,7 +369,14 @@ API docs at `http://localhost:8000/docs`
 PortSense/
 ├── backend/
 │   ├── app/
-│   │   ├── routes/
+│   │   ├── rag/
+│   │   │   ├── embeddings.py        # Gemini embed_texts (batch) + embed_query
+│   │   │   ├── chunker.py           # 500-word chunks, 50-word overlap
+│   │   │   ├── news_embedder.py     # GNews batch embed + Atlas upsert
+│   │   │   └── rag_service.py       # store_doc_chunks, store_news_article, retrieve_context
+│   │   ├── routers/
+│   │   │   ├── admin_rag.py         # POST /admin/upload-doc
+│   │   │   ├── user_rag.py          # POST /user/upload-doc, POST /user/ask-ai
 │   │   │   ├── auth.py
 │   │   │   ├── holdings.py
 │   │   │   ├── analytics.py
@@ -215,8 +388,9 @@ PortSense/
 │   │   │   ├── comparison.py
 │   │   │   └── tax_returns.py
 │   │   ├── services/
+│   │   │   ├── document_upload.py   # PDF/TXT extraction, orchestrates chunk→embed→store
+│   │   │   ├── gemini.py            # RAG prompt building + Gemini calls
 │   │   │   ├── analytics.py
-│   │   │   ├── gemini.py
 │   │   │   ├── sentiment.py
 │   │   │   ├── market.py
 │   │   │   ├── mf.py
@@ -237,6 +411,7 @@ PortSense/
         │   ├── Tax.jsx
         │   ├── Comparison.jsx
         │   ├── SentimentPage.jsx
+        │   ├── KnowledgeBase.jsx    # AI Knowledge Center (upload + Ask AI)
         │   ├── Account.jsx
         │   ├── NewsPage.jsx
         │   └── Landing.jsx
@@ -261,18 +436,21 @@ PortSense/
 - [ ] Price alerts via email for watchlist items
 - [ ] Multi-currency support for NRI investors
 - [ ] SSE streaming for sentiment progressive card reveal (currently blocked by ad-blocker heuristics on fetch endpoints)
+- [ ] Scheduled background worker to continuously embed incoming GNews articles into the vector store
+- [ ] Source citation in rebalancing advice (surface which retrieved chunk influenced which recommendation)
+- [ ] Admin document management UI (list uploaded docs, delete by doc_id)
 
 ---
 
 ## Disclaimer
 
-Tax estimates are indicative only. Sentiment analysis and rebalancing advice are AI-generated and do not constitute financial advice. News articles are sourced via GNews API — PortSense does not own or modify any article content. Always attribute the original publisher when sharing. Consult a SEBI-registered investment advisor before making investment decisions.
+Tax estimates are indicative only. Sentiment analysis and rebalancing advice are AI-generated and do not constitute financial advice. RAG-retrieved context is sourced from admin-uploaded documents and GNews articles — always verify information against official filings before making investment decisions. News articles are sourced via GNews API — PortSense does not own or modify any article content. Always attribute the original publisher when sharing. Consult a SEBI-registered investment advisor before making investment decisions.
 
 ---
 
 <div align="center">
 
-Built with FastAPI · React · FinBERT · Gemini 2.5 Flash · GNews API  
+Built with FastAPI · React · FinBERT · Gemini 2.5 Flash · MongoDB Atlas Vector Search  
 Deployed on Render + Vercel · Data from NSE via yfinance + MFAPI
 
 **[Try the live demo →](https://bit.ly/portsense)**
