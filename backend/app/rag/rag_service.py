@@ -72,19 +72,48 @@ def _normalize_tickers(tickers: list[str] | None) -> list[str] | None:
 	return normalized or None
 
 
-def _build_vector_filter(user_id: str | None, tickers: list[str] | None) -> dict[str, Any]:
+def _build_vector_filter(
+	user_id: str | None,
+	tickers: list[str] | None,
+	sources: list[str] | None = None,
+) -> dict[str, Any]:
 	"""Build the Atlas Vector Search filter for supported document sources."""
 
-	source_filters: list[dict[str, Any]] = [
-		{"source": "admin_doc"},
-		{
-			"source": "gnews",
-			"published_at": {"$gte": datetime.now(timezone.utc) - timedelta(days=365)},
-		},
-	]
+	normalized_user_id = str(user_id).strip() if user_id is not None else ""
 
-	if user_id is not None:
-		source_filters.append({"source": "user_doc", "user_id": user_id})
+	if sources is None:
+		source_filters: list[dict[str, Any]] = [
+			{"source": "admin_doc"},
+			{
+				"source": "gnews",
+				"published_at": {"$gte": datetime.now(timezone.utc) - timedelta(days=365)},
+			},
+		]
+
+		if normalized_user_id:
+			source_filters.append({"source": "user_doc", "user_id": normalized_user_id})
+	else:
+		normalized_sources = [str(source).strip() for source in sources if str(source).strip()]
+		source_filters = []
+
+		for source in normalized_sources:
+			if source == "user_doc":
+				user_doc_filter: dict[str, Any] = {"source": "user_doc"}
+				if normalized_user_id:
+					user_doc_filter["user_id"] = normalized_user_id
+				source_filters.append(user_doc_filter)
+			elif source == "gnews":
+				source_filters.append(
+					{
+						"source": "gnews",
+						"published_at": {"$gte": datetime.now(timezone.utc) - timedelta(days=365)},
+					}
+				)
+			else:
+				source_filters.append({"source": source})
+
+		if not source_filters:
+			source_filters.append({"source": "user_doc"})
 
 	filter_query: dict[str, Any] = {"$or": source_filters}
 
@@ -149,6 +178,7 @@ def retrieve_context(
 	user_id: str | None,
 	tickers: list[str] | None,
 	limit: int = 8,
+	sources: list[str] | None = None,
 ) -> list[dict]:
 	"""Retrieve semantically relevant context with Atlas Vector Search."""
 
@@ -164,7 +194,7 @@ def retrieve_context(
 				"queryVector": _normalize_embedding(query_embedding),
 				"numCandidates": 100,
 				"limit": limit,
-				"filter": _build_vector_filter(user_id, tickers),
+				"filter": _build_vector_filter(user_id, tickers, sources=sources),
 			}
 		},
 		{
@@ -172,6 +202,7 @@ def retrieve_context(
 				"_id": 0,
 				"text": 1,
 				"source": 1,
+				"user_id": 1,
 				"ticker": 1,
 				"company": 1,
 				"document_type": 1,
@@ -189,3 +220,20 @@ def retrieve_context(
 	]
 
 	return list(collection.aggregate(pipeline))
+
+
+def retrieve_user_doc_context(
+	query_embedding: list[float],
+	user_id: str,
+	tickers: list[str] | None,
+	limit: int = 8,
+) -> list[dict]:
+	"""Retrieve only the authenticated user's uploaded document chunks."""
+
+	return retrieve_context(
+		query_embedding=query_embedding,
+		user_id=user_id,
+		tickers=tickers,
+		limit=limit,
+		sources=["user_doc"],
+	)

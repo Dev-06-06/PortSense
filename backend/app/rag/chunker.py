@@ -104,7 +104,8 @@ def chunk_text(
 
 	total_chunks = len(chunk_texts)
 	created_at = datetime.now(timezone.utc)
-	uploaded_by = "admin" if source == "admin_doc" else user_id
+	normalized_user_id = str(user_id).strip() if user_id is not None else None
+	uploaded_by = "admin" if source == "admin_doc" else normalized_user_id
 
 	chunks: list[dict] = []
 	for chunk_index, chunk in enumerate(chunk_texts):
@@ -117,7 +118,7 @@ def chunk_text(
 				"ticker": ticker,
 				"company": company,
 				"source": source,
-				"user_id": user_id,
+				"user_id": normalized_user_id,
 				"chunk_index": chunk_index,
 				"total_chunks": total_chunks,
 				"created_at": created_at,

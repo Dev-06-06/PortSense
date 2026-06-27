@@ -27,7 +27,7 @@ if not GEMINI_KEYS:
     logger.warning("No Gemini API keys are set")
 
 
-def get_gemini_response(prompt: str) -> str:
+def _generate_gemini_response(prompt: str, fallback_message: str) -> str:
     for _ in range(len(GEMINI_KEYS)):
         key = next(key_cycle)
         try:
@@ -41,7 +41,58 @@ def get_gemini_response(prompt: str) -> str:
             logging.warning(f"Gemini key failed: {type(e).__name__}: {e}")
             continue
 
-    return "Unable to generate rebalancing advice. Please try again."
+    return fallback_message
+
+
+def get_gemini_response(prompt: str) -> str:
+    return _generate_gemini_response(
+        prompt,
+        "Unable to generate rebalancing advice. Please try again.",
+    )
+
+
+def _format_user_doc_chunks(chunks: list[dict]) -> str:
+    if not chunks:
+        return ""
+
+    sections: list[str] = []
+    for index, chunk in enumerate(chunks, start=1):
+        sections.extend(
+            [
+                f"[Chunk {index}]",
+                f"Source: {chunk.get('source', 'N/A')}",
+                f"Ticker: {chunk.get('ticker', 'N/A')}",
+                f"Company: {chunk.get('company', 'N/A')}",
+                f"Document Type: {chunk.get('document_type', 'N/A')}",
+                f"Document Name: {chunk.get('doc_name', 'N/A')}",
+                f"Chunk Index: {chunk.get('chunk_index', 'N/A')}",
+                "Content:",
+                str(chunk.get("text", "") or "").strip(),
+                "",
+            ]
+        )
+
+    return "\n".join(sections).strip()
+
+
+def build_user_doc_answer_prompt(question: str, chunks: list[dict]) -> str:
+    retrieved_context = _format_user_doc_chunks(chunks)
+    return (
+        "You are an investment research assistant.\n"
+        "Answer ONLY using the retrieved document context.\n"
+        "Do not use outside knowledge or speculate.\n"
+        "If the uploaded documents do not contain enough information, clearly say so.\n\n"
+        f"Retrieved Context:\n{retrieved_context or 'No retrieved context available.'}\n\n"
+        f"Question:\n{question.strip()}"
+    )
+
+
+def get_user_doc_answer(question: str, chunks: list[dict]) -> str:
+    prompt = build_user_doc_answer_prompt(question, chunks)
+    return _generate_gemini_response(
+        prompt,
+        "Unable to generate an answer right now. Please try again.",
+    )
 
 
 def _format_holdings(holdings: list[dict]) -> str:

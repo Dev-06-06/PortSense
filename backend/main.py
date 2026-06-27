@@ -20,6 +20,7 @@ from app.routes.market import router as market_router
 from app.routes.news import router as news_router
 from app.routes.sentiment import router as sentiment_router
 from app.routers.admin_rag import router as admin_rag_router
+from app.routers.user_rag import router as user_rag_router
 from app.routes.stock_intel import router as stock_intel_router
 from app.routes.tax_returns import router as tax_router
 from app.routes.watchlist import router as watchlist_router
@@ -90,6 +91,7 @@ app.include_router(comparison_router, prefix="/api/comparison")
 app.include_router(sentiment_router, prefix="/api/sentiment", tags=["sentiment"])
 app.include_router(genai_router, prefix="/api/genai", tags=["genai"])
 app.include_router(admin_rag_router, prefix="", tags=["admin-rag"])
+app.include_router(user_rag_router, prefix="", tags=["user-rag"])
 app.include_router(stock_intel_router, prefix="/api/stock-intel", tags=["stock-intel"])
 app.include_router(watchlist_router, prefix="/api/watchlist", tags=["watchlist"])
 app.include_router(market_router, prefix="/api/market")

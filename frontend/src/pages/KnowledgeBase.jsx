@@ -1,15 +1,26 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import api from "../services/api";
 
-const ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL || "")
-  .trim()
-  .toLowerCase();
+const ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL || "").trim().toLowerCase();
+
+const companyDocumentTypes = [
+  { label: "Annual Report", value: "annual_report" },
+  { label: "Quarterly Report", value: "quarterly_report" },
+  { label: "Earnings Call", value: "earnings_call" },
+  { label: "Presentation", value: "presentation" },
+  { label: "FAQ", value: "faq" },
+  { label: "Policy", value: "policy" },
+];
+
+// The backend is the source of truth for allowed document types.
+// Use the same permitted values as companyDocumentTypes so uploads match the API contract.
+const personalDocumentTypes = companyDocumentTypes;
 
 const shellStyle = {
   minHeight: "100vh",
-  backgroundColor: "#0d1117",
+  background:
+    "radial-gradient(circle at top left, rgba(249, 115, 22, 0.14), transparent 32%), radial-gradient(circle at top right, rgba(148, 163, 184, 0.08), transparent 24%), #0d1117",
   color: "#e5e7eb",
   fontFamily: "'DM Sans', sans-serif",
   padding: "2rem 1rem",
@@ -26,7 +37,7 @@ const containerStyle = {
 const cardStyle = {
   borderRadius: "1rem",
   border: "1px solid rgba(255, 255, 255, 0.08)",
-  backgroundColor: "rgba(15, 23, 42, 0.6)",
+  backgroundColor: "rgba(15, 23, 42, 0.62)",
   backdropFilter: "blur(8px)",
 };
 
@@ -39,6 +50,13 @@ const inputStyle = {
   fontSize: "0.95rem",
   width: "100%",
   boxSizing: "border-box",
+};
+
+const textareaStyle = {
+  ...inputStyle,
+  minHeight: "8rem",
+  resize: "vertical",
+  lineHeight: 1.6,
 };
 
 const buttonStyle = {
@@ -63,164 +81,484 @@ const spinnerStyle = {
   borderTopColor: "#ffffff",
 };
 
-const documentTypes = [
-  { label: "Annual Report", value: "annual_report" },
-  { label: "Quarterly Report", value: "quarterly_report" },
-  { label: "Earnings Call", value: "earnings_call" },
-  { label: "Presentation", value: "presentation" },
-  { label: "FAQ", value: "faq" },
-  { label: "Policy", value: "policy" },
-];
-
-const emptyResult = {
+const emptyUploadResult = {
   ticker: "",
+  company: "",
   document_type: "",
   chunks_stored: null,
 };
 
+const getAskAiMessage = (error) =>
+  error?.response?.data?.detail || error?.response?.data?.message || "Unable to get an answer right now.";
+
+const createUploadState = (defaultDocumentType) => ({
+  ticker: "",
+  company: "",
+  documentType: defaultDocumentType,
+  file: null,
+  uploading: false,
+  error: "",
+  success: "",
+  result: emptyUploadResult,
+});
+
+const getDocumentTypeLabel = (documentTypes, value) =>
+  documentTypes.find((type) => type.value === value)?.label || value;
+
+const getUploadMessage = (error) =>
+  error?.response?.data?.detail ||
+  error?.response?.data?.message ||
+  "Unable to upload document.";
+
+const isValidDocumentFile = (file) => {
+  const fileName = String(file?.name || "").toLowerCase();
+  return fileName.endsWith(".pdf") || fileName.endsWith(".txt");
+};
+
+const formatTimestamp = (value) => {
+  try {
+    return new Intl.DateTimeFormat("en-IN", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(new Date(value));
+  } catch {
+    return "Just now";
+  }
+};
+
+const normalizeChunksStored = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : value ?? null;
+};
+
 export default function KnowledgeBasePage() {
-  const navigate = useNavigate();
   const { user, decodedToken } = useAuth();
 
-  const [ready, setReady] = useState(false);
-  const [forbidden, setForbidden] = useState(false);
-  const [ticker, setTicker] = useState("");
-  const [company, setCompany] = useState("");
-  const [documentType, setDocumentType] = useState(documentTypes[0].value);
-  const [file, setFile] = useState(null);
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const [result, setResult] = useState(emptyResult);
+  const [companyForm, setCompanyForm] = useState(() =>
+    createUploadState(companyDocumentTypes[0].value),
+  );
+  const [personalForm, setPersonalForm] = useState(() =>
+    createUploadState(personalDocumentTypes[0].value),
+  );
+  const [recentPersonalUploads, setRecentPersonalUploads] = useState([]);
+  const [askQuestion, setAskQuestion] = useState("");
+  const [askAnswer, setAskAnswer] = useState("");
+  const [askLoading, setAskLoading] = useState(false);
+  const [askError, setAskError] = useState("");
+  const [askTicker, setAskTicker] = useState("");
 
-  const currentEmail = useMemo(() => {
-    return String(user?.email || decodedToken?.email || "")
-      .trim()
-      .toLowerCase();
-  }, [user, decodedToken]);
+  const currentEmail = useMemo(
+    () => String(user?.email || decodedToken?.email || "").trim().toLowerCase(),
+    [user, decodedToken],
+  );
+  const isAdmin = Boolean(ADMIN_EMAIL) && currentEmail === ADMIN_EMAIL;
+  const uploadedTickerOptions = useMemo(() => {
+    const tickers = [];
+    const seen = new Set();
+
+    for (const upload of recentPersonalUploads) {
+      const ticker = String(upload?.ticker || "").trim().toUpperCase();
+      if (!ticker || seen.has(ticker)) {
+        continue;
+      }
+      seen.add(ticker);
+      tickers.push(ticker);
+    }
+
+    return tickers;
+  }, [recentPersonalUploads]);
+
+  const resolvedAskTicker = useMemo(() => {
+    if (uploadedTickerOptions.length === 1) {
+      return uploadedTickerOptions[0];
+    }
+
+    if (uploadedTickerOptions.length > 1) {
+      return uploadedTickerOptions.includes(askTicker) ? askTicker : uploadedTickerOptions[0];
+    }
+
+    return "";
+  }, [askTicker, uploadedTickerOptions]);
 
   useEffect(() => {
-    document.title = "Knowledge Base | PortSense";
+    if (uploadedTickerOptions.length === 0) {
+      if (askTicker) {
+        setAskTicker("");
+      }
+      return;
+    }
+
+    if (uploadedTickerOptions.length === 1) {
+      if (askTicker !== uploadedTickerOptions[0]) {
+        setAskTicker(uploadedTickerOptions[0]);
+      }
+      return;
+    }
+
+    if (!uploadedTickerOptions.includes(askTicker)) {
+      setAskTicker(uploadedTickerOptions[0]);
+    }
+  }, [askTicker, uploadedTickerOptions]);
+
+  useEffect(() => {
+    document.title = "AI Center | PortSense";
   }, []);
 
-  useEffect(() => {
-    if (!ADMIN_EMAIL) {
-      setForbidden(true);
-      setReady(true);
-      return;
-    }
-
-    if (currentEmail && currentEmail !== ADMIN_EMAIL) {
-      navigate("/dashboard", { replace: true });
-      return;
-    }
-
-    if (currentEmail === ADMIN_EMAIL) {
-      setReady(true);
-    }
-  }, [currentEmail, navigate]);
-
-  const handleSubmit = async (event) => {
+  const submitUpload = async ({
+    event,
+    endpoint,
+    formState,
+    setFormState,
+    documentTypes,
+    successLabel,
+    trackRecentUpload,
+  }) => {
     event.preventDefault();
-    setError("");
-    setSuccess("");
+    const formElement = event.currentTarget;
 
-    if (!ticker.trim()) {
-      setError("Ticker is required.");
+    setFormState((previous) => ({
+      ...previous,
+      error: "",
+      success: "",
+    }));
+
+    if (!formState.ticker.trim()) {
+      setFormState((previous) => ({
+        ...previous,
+        error: "Ticker is required.",
+      }));
       return;
     }
 
-    if (!company.trim()) {
-      setError("Company is required.");
+    if (!formState.company.trim()) {
+      setFormState((previous) => ({
+        ...previous,
+        error: "Company is required.",
+      }));
       return;
     }
 
-    if (!file) {
-      setError("Please choose a document to upload.");
+    if (!formState.file) {
+      setFormState((previous) => ({
+        ...previous,
+        error: "Please choose a document to upload.",
+      }));
       return;
     }
 
-    const fileName = file.name.toLowerCase();
-    const validExtension =
-      fileName.endsWith(".pdf") || fileName.endsWith(".txt");
-
-    if (!validExtension) {
-      setError("Only .pdf and .txt files are allowed.");
+    if (!isValidDocumentFile(formState.file)) {
+      setFormState((previous) => ({
+        ...previous,
+        error: "Only .pdf and .txt files are allowed.",
+      }));
       return;
     }
 
-    setUploading(true);
+    setFormState((previous) => ({
+      ...previous,
+      uploading: true,
+      error: "",
+      success: "",
+    }));
 
     try {
       const formData = new FormData();
-      formData.append("file", file);
-      formData.append("ticker", ticker.trim().toUpperCase());
-      formData.append("company", company.trim());
-      formData.append("document_type", documentType);
+      formData.append("file", formState.file);
+      formData.append("ticker", formState.ticker.trim().toUpperCase());
+      formData.append("company", formState.company.trim());
+      formData.append("document_type", formState.documentType);
 
-      const response = await api.post("/admin/upload-doc", formData);
+      const response = await api.post(endpoint, formData);
+      const payload = response?.data || {};
+
+      const nextResult = {
+        ticker: String(payload.ticker || formState.ticker.trim().toUpperCase()),
+        company: String(payload.company || formState.company.trim()),
+        document_type: String(payload.document_type || formState.documentType),
+        chunks_stored: normalizeChunksStored(payload.chunks_stored),
+      };
+
+      setFormState(() => ({
+        ...createUploadState(documentTypes[0].value),
+        success: successLabel,
+        result: nextResult,
+      }));
+
+      if (trackRecentUpload) {
+        setRecentPersonalUploads((previous) => [
+          {
+            id: payload.doc_id || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            ticker: nextResult.ticker,
+            company: nextResult.company,
+            documentType: nextResult.document_type,
+            chunksStored: nextResult.chunks_stored,
+            fileName: formState.file.name,
+            uploadedAt: Date.now(),
+          },
+          ...previous,
+        ]);
+      }
+
+      formElement?.reset?.();
+    } catch (error) {
+      // Log raw response for easier debugging of backend validation errors
+      try {
+        // eslint-disable-next-line no-console
+        console.error("Upload error response:", error?.response?.data);
+      } catch {}
+
+      setFormState((previous) => ({
+        ...previous,
+        uploading: false,
+        error: getUploadMessage(error),
+        success: "",
+      }));
+      return;
+    }
+
+    setFormState((previous) => ({
+      ...previous,
+      uploading: false,
+    }));
+  };
+
+  const submitAskAi = async (event) => {
+    event.preventDefault();
+
+    const question = askQuestion.trim();
+    if (!question) {
+      setAskError("Please enter a question first.");
+      return;
+    }
+
+    const ticker = resolvedAskTicker || undefined;
+
+    setAskLoading(true);
+    setAskError("");
+
+    try {
+      const response = await api.post("/user/ask-ai", {
+        question,
+        ticker,
+      });
 
       const payload = response?.data || {};
-      setResult({
-        ticker: String(payload.ticker || ticker.trim().toUpperCase()),
-        document_type: String(payload.document_type || documentType),
-        chunks_stored: Number.isFinite(Number(payload.chunks_stored))
-          ? Number(payload.chunks_stored)
-          : (payload.chunks_stored ?? null),
-      });
-      setSuccess("Document uploaded successfully.");
-      setFile(null);
-      setTicker("");
-      setCompany("");
-      setDocumentType(documentTypes[0].value);
-      event.target.reset?.();
-    } catch (err) {
-      setError(
-        err?.response?.data?.detail ||
-          err?.response?.data?.message ||
-          "Unable to upload document.",
-      );
+      setAskAnswer(String(payload.answer || ""));
+    } catch (error) {
+      setAskError(getAskAiMessage(error));
     } finally {
-      setUploading(false);
+      setAskLoading(false);
     }
   };
 
-  if (!ready && !forbidden) {
-    return (
-      <div style={shellStyle}>
-        <div style={containerStyle}>
-          <div style={{ ...cardStyle, padding: "1.25rem" }}>Loading...</div>
+  const renderUploadCard = ({
+    title,
+    description,
+    formState,
+    setFormState,
+    endpoint,
+    documentTypes,
+    successLabel,
+    trackRecentUpload = false,
+    buttonText = "Upload Document",
+    fileInputId,
+  }) => (
+    <div style={{ ...cardStyle, padding: "1.5rem" }}>
+      <div style={{ marginBottom: "1.25rem" }}>
+        <div
+          style={{
+            color: "#f97316",
+            fontSize: "0.72rem",
+            fontWeight: 800,
+            letterSpacing: "0.16em",
+            textTransform: "uppercase",
+            marginBottom: "0.4rem",
+          }}
+        >
+          AI Center
         </div>
+        <h2
+          style={{
+            margin: 0,
+            fontSize: "1.8rem",
+            fontWeight: 800,
+            letterSpacing: "-0.02em",
+          }}
+        >
+          {title}
+        </h2>
+        <p
+          style={{
+            margin: "0.5rem 0 0",
+            color: "#94a3b8",
+            lineHeight: 1.6,
+          }}
+        >
+          {description}
+        </p>
       </div>
-    );
-  }
 
-  if (forbidden) {
-    return (
-      <div style={shellStyle}>
-        <div style={containerStyle}>
-          <div style={{ ...cardStyle, padding: "1.5rem" }}>
-            <div
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.6rem",
-                marginBottom: "0.75rem",
-                color: "#fca5a5",
-                fontWeight: 700,
-              }}
+      <form
+        onSubmit={(event) =>
+          submitUpload({
+            event,
+            endpoint,
+            formState,
+            setFormState,
+            documentTypes,
+            successLabel,
+            trackRecentUpload,
+          })
+        }
+        style={{ display: "grid", gap: "1rem" }}
+      >
+        <div style={{ display: "grid", gap: "1rem" }}>
+          <div style={{ display: "grid", gap: "0.5rem" }}>
+            <label htmlFor={`${fileInputId}-ticker`} style={{ fontWeight: 700, fontSize: "0.9rem" }}>
+              Ticker
+            </label>
+            <input
+              id={`${fileInputId}-ticker`}
+              value={formState.ticker}
+              onChange={(event) =>
+                setFormState((previous) => ({
+                  ...previous,
+                  ticker: event.target.value.toUpperCase(),
+                }))
+              }
+              placeholder="RELIANCE.NS"
+              style={inputStyle}
+              autoComplete="off"
+            />
+          </div>
+
+          <div style={{ display: "grid", gap: "0.5rem" }}>
+            <label htmlFor={`${fileInputId}-company`} style={{ fontWeight: 700, fontSize: "0.9rem" }}>
+              Company
+            </label>
+            <input
+              id={`${fileInputId}-company`}
+              value={formState.company}
+              onChange={(event) =>
+                setFormState((previous) => ({
+                  ...previous,
+                  company: event.target.value,
+                }))
+              }
+              placeholder="Reliance Industries Ltd"
+              style={inputStyle}
+              autoComplete="organization"
+            />
+          </div>
+
+          <div style={{ display: "grid", gap: "0.5rem" }}>
+            <label htmlFor={`${fileInputId}-document-type`} style={{ fontWeight: 700, fontSize: "0.9rem" }}>
+              Document Type
+            </label>
+            <select
+              id={`${fileInputId}-document-type`}
+              value={formState.documentType}
+              onChange={(event) =>
+                setFormState((previous) => ({
+                  ...previous,
+                  documentType: event.target.value,
+                }))
+              }
+              style={inputStyle}
             >
-              <span>403</span>
-              <span>Forbidden</span>
-            </div>
-            <div style={{ color: "#cbd5e1", lineHeight: 1.6 }}>
-              This page is restricted to the project owner.
+              {documentTypes.map((type) => (
+                <option key={type.value} value={type.value}>
+                  {type.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{ display: "grid", gap: "0.5rem" }}>
+            <label htmlFor={`${fileInputId}-file`} style={{ fontWeight: 700, fontSize: "0.9rem" }}>
+              Upload PDF/TXT
+            </label>
+            <input
+              id={`${fileInputId}-file`}
+              type="file"
+              accept=".pdf,.txt"
+              onChange={(event) =>
+                setFormState((previous) => ({
+                  ...previous,
+                  file: event.target.files?.[0] || null,
+                }))
+              }
+              style={{
+                ...inputStyle,
+                padding: "0.55rem",
+                background: "#111827",
+              }}
+            />
+            <div style={{ color: "#94a3b8", fontSize: "0.85rem" }}>
+              Accepted formats: .pdf, .txt
             </div>
           </div>
         </div>
-      </div>
-    );
-  }
+
+        {formState.error && (
+          <div
+            style={{
+              borderRadius: "0.9rem",
+              border: "1px solid rgba(248, 113, 113, 0.35)",
+              backgroundColor: "rgba(127, 29, 29, 0.25)",
+              padding: "0.9rem",
+              color: "#fecaca",
+              lineHeight: 1.6,
+            }}
+          >
+            {formState.error}
+          </div>
+        )}
+
+        {formState.success && (
+          <div
+            style={{
+              borderRadius: "0.9rem",
+              border: "1px solid rgba(74, 222, 128, 0.35)",
+              backgroundColor: "rgba(20, 83, 45, 0.28)",
+              padding: "0.9rem",
+              color: "#bbf7d0",
+              lineHeight: 1.6,
+            }}
+          >
+            <div style={{ fontWeight: 700, marginBottom: "0.45rem" }}>{formState.success}</div>
+            <div style={{ display: "grid", gap: "0.25rem", color: "#dcfce7" }}>
+              <div>Ticker: {formState.result?.ticker || "-"}</div>
+              <div>Company: {formState.result?.company || "-"}</div>
+              <div>Document Type: {getDocumentTypeLabel(documentTypes, formState.result?.document_type || "")}</div>
+              <div>Chunks Stored: {formState.result?.chunks_stored ?? "-"}</div>
+            </div>
+          </div>
+        )}
+
+        <button
+          type="submit"
+          disabled={formState.uploading}
+          style={{
+            ...buttonStyle,
+            backgroundColor: formState.uploading ? "#334155" : "#f97316",
+            color: "#ffffff",
+            opacity: formState.uploading ? 0.8 : 1,
+            alignSelf: "start",
+          }}
+        >
+          {formState.uploading ? (
+            <>
+              <span className="kb-spin" style={spinnerStyle} />
+              Uploading...
+            </>
+          ) : (
+            buttonText
+          )}
+        </button>
+      </form>
+    </div>
+  );
 
   return (
     <div style={shellStyle}>
@@ -234,9 +572,10 @@ export default function KnowledgeBasePage() {
           to { transform: rotate(360deg); }
         }
       `}</style>
+
       <div style={containerStyle}>
         <div style={{ ...cardStyle, padding: "1.5rem" }}>
-          <div style={{ marginBottom: "1.25rem" }}>
+          <div style={{ marginBottom: "0.75rem" }}>
             <div
               style={{
                 color: "#f97316",
@@ -247,7 +586,7 @@ export default function KnowledgeBasePage() {
                 marginBottom: "0.4rem",
               }}
             >
-              Admin Tool
+              AI Center
             </div>
             <h1
               style={{
@@ -257,7 +596,7 @@ export default function KnowledgeBasePage() {
                 letterSpacing: "-0.02em",
               }}
             >
-              Knowledge Base
+              AI Center
             </h1>
             <p
               style={{
@@ -266,97 +605,230 @@ export default function KnowledgeBasePage() {
                 lineHeight: 1.6,
               }}
             >
-              Upload company documents into the global RAG knowledge base.
+              Upload company knowledge documents or keep your own research in one place.
+            </p>
+          </div>
+        </div>
+
+        {isAdmin &&
+          renderUploadCard({
+            title: "Company Knowledge Base",
+            description: "Upload company documents into the shared knowledge base for all PortSense users.",
+            formState: companyForm,
+            setFormState: setCompanyForm,
+            endpoint: "/admin/upload-doc",
+            documentTypes: companyDocumentTypes,
+            successLabel: "Company document uploaded successfully.",
+            buttonText: "Upload Company Document",
+            fileInputId: "company-upload",
+          })}
+
+        {isAdmin && (
+          <div
+            style={{
+              ...cardStyle,
+              padding: "0.9rem 1.1rem",
+              textAlign: "center",
+              color: "#cbd5e1",
+              fontWeight: 700,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+            }}
+          >
+            Personal Research
+          </div>
+        )}
+
+        {renderUploadCard({
+          title: "Upload Personal Research",
+          description: "Upload private research files that stay scoped to your account.",
+          formState: personalForm,
+          setFormState: setPersonalForm,
+          endpoint: "/user/upload-doc",
+          documentTypes: personalDocumentTypes,
+          successLabel: "Personal research uploaded successfully.",
+          trackRecentUpload: true,
+          buttonText: "Upload Document",
+          fileInputId: "personal-upload",
+        })}
+
+        <div
+          style={{
+            ...cardStyle,
+            padding: "1rem 1.25rem",
+            color: "#cbd5e1",
+            lineHeight: 1.6,
+          }}
+        >
+          Note: uploaded files are used as context for AI insights only in AI Center.
+        </div>
+
+        <div style={{ ...cardStyle, padding: "1.5rem" }}>
+          <div style={{ marginBottom: "1rem" }}>
+            <div
+              style={{
+                color: "#f97316",
+                fontSize: "0.72rem",
+                fontWeight: 800,
+                letterSpacing: "0.16em",
+                textTransform: "uppercase",
+                marginBottom: "0.4rem",
+              }}
+            >
+              AI Center
+            </div>
+            <h2
+              style={{
+                margin: 0,
+                fontSize: "1.5rem",
+                fontWeight: 800,
+                letterSpacing: "-0.02em",
+              }}
+            >
+              My Uploaded Documents
+            </h2>
+            <p style={{ margin: "0.45rem 0 0", color: "#94a3b8", lineHeight: 1.6 }}>
+              Recent personal uploads from this session.
             </p>
           </div>
 
-          <form
-            onSubmit={handleSubmit}
-            style={{ display: "grid", gap: "1rem" }}
-          >
-            <div style={{ display: "grid", gap: "1rem" }}>
-              <div style={{ display: "grid", gap: "0.5rem" }}>
-                <label
-                  htmlFor="kb-ticker"
-                  style={{ fontWeight: 700, fontSize: "0.9rem" }}
+          {recentPersonalUploads.length === 0 ? (
+            <div
+              style={{
+                borderRadius: "0.9rem",
+                border: "1px dashed rgba(148, 163, 184, 0.24)",
+                backgroundColor: "rgba(15, 23, 42, 0.42)",
+                padding: "1rem",
+                color: "#94a3b8",
+                lineHeight: 1.6,
+              }}
+            >
+              Your uploaded personal documents will appear here after each successful upload.
+            </div>
+          ) : (
+            <div style={{ display: "grid", gap: "0.75rem" }}>
+              {recentPersonalUploads.map((item) => (
+                <div
+                  key={item.id}
+                  style={{
+                    borderRadius: "0.9rem",
+                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    backgroundColor: "rgba(15, 23, 42, 0.5)",
+                    padding: "1rem",
+                    display: "grid",
+                    gap: "0.55rem",
+                  }}
                 >
-                  Ticker
-                </label>
-                <input
-                  id="kb-ticker"
-                  value={ticker}
-                  onChange={(event) =>
-                    setTicker(event.target.value.toUpperCase())
-                  }
-                  placeholder="RELIANCE.NS"
-                  style={inputStyle}
-                  autoComplete="off"
-                />
-              </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: "0.5rem",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <div style={{ fontWeight: 800, color: "#ffffff" }}>{item.ticker}</div>
+                    <div style={{ color: "#94a3b8", fontSize: "0.85rem" }}>{formatTimestamp(item.uploadedAt)}</div>
+                  </div>
+                  <div style={{ color: "#cbd5e1", lineHeight: 1.6 }}>{item.company}</div>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: "0.5rem",
+                      color: "#94a3b8",
+                      fontSize: "0.9rem",
+                    }}
+                  >
+                    <span>Document Type: {getDocumentTypeLabel(personalDocumentTypes, item.documentType)}</span>
+                    <span>Chunks Stored: {item.chunksStored ?? "-"}</span>
+                    <span>File: {item.fileName}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
-              <div style={{ display: "grid", gap: "0.5rem" }}>
-                <label
-                  htmlFor="kb-company"
-                  style={{ fontWeight: 700, fontSize: "0.9rem" }}
-                >
-                  Company
-                </label>
-                <input
-                  id="kb-company"
-                  value={company}
-                  onChange={(event) => setCompany(event.target.value)}
-                  placeholder="Reliance Industries Ltd"
-                  style={inputStyle}
-                  autoComplete="organization"
-                />
-              </div>
+        <div style={{ ...cardStyle, padding: "1.5rem" }}>
+          <div style={{ marginBottom: "1rem" }}>
+            <div
+              style={{
+                color: "#f97316",
+                fontSize: "0.72rem",
+                fontWeight: 800,
+                letterSpacing: "0.16em",
+                textTransform: "uppercase",
+                marginBottom: "0.4rem",
+              }}
+            >
+              AI Center
+            </div>
+            <h2
+              style={{
+                margin: 0,
+                fontSize: "1.5rem",
+                fontWeight: 800,
+                letterSpacing: "-0.02em",
+              }}
+            >
+              Ask AI
+            </h2>
+            <p style={{ margin: "0.45rem 0 0", color: "#94a3b8", lineHeight: 1.6 }}>
+              Ask questions about your uploaded documents without leaving this page.
+            </p>
+          </div>
 
+          <div style={{ display: "grid", gap: "1rem" }}>
+            <textarea
+              value={askQuestion}
+              onChange={(event) => setAskQuestion(event.target.value)}
+              placeholder="Ask a question about your uploaded documents..."
+              style={textareaStyle}
+            />
+
+            {uploadedTickerOptions.length > 1 ? (
               <div style={{ display: "grid", gap: "0.5rem" }}>
-                <label
-                  htmlFor="kb-document-type"
-                  style={{ fontWeight: 700, fontSize: "0.9rem" }}
-                >
-                  Document Type
+                <label htmlFor="ask-ai-ticker" style={{ fontWeight: 700, fontSize: "0.9rem" }}>
+                  Search within
                 </label>
                 <select
-                  id="kb-document-type"
-                  value={documentType}
-                  onChange={(event) => setDocumentType(event.target.value)}
+                  id="ask-ai-ticker"
+                  value={resolvedAskTicker}
+                  onChange={(event) => setAskTicker(event.target.value)}
                   style={inputStyle}
                 >
-                  {documentTypes.map((type) => (
-                    <option key={type.value} value={type.value}>
-                      {type.label}
+                  {uploadedTickerOptions.map((ticker) => (
+                    <option key={ticker} value={ticker}>
+                      {ticker}
                     </option>
                   ))}
                 </select>
               </div>
-
-              <div style={{ display: "grid", gap: "0.5rem" }}>
-                <label
-                  htmlFor="kb-file"
-                  style={{ fontWeight: 700, fontSize: "0.9rem" }}
-                >
-                  File Picker
-                </label>
-                <input
-                  id="kb-file"
-                  type="file"
-                  accept=".pdf,.txt"
-                  onChange={(event) => setFile(event.target.files?.[0] || null)}
-                  style={{
-                    ...inputStyle,
-                    padding: "0.55rem",
-                    background: "#111827",
-                  }}
-                />
-                <div style={{ color: "#94a3b8", fontSize: "0.85rem" }}>
-                  Accepted formats: .pdf, .txt
-                </div>
+            ) : uploadedTickerOptions.length === 1 ? (
+              <div style={{ color: "#94a3b8", fontSize: "0.9rem" }}>
+                Search scope: {resolvedAskTicker}
               </div>
-            </div>
+            ) : null}
 
-            {error && (
+            <button
+                type="button"
+                onClick={submitAskAi}
+                disabled={askLoading}
+              style={{
+                ...buttonStyle,
+                  backgroundColor: askLoading ? "#334155" : "#f97316",
+                color: "#ffffff",
+                alignSelf: "start",
+                  opacity: askLoading ? 0.82 : 1,
+              }}
+            >
+                {askLoading ? <span className="kb-spin" style={spinnerStyle} /> : null}
+              Ask AI
+            </button>
+
+            {askError ? (
               <div
                 style={{
                   borderRadius: "0.9rem",
@@ -367,55 +839,25 @@ export default function KnowledgeBasePage() {
                   lineHeight: 1.6,
                 }}
               >
-                {error}
+                {askError}
               </div>
-            )}
+            ) : null}
 
-            {success && (
-              <div
-                style={{
-                  borderRadius: "0.9rem",
-                  border: "1px solid rgba(74, 222, 128, 0.35)",
-                  backgroundColor: "rgba(20, 83, 45, 0.28)",
-                  padding: "0.9rem",
-                  color: "#bbf7d0",
-                  lineHeight: 1.6,
-                }}
-              >
-                <div style={{ fontWeight: 700, marginBottom: "0.45rem" }}>
-                  {success}
-                </div>
-                <div
-                  style={{ display: "grid", gap: "0.25rem", color: "#dcfce7" }}
-                >
-                  <div>Ticker: {result.ticker || "-"}</div>
-                  <div>Document Type: {result.document_type || "-"}</div>
-                  <div>Chunks Stored: {result.chunks_stored ?? "-"}</div>
-                </div>
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={uploading}
+            <div
               style={{
-                ...buttonStyle,
-                backgroundColor: uploading ? "#334155" : "#f97316",
-                color: "#ffffff",
-                opacity: uploading ? 0.8 : 1,
-                alignSelf: "start",
+                borderRadius: "0.9rem",
+                border: "1px dashed rgba(148, 163, 184, 0.24)",
+                backgroundColor: "rgba(15, 23, 42, 0.42)",
+                padding: "1rem",
+                color: "#94a3b8",
+                lineHeight: 1.6,
+                minHeight: "5.5rem",
+                whiteSpace: "pre-wrap",
               }}
             >
-              {uploading ? (
-                <>
-                  <span className="kb-spin" style={spinnerStyle} />
-                  Uploading...
-                </>
-              ) : (
-                "Upload Document"
-              )}
-            </button>
-          </form>
+                {askAnswer || "AI responses will appear here."}
+            </div>
+          </div>
         </div>
       </div>
     </div>

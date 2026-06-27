@@ -6,9 +6,9 @@ import {
   Radio,
   UserCircle,
   Receipt,
+  BookOpen,
 } from "lucide-react";
 import { prefetchRoute } from "../routes/prefetch";
-
 const tabs = [
   {
     label: "Dashboard",
@@ -24,6 +24,7 @@ const tabs = [
   { label: "Compare", icon: <TrendingUp size={20} />, path: "/comparison" },
   { label: "Sentiment", icon: <Radio size={20} />, path: "/sentiment" },
   { label: "Account", icon: <UserCircle size={20} />, path: "/account" },
+  { label: "AI", icon: <BookOpen size={20} />, path: "/knowledge-base" },
 ];
 
 const BottomNav = () => {
@@ -45,8 +46,7 @@ const BottomNav = () => {
           background: #111827;
           border-top: 1px solid rgba(255, 255, 255, 0.1);
           display: grid;
-          grid-template-columns: repeat(6, minmax(0, 1fr));
-          z-index: 1000;
+          grid-template-columns: repeat(7, minmax(0, 1fr));
         }
 
         .bottom-nav-link {

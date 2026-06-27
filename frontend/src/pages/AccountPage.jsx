@@ -754,7 +754,7 @@ const AccountPage = () => {
                 fontSize: "0.95rem",
               }}
             >
-              Open Knowledge Base
+              Open AI Center
             </button>
           </div>
         )}
