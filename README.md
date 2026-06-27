@@ -4,7 +4,7 @@
 
 <div align="center">
 
-**[Live Demo](https://bit.ly/portsense)** &nbsp;·&nbsp; **[Backend API Docs](https://portsense.onrender.com/docs)** &nbsp;·&nbsp; **[GitHub](https://github.com/Dev-06-06/PortSense)**
+**[Live Demo](https://port-sense-tau.vercel.app/)** &nbsp;·&nbsp; **[Backend API Docs](https://portsense.onrender.com/docs)** &nbsp;·&nbsp; **[GitHub](https://github.com/Dev-06-06/PortSense)**
 
 ![PortSense Dashboard](https://github.com/user-attachments/assets/4dff3281-c2be-4f46-83db-8c22766da8a6)
 
@@ -453,6 +453,6 @@ Tax estimates are indicative only. Sentiment analysis and rebalancing advice are
 Built with FastAPI · React · FinBERT · Gemini 2.5 Flash · MongoDB Atlas Vector Search  
 Deployed on Render + Vercel · Data from NSE via yfinance + MFAPI
 
-**[Try the live demo →](https://bit.ly/portsense)**
+**[Try the live demo →](https://port-sense-tau.vercel.app/)**
 
 </div>
