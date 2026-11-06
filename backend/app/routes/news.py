@@ -8,7 +8,7 @@ import httpx
 from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, Query
 
-from app.middleware.auth import get_current_user
+from app.auth.dependencies import get_current_user
 
 ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
 load_dotenv(dotenv_path=ENV_PATH)

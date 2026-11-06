@@ -7,11 +7,11 @@ from motor.motor_asyncio import AsyncIOMotorCollection
 import pandas as pd
 import yfinance as yf
 
-from app.config.db import get_mongo_client
+from app.database.db import get_mongo_client
 from app.deps import get_holdings_collection
-from app.middleware.auth import get_current_user
-from app.services.cache import get_cached, set_cached
-from app.services.analytics import (
+from app.auth.dependencies import get_current_user
+from app.business_logic.cache import get_cached, set_cached
+from app.business_logic.analytics import (
     compute_diversification,
     get_benchmark_comparison,
     get_correlation_matrix,
@@ -19,10 +19,10 @@ from app.services.analytics import (
     get_stock_beta,
     get_sector,
 )
-from app.services.concurrency import gather_in_threads_bounded
-from app.services.market import get_stock_info
-from app.services.risk_decomposition import compute_risk_decomposition
-from app.services.stress_test import run_stress_test
+from app.business_logic.concurrency import gather_in_threads_bounded
+from app.business_logic.market_data import get_stock_info
+from app.business_logic.risk_decomposition import compute_risk_decomposition
+from app.business_logic.stress_test import run_stress_test
 
 
 router = APIRouter()

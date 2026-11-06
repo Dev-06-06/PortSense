@@ -7,7 +7,7 @@ from google import genai
 from google.genai import types
 import logging
 
-from app.rag import embeddings, rag_service
+from app.rag import embeddings, storage as rag_service
 
 ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
 load_dotenv(dotenv_path=ENV_PATH)

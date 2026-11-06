@@ -12,9 +12,9 @@ import pandas as pd
 import yfinance as yf
 
 from app.deps import get_holdings_collection
-from app.middleware.auth import get_current_user
-from app.services.mf import get_mf_nav, _compute_fd_value
-from app.services.market import get_stock_info
+from app.auth.dependencies import get_current_user
+from app.business_logic.mutual_funds import get_mf_nav, _compute_fd_value
+from app.business_logic.market_data import get_stock_info
 
 
 router = APIRouter(tags=["comparison"])

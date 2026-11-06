@@ -13,10 +13,10 @@ from passlib.context import CryptContext
 from motor.motor_asyncio import AsyncIOMotorCollection
 from pydantic import BaseModel, Field
 
-from app.config.db import get_database
+from app.database.db import get_database
 from app.deps import get_users_collection
-from app.middleware.auth import get_current_user
-from app.models.user import (
+from app.auth.dependencies import get_current_user
+from app.schemas.user import (
     ForgotPasswordRequest,
     GoogleAuthRequest,
     ResendOTPRequest,
@@ -27,7 +27,7 @@ from app.models.user import (
     UserResponse,
     VerifyEmailRequest,
 )
-from app.utils.mailer import generate_otp, send_otp_email
+from app.external_services.email.mailer import generate_otp, send_otp_email
 
 
 # Always load backend/.env even when app is started from repository root.
@@ -218,7 +218,7 @@ async def login(
         holdings_collection = db["holdings"]
 
         # Import DEMO_HOLDINGS inline to avoid circular imports
-        from seed import DEMO_HOLDINGS
+        from app.database.seeds.seed_demo import DEMO_HOLDINGS
         from datetime import datetime, timezone
 
         await holdings_collection.delete_many({"userId": user["_id"]})

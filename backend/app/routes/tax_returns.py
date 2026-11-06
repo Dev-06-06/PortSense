@@ -8,10 +8,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from motor.motor_asyncio import AsyncIOMotorCollection
 
 from app.deps import get_holdings_collection
-from app.middleware.auth import get_current_user
-from app.services.concurrency import gather_in_threads_bounded
-from app.services.market import get_stock_info
-from app.services.mf import _compute_fd_value, get_mf_nav
+from app.auth.dependencies import get_current_user
+from app.business_logic.concurrency import gather_in_threads_bounded
+from app.business_logic.market_data import get_stock_info
+from app.business_logic.mutual_funds import _compute_fd_value, get_mf_nav
 
 
 LTCG_EXEMPTION = 125000.0

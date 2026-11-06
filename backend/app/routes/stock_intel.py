@@ -13,17 +13,17 @@ from fastapi import APIRouter, BackgroundTasks, Depends
 from motor.motor_asyncio import AsyncIOMotorCollection
 
 from app.deps import get_holdings_collection
-from app.middleware.auth import get_current_user
+from app.auth.dependencies import get_current_user
 from app.rag.news_embedder import embed_and_store_articles
-from app.services.gemini import get_gemini_response
-from app.services.market import get_stock_info
-from app.services.sentiment import (
+from app.gemini.service import get_gemini_response
+from app.business_logic.market_data import get_stock_info
+from app.business_logic.sentiment import (
     fetch_news_articles,
     _prepare_finbert_inputs,
     _truncate,
     run_finbert_scored,
 )
-from app.services.technical import get_technical_indicators
+from app.business_logic.technical import get_technical_indicators
 
 
 router = APIRouter()

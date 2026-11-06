@@ -10,24 +10,24 @@ import yfinance as yf
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from app.config.db import close_mongo_connection, connect_to_mongo, ensure_indexes
+from app.database.db import close_mongo_connection, connect_to_mongo, ensure_indexes
 from app.routes.analytics import router as analytics_router
-from app.routes.auth import router as auth_router
+from app.auth.routes import router as auth_router
 from app.routes.comparison import router as comparison_router
 from app.routes.genai import router as genai_router
 from app.routes.holdings import router as holdings_router
 from app.routes.market import router as market_router
 from app.routes.news import router as news_router
 from app.routes.sentiment import router as sentiment_router
-from app.routers.admin_rag import router as admin_rag_router
-from app.routers.user_rag import router as user_rag_router
+from app.rag.routes.admin import router as admin_rag_router
+from app.rag.routes.user import router as user_rag_router
 from app.routes.stock_intel import router as stock_intel_router
 from app.routes.tax_returns import router as tax_router
 from app.routes.watchlist import router as watchlist_router
 
 
 logging.basicConfig(level=logging.INFO)
-logging.getLogger("app.services.analytics").setLevel(logging.DEBUG)
+logging.getLogger("app.business_logic.analytics").setLevel(logging.DEBUG)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 

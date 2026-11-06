@@ -7,9 +7,9 @@ from fastapi.responses import StreamingResponse
 from motor.motor_asyncio import AsyncIOMotorCollection
 
 from app.deps import get_holdings_collection
-from app.middleware.auth import get_current_user
-from app.services.sentiment import get_portfolio_sentiment
-from app.services.sentiment import get_stock_sentiment
+from app.auth.dependencies import get_current_user
+from app.business_logic.sentiment import get_portfolio_sentiment
+from app.business_logic.sentiment import get_stock_sentiment
 
 
 router = APIRouter()

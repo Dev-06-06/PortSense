@@ -9,7 +9,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException, UploadFile, status
 
-from app.rag import chunker, embeddings, rag_service
+from app.rag import chunker, embeddings, storage as rag_service
 
 
 SUPPORTED_DOCUMENT_TYPES = {

@@ -9,9 +9,9 @@ from pymongo.errors import DuplicateKeyError
 import yfinance as yf
 
 from app.deps import get_watchlist_collection
-from app.middleware.auth import get_current_user
-from app.services.market import get_stock_info
-from app.services.sentiment import _get_stock_sentiment_cached
+from app.auth.dependencies import get_current_user
+from app.business_logic.market_data import get_stock_info
+from app.business_logic.sentiment import _get_stock_sentiment_cached
 
 
 class WatchlistAdd(BaseModel):

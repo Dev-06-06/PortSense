@@ -9,9 +9,9 @@ from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
 from passlib.context import CryptContext
 
-from app.config.db import get_database_from_client
+from app.database.db import get_database_from_client
 
-ENV_PATH = Path(__file__).resolve().parent / ".env"
+ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
 load_dotenv(dotenv_path=ENV_PATH)
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")

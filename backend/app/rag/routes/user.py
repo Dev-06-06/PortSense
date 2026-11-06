@@ -12,10 +12,10 @@ from typing import Literal
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field
 
-from app.middleware.auth import get_current_user
-from app.rag import embeddings, rag_service
-from app.services.gemini import get_user_doc_answer
-from app.services.document_upload import upload_document
+from app.auth.dependencies import get_current_user
+from app.rag import embeddings, storage as rag_service
+from app.gemini.service import get_user_doc_answer
+from app.rag.document_upload import upload_document
 
 
 router = APIRouter(tags=["user-rag"])

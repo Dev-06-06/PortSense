@@ -9,12 +9,12 @@ from pymongo.errors import DuplicateKeyError
 import yfinance as yf
 
 from app.deps import get_holdings_collection
-from app.middleware.auth import get_current_user
-from app.models.holding import HoldingCreate
-from app.services.cache import invalidate_user
-from app.services.concurrency import gather_in_threads_bounded
-from app.services.market import get_stock_info
-from app.services.mf import search_mf_schemes
+from app.auth.dependencies import get_current_user
+from app.schemas.holding import HoldingCreate
+from app.business_logic.cache import invalidate_user
+from app.business_logic.concurrency import gather_in_threads_bounded
+from app.business_logic.market_data import get_stock_info
+from app.business_logic.mutual_funds import search_mf_schemes
 
 
 router = APIRouter(tags=["holdings"])
@@ -37,7 +37,7 @@ async def get_mf_nav_detail(
     scheme_code: str,
     current_user: dict = Depends(get_current_user),
 ):
-    from app.services.mf import get_mf_nav
+    from app.business_logic.mutual_funds import get_mf_nav
     import httpx
 
     try:
@@ -132,7 +132,7 @@ async def _build_enriched_holdings(
     current_user: dict,
     holdings_collection: AsyncIOMotorCollection,
 ) -> list[dict]:
-    from app.services.mf import get_mf_nav, _compute_fd_value
+    from app.business_logic.mutual_funds import get_mf_nav, _compute_fd_value
 
     raw_holdings = []
     async for holding in holdings_collection.find({"userId": current_user.get("_id")}):
@@ -446,7 +446,7 @@ async def create_holding(
     elif asset_type == "mutual_fund":
         ticker = str(payload.ticker).strip()
         # Validate scheme code exists on MFAPI
-        from app.services.mf import get_mf_nav
+        from app.business_logic.mutual_funds import get_mf_nav
         nav = await get_mf_nav(ticker)
         if nav.get("currentNav", 0) == 0:
             raise HTTPException(

@@ -57,7 +57,7 @@ def get_database(client: MongoClient):
 
 
 def seed_sectors() -> None:
-    env_path = Path(__file__).resolve().parents[1] / ".env"
+    env_path = Path(__file__).resolve().parents[2] / ".env"
     load_dotenv(dotenv_path=env_path)
 
     mongo_uri = os.getenv("MONGO_URI")

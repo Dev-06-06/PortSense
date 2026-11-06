@@ -1,7 +1,7 @@
 from fastapi import HTTPException, status
 from motor.motor_asyncio import AsyncIOMotorCollection
 
-from app.config.db import get_database, get_mongo_client
+from app.database.db import get_database, get_mongo_client
 
 
 def get_database_dependency():

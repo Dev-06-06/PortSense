@@ -2,8 +2,8 @@ import asyncio
 
 from fastapi import APIRouter, Depends
 
-from app.middleware.auth import get_current_user
-from app.services.market import get_stock_info
+from app.auth.dependencies import get_current_user
+from app.business_logic.market_data import get_stock_info
 
 router = APIRouter(tags=["market"])
 

@@ -2,7 +2,7 @@ import asyncio
 import logging
 from typing import Any
 
-from app.services.analytics import get_sector
+from app.business_logic.analytics import get_sector
 
 logger = logging.getLogger(__name__)
 

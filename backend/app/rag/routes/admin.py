@@ -13,8 +13,8 @@ from typing import Literal
 from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 
-from app.middleware.auth import get_current_user
-from app.services.document_upload import upload_document
+from app.auth.dependencies import get_current_user
+from app.rag.document_upload import upload_document
 
 
 ENV_PATH = Path(__file__).resolve().parents[2] / ".env"

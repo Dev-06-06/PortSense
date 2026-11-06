@@ -4,10 +4,10 @@ from fastapi import APIRouter, Depends
 from motor.motor_asyncio import AsyncIOMotorCollection
 from pydantic import BaseModel
 
-from app.config.db import get_mongo_client
+from app.database.db import get_mongo_client
 from app.deps import get_holdings_collection
-from app.middleware.auth import get_current_user
-from app.services.analytics import (
+from app.auth.dependencies import get_current_user
+from app.business_logic.analytics import (
     get_benchmark_comparison,
     compute_correlation_score,
     get_correlation_matrix,
@@ -15,9 +15,9 @@ from app.services.analytics import (
     get_portfolio_beta,
     get_sector_breakdown,
 )
-from app.services.concurrency import gather_in_threads_bounded
-from app.services.gemini import get_correlation_explanation, get_rebalancing_advice
-from app.services.market import get_stock_info
+from app.business_logic.concurrency import gather_in_threads_bounded
+from app.gemini.service import get_correlation_explanation, get_rebalancing_advice
+from app.business_logic.market_data import get_stock_info
 
 
 router = APIRouter()
@@ -77,7 +77,7 @@ async def _get_user_holdings(user_id, holdings_collection: AsyncIOMotorCollectio
     
 
     # Enrich non-stocks with basic data (no yfinance)
-    from app.services.mf import get_mf_nav, _compute_fd_value
+    from app.business_logic.mutual_funds import get_mf_nav, _compute_fd_value
     for holding in non_stock_raw:
         asset_type = str(holding.get("assetType", "")).strip().lower()
         ticker = str(holding.get("ticker", "")).strip()

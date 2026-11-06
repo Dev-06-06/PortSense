@@ -11,8 +11,8 @@ import yfinance as yf
 from scipy.optimize import brentq
 from cachetools import TTLCache
 from motor.motor_asyncio import AsyncIOMotorClient
-from app.config.db import get_database_from_client
-from app.services.gemini import get_gemini_response
+from app.database.db import get_database_from_client
+from app.gemini.service import get_gemini_response
 
 logger = logging.getLogger(__name__)
 

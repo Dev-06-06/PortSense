@@ -8,7 +8,7 @@ import sys
 import os
 
 # Allow imports from backend root
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -18,8 +18,8 @@ logging.basicConfig(
 for noisy in ("yfinance", "peewee", "urllib3", "httpx", "httpcore", "motor", "pymongo"):
     logging.getLogger(noisy).setLevel(logging.WARNING)
 
-from app.config.db import connect_to_mongo, get_database_from_client
-from app.services.analytics import get_sector
+from app.database.db import connect_to_mongo, get_database_from_client
+from app.business_logic.analytics import get_sector
 
 TICKERS = ["BAJAJFINSV.NS", "NESTLEIND.NS"]
 
