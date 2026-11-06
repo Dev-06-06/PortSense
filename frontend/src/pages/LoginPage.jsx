@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import api from "../services/api";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { prefetchRoute } from "../routes/prefetch";
+import { prefetchRoute } from "../performance/prefetchPages";
 import { useGoogleAuth } from "../hooks/useGoogleAuth";
 
 const LoginPage = () => {
@@ -45,27 +45,30 @@ const LoginPage = () => {
   const [forgotHover, setForgotHover] = useState(false);
 
   return (
-    <div style={{
-      minHeight: "100vh",
-      backgroundColor: "#0d1117",
-      display: "grid",
-      placeItems: "center",
-      padding: "1.5rem",
-      fontFamily: "'DM Sans', sans-serif",
-    }}>
+    <div
+      style={{
+        minHeight: "100vh",
+        backgroundColor: "#0d1117",
+        display: "grid",
+        placeItems: "center",
+        padding: "1.5rem",
+        fontFamily: "'DM Sans', sans-serif",
+      }}
+    >
       <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Barlow+Condensed:wght@600;700;800;900&display=swap');`}</style>
 
-      <div style={{
-        width: "100%",
-        maxWidth: "26rem",
-        backgroundColor: "#111827",
-        border: "1px solid rgba(255,255,255,0.1)",
-        borderRadius: "1.25rem",
-        padding: "2rem",
-        color: "#fff",
-        boxShadow: "0 25px 50px rgba(0,0,0,0.5)",
-      }}>
-
+      <div
+        style={{
+          width: "100%",
+          maxWidth: "26rem",
+          backgroundColor: "#111827",
+          border: "1px solid rgba(255,255,255,0.1)",
+          borderRadius: "1.25rem",
+          padding: "2rem",
+          color: "#fff",
+          boxShadow: "0 25px 50px rgba(0,0,0,0.5)",
+        }}
+      >
         {/* Logo button */}
         <button
           type="button"
@@ -81,51 +84,111 @@ const LoginPage = () => {
             cursor: "pointer",
           }}
         >
-          <div style={{
-            width: "32px",
-            height: "32px",
-            borderRadius: "50%",
-            backgroundColor: "#f97316",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}>
-            <span style={{ color: "#fff", fontSize: "14px", fontWeight: 900, fontFamily: "'DM Sans', sans-serif" }}>P</span>
+          <div
+            style={{
+              width: "32px",
+              height: "32px",
+              borderRadius: "50%",
+              backgroundColor: "#f97316",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <span
+              style={{
+                color: "#fff",
+                fontSize: "14px",
+                fontWeight: 900,
+                fontFamily: "'DM Sans', sans-serif",
+              }}
+            >
+              P
+            </span>
           </div>
-          <div style={{
-            fontFamily: "'Barlow Condensed', sans-serif",
-            fontWeight: 900,
-            letterSpacing: "0.18em",
-            color: "#fff",
-            fontSize: "1rem",
-          }}>PORTSENSE</div>
+          <div
+            style={{
+              fontFamily: "'Barlow Condensed', sans-serif",
+              fontWeight: 900,
+              letterSpacing: "0.18em",
+              color: "#fff",
+              fontSize: "1rem",
+            }}
+          >
+            PORTSENSE
+          </div>
         </button>
 
         {/* Heading */}
         <div style={{ marginBottom: "1.5rem" }}>
-          <div style={{ margin: 0, marginBottom: "0.25rem", fontSize: "0.65rem", fontWeight: 800, letterSpacing: "0.2em", textTransform: "uppercase", color: "#f97316" }}>WELCOME BACK</div>
-          <h1 style={{ margin: 0, fontFamily: "'Barlow Condensed', sans-serif", fontSize: "2.5rem", fontWeight: 900, color: "#fff" }}>LOGIN</h1>
-          <p style={{ margin: "0.25rem 0 0", fontSize: "0.85rem", color: "#64748b" }}>Continue tracking your portfolio.</p>
+          <div
+            style={{
+              margin: 0,
+              marginBottom: "0.25rem",
+              fontSize: "0.65rem",
+              fontWeight: 800,
+              letterSpacing: "0.2em",
+              textTransform: "uppercase",
+              color: "#f97316",
+            }}
+          >
+            WELCOME BACK
+          </div>
+          <h1
+            style={{
+              margin: 0,
+              fontFamily: "'Barlow Condensed', sans-serif",
+              fontSize: "2.5rem",
+              fontWeight: 900,
+              color: "#fff",
+            }}
+          >
+            LOGIN
+          </h1>
+          <p
+            style={{
+              margin: "0.25rem 0 0",
+              fontSize: "0.85rem",
+              color: "#64748b",
+            }}
+          >
+            Continue tracking your portfolio.
+          </p>
         </div>
 
         {error && (
-          <div style={{
-            marginBottom: "1rem",
-            padding: "0.65rem 0.9rem",
-            backgroundColor: "rgba(239,68,68,0.1)",
-            border: "1px solid rgba(239,68,68,0.3)",
-            borderRadius: "0.75rem",
-            color: "#fca5a5",
-            fontSize: "0.85rem",
-          }}>{error}</div>
+          <div
+            style={{
+              marginBottom: "1rem",
+              padding: "0.65rem 0.9rem",
+              backgroundColor: "rgba(239,68,68,0.1)",
+              border: "1px solid rgba(239,68,68,0.3)",
+              borderRadius: "0.75rem",
+              color: "#fca5a5",
+              fontSize: "0.85rem",
+            }}
+          >
+            {error}
+          </div>
         )}
 
         <form onSubmit={onSubmit}>
           <div style={{ display: "grid", gap: "0.9rem" }}>
-
             {/* Email */}
             <div>
-              <label style={{ display: "block", marginBottom: "0.4rem", fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase", color: "#94a3b8" }}>Email</label>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "0.4rem",
+                  fontSize: "0.7rem",
+                  fontWeight: 700,
+                  letterSpacing: "0.15em",
+                  textTransform: "uppercase",
+                  color: "#94a3b8",
+                }}
+              >
+                Email
+              </label>
               <input
                 type="email"
                 placeholder="you@example.com"
@@ -150,13 +213,34 @@ const LoginPage = () => {
 
             {/* Password */}
             <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
-                <label style={{ fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase", color: "#94a3b8" }}>Password</label>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "0.4rem",
+                }}
+              >
+                <label
+                  style={{
+                    fontSize: "0.7rem",
+                    fontWeight: 700,
+                    letterSpacing: "0.15em",
+                    textTransform: "uppercase",
+                    color: "#94a3b8",
+                  }}
+                >
+                  Password
+                </label>
                 <Link
                   to="/reset-password"
                   onMouseEnter={() => setForgotHover(true)}
                   onMouseLeave={() => setForgotHover(false)}
-                  style={{ fontSize: "0.75rem", color: forgotHover ? "#f97316" : "#64748b", textDecoration: "none" }}
+                  style={{
+                    fontSize: "0.75rem",
+                    color: forgotHover ? "#f97316" : "#64748b",
+                    textDecoration: "none",
+                  }}
                 >
                   Forgot password?
                 </Link>
@@ -206,15 +290,59 @@ const LoginPage = () => {
                   }}
                 >
                   {showPassword ? (
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" stroke={eyeHover ? "#f97316" : "#64748b"} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-                      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" stroke={eyeHover ? "#f97316" : "#64748b"} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-                      <line x1="1" y1="1" x2="23" y2="23" stroke={eyeHover ? "#f97316" : "#64748b"} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"
+                        stroke={eyeHover ? "#f97316" : "#64748b"}
+                        strokeWidth="1.4"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"
+                        stroke={eyeHover ? "#f97316" : "#64748b"}
+                        strokeWidth="1.4"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <line
+                        x1="1"
+                        y1="1"
+                        x2="23"
+                        y2="23"
+                        stroke={eyeHover ? "#f97316" : "#64748b"}
+                        strokeWidth="1.4"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
                     </svg>
                   ) : (
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke={eyeHover ? "#f97316" : "#64748b"} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-                      <circle cx="12" cy="12" r="3" fill={eyeHover ? "#f97316" : "#64748b"} />
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"
+                        stroke={eyeHover ? "#f97316" : "#64748b"}
+                        strokeWidth="1.2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <circle
+                        cx="12"
+                        cy="12"
+                        r="3"
+                        fill={eyeHover ? "#f97316" : "#64748b"}
+                      />
                     </svg>
                   )}
                 </button>
@@ -246,19 +374,57 @@ const LoginPage = () => {
         </form>
 
         {/* OR Divider */}
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", margin: "1.25rem 0" }}>
-          <div style={{ flex: 1, height: "1px", background: "rgba(255,255,255,0.1)" }} />
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.75rem",
+            margin: "1.25rem 0",
+          }}
+        >
+          <div
+            style={{
+              flex: 1,
+              height: "1px",
+              background: "rgba(255,255,255,0.1)",
+            }}
+          />
           <div style={{ fontSize: "0.75rem", color: "#475569" }}>or</div>
-          <div style={{ flex: 1, height: "1px", background: "rgba(255,255,255,0.1)" }} />
+          <div
+            style={{
+              flex: 1,
+              height: "1px",
+              background: "rgba(255,255,255,0.1)",
+            }}
+          />
         </div>
 
         {/* Google Button Container */}
-        <div id="google-login-btn" style={{ width: "100%", display: "flex", justifyContent: "center" }} />
+        <div
+          id="google-login-btn"
+          style={{ width: "100%", display: "flex", justifyContent: "center" }}
+        />
 
         {/* Register link */}
-        <p style={{ marginTop: "1.25rem", marginBottom: 0, textAlign: "center", fontSize: "0.875rem", color: "#94a3b8" }}>
-          Don't have an account?{' '}
-          <Link to="/register" onMouseEnter={() => prefetchRoute("/register") } style={{ color: "#f97316", fontWeight: 700, textDecoration: "none" }}>
+        <p
+          style={{
+            marginTop: "1.25rem",
+            marginBottom: 0,
+            textAlign: "center",
+            fontSize: "0.875rem",
+            color: "#94a3b8",
+          }}
+        >
+          Don't have an account?{" "}
+          <Link
+            to="/register"
+            onMouseEnter={() => prefetchRoute("/register")}
+            style={{
+              color: "#f97316",
+              fontWeight: 700,
+              textDecoration: "none",
+            }}
+          >
             Register
           </Link>
         </p>

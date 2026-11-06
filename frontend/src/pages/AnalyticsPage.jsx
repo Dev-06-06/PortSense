@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -17,8 +17,7 @@ import {
 } from "recharts";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import useSwipe from "../hooks/useSwipe";
-import api from "../services/api";
+import api from "../axios/api";
 
 const SLICE_COLORS = [
   "#f97316",
@@ -182,21 +181,6 @@ const AnalyticsPage = () => {
   const [expandedPair, setExpandedPair] = useState(null);
   const [explanations, setExplanations] = useState({});
   const [loadingPair, setLoadingPair] = useState(null);
-  const analyticsSwipeRef = useRef(null);
-
-  const onSwipeLeft = () => {
-    const currentIndex = ANALYTICS_TABS.indexOf(activeTab);
-    if (currentIndex < ANALYTICS_TABS.length - 1)
-      setActiveTab(ANALYTICS_TABS[currentIndex + 1]);
-  };
-
-  const onSwipeRight = () => {
-    const currentIndex = ANALYTICS_TABS.indexOf(activeTab);
-    if (currentIndex > 0) setActiveTab(ANALYTICS_TABS[currentIndex - 1]);
-  };
-
-  useSwipe(analyticsSwipeRef, onSwipeLeft, onSwipeRight);
-
   // Parse advice text
   const parsedAdvice = useMemo(() => parseAdvice(adviceText), [adviceText]);
 
@@ -615,10 +599,7 @@ const AnalyticsPage = () => {
           ))}
         </div>
 
-        <div
-          ref={analyticsSwipeRef}
-          style={{ touchAction: "pan-y", paddingTop: "1rem" }}
-        >
+        <div style={{ paddingTop: "1rem" }}>
           {activeTab === "Overview" && (
             <>
               {/* ========== 1. SECTOR BREAKDOWN ========== */}

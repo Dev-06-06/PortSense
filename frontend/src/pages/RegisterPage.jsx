@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import api from "../services/api";
 import { Link, useNavigate } from "react-router-dom";
 import { useGoogleAuth } from "../hooks/useGoogleAuth";
-import { prefetchRoute } from "../routes/prefetch";
+import { prefetchRoute } from "../performance/prefetchPages";
 
 const RegisterPage = () => {
   const [username, setUsername] = useState("");
