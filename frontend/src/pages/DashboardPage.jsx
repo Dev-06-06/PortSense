@@ -4,7 +4,7 @@ import api from "../services/api";
 import StockIntelDrawer from "../components/StockIntelDrawer";
 import TopNav from "../components/TopNav";
 import DemoBanner from "../components/DemoBanner";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../hooks/useAuth";
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 

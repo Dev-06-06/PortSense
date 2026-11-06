@@ -3,7 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import BottomNav from "./components/BottomNav";
 import DemoBanner from "./components/DemoBanner";
 import ProtectedRoute from "./components/ProtectedRoute";
-import { useAuth } from "./context/AuthContext";
+import { useAuth } from "./hooks/useAuth";
 
 const LandingPage = lazy(() => import("./pages/LandingPage"));
 const LoginPage = lazy(() => import("./pages/LoginPage"));

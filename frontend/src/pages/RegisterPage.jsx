@@ -453,9 +453,11 @@ const RegisterPage = () => {
               fontWeight: 700,
               textDecoration: "none",
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = "#fb923c")}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = "#fb923c";
+              prefetchRoute("/login");
+            }}
             onMouseLeave={(e) => (e.currentTarget.style.color = "#f97316")}
-            onMouseEnter={() => prefetchRoute("/login")}
           >
             Login
           </Link>

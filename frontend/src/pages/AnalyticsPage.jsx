@@ -16,7 +16,7 @@ import {
   YAxis,
 } from "recharts";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../hooks/useAuth";
 import api from "../axios/api";
 
 const SLICE_COLORS = [

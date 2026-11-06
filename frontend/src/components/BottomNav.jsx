@@ -8,7 +8,7 @@ import {
   Receipt,
   BookOpen,
 } from "lucide-react";
-import { prefetchRoute } from "../routes/prefetch";
+import { prefetchRoute } from "../performance/prefetchPages";
 const tabs = [
   {
     label: "Dashboard",
