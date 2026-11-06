@@ -5,8 +5,8 @@ from motor.motor_asyncio import AsyncIOMotorCollection
 from pydantic import BaseModel
 
 from app.database.db import get_mongo_client
-from app.deps import get_holdings_collection
-from app.auth.dependencies import get_current_user
+from app.database.dependencies import get_holdings_collection
+from app.auth.verify_token import get_current_user
 from app.business_logic.analytics import (
     get_benchmark_comparison,
     compute_correlation_score,
@@ -16,8 +16,8 @@ from app.business_logic.analytics import (
     get_sector_breakdown,
 )
 from app.business_logic.concurrency import gather_in_threads_bounded
-from app.gemini.service import get_correlation_explanation, get_rebalancing_advice
-from app.business_logic.market_data import get_stock_info
+from app.gemini.gemini_services import get_correlation_explanation, get_rebalancing_advice
+from app.business_logic.stock_data import get_stock_info
 
 
 router = APIRouter()

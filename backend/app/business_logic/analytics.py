@@ -12,7 +12,7 @@ from scipy.optimize import brentq
 from cachetools import TTLCache
 from motor.motor_asyncio import AsyncIOMotorClient
 from app.database.db import get_database_from_client
-from app.gemini.service import get_gemini_response
+from app.gemini.gemini_services import get_gemini_response
 
 logger = logging.getLogger(__name__)
 

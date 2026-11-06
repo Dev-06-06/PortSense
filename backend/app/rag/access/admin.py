@@ -13,7 +13,7 @@ from typing import Literal
 from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 
-from app.auth.dependencies import get_current_user
+from app.auth.verify_token import get_current_user
 from app.rag.document_upload import upload_document
 
 

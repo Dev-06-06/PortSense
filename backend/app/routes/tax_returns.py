@@ -7,10 +7,10 @@ from datetime import date, datetime
 from fastapi import APIRouter, Depends, HTTPException
 from motor.motor_asyncio import AsyncIOMotorCollection
 
-from app.deps import get_holdings_collection
-from app.auth.dependencies import get_current_user
+from app.database.dependencies import get_holdings_collection
+from app.auth.verify_token import get_current_user
 from app.business_logic.concurrency import gather_in_threads_bounded
-from app.business_logic.market_data import get_stock_info
+from app.business_logic.stock_data import get_stock_info
 from app.business_logic.mutual_funds import _compute_fd_value, get_mf_nav
 
 

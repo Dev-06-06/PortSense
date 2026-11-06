@@ -6,7 +6,8 @@ from datetime import datetime, timezone
 from hashlib import md5
 from typing import Any
 
-from app.rag import embeddings, storage as rag_service
+from app.rag import embeddings
+from app.rag import vector_search as rag_service
 
 
 def _build_embedding_text(article: dict[str, Any]) -> str:

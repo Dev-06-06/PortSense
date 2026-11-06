@@ -8,10 +8,10 @@ from pydantic import BaseModel
 from pymongo.errors import DuplicateKeyError
 import yfinance as yf
 
-from app.deps import get_watchlist_collection
-from app.auth.dependencies import get_current_user
-from app.business_logic.market_data import get_stock_info
-from app.business_logic.sentiment import _get_stock_sentiment_cached
+from app.database.dependencies import get_watchlist_collection
+from app.auth.verify_token import get_current_user
+from app.business_logic.stock_data import get_stock_info
+from app.business_logic.sentiment_analysis import _get_stock_sentiment_cached
 
 
 class WatchlistAdd(BaseModel):

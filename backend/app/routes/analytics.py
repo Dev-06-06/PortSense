@@ -8,8 +8,8 @@ import pandas as pd
 import yfinance as yf
 
 from app.database.db import get_mongo_client
-from app.deps import get_holdings_collection
-from app.auth.dependencies import get_current_user
+from app.database.dependencies import get_holdings_collection
+from app.auth.verify_token import get_current_user
 from app.business_logic.cache import get_cached, set_cached
 from app.business_logic.analytics import (
     compute_diversification,
@@ -20,7 +20,7 @@ from app.business_logic.analytics import (
     get_sector,
 )
 from app.business_logic.concurrency import gather_in_threads_bounded
-from app.business_logic.market_data import get_stock_info
+from app.business_logic.stock_data import get_stock_info
 from app.business_logic.risk_decomposition import compute_risk_decomposition
 from app.business_logic.stress_test import run_stress_test
 

@@ -12,18 +12,18 @@ import yfinance as yf
 from fastapi import APIRouter, BackgroundTasks, Depends
 from motor.motor_asyncio import AsyncIOMotorCollection
 
-from app.deps import get_holdings_collection
-from app.auth.dependencies import get_current_user
+from app.database.dependencies import get_holdings_collection
+from app.auth.verify_token import get_current_user
 from app.rag.news_embedder import embed_and_store_articles
-from app.gemini.service import get_gemini_response
-from app.business_logic.market_data import get_stock_info
-from app.business_logic.sentiment import (
+from app.gemini.gemini_services import get_gemini_response
+from app.business_logic.stock_data import get_stock_info
+from app.business_logic.sentiment_analysis import (
     fetch_news_articles,
     _prepare_finbert_inputs,
     _truncate,
     run_finbert_scored,
 )
-from app.business_logic.technical import get_technical_indicators
+from app.business_logic.technical_indicators import get_technical_indicators
 
 
 router = APIRouter()

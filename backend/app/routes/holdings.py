@@ -8,12 +8,12 @@ from motor.motor_asyncio import AsyncIOMotorCollection
 from pymongo.errors import DuplicateKeyError
 import yfinance as yf
 
-from app.deps import get_holdings_collection
-from app.auth.dependencies import get_current_user
+from app.database.dependencies import get_holdings_collection
+from app.auth.verify_token import get_current_user
 from app.schemas.holding import HoldingCreate
 from app.business_logic.cache import invalidate_user
 from app.business_logic.concurrency import gather_in_threads_bounded
-from app.business_logic.market_data import get_stock_info
+from app.business_logic.stock_data import get_stock_info
 from app.business_logic.mutual_funds import search_mf_schemes
 
 

@@ -8,7 +8,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 
-from app.deps import get_users_collection
+from app.database.dependencies import get_users_collection
 
 
 # Always load backend/.env even when app is started from repository root.
