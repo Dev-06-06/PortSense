@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import api from "../services/api";
+import api from "../axios/api";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 

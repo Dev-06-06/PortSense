@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import api from "../services/api";
+import api from "../axios/api";
 import StockIntelDrawer from "../components/StockIntelDrawer";
 import TopNav from "../components/TopNav";
 import DemoBanner from "../components/DemoBanner";

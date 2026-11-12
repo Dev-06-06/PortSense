@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import api from "../services/api";
+import api from "../axios/api";
 
 const shellStyle = {
   minHeight: "100vh",

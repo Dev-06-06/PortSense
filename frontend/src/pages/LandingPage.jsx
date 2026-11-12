@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import TopNav from "../components/TopNav";
-import api from "../services/api";
+import api from "../axios/api";
 
 const FEATURES = [
   {
@@ -151,7 +151,9 @@ export default function LandingPage() {
           {/* CTAs */}
           <div style={s.ctaRow}>
             <button
-              onClick={() => (user ? navigate("/dashboard") : navigate("/login"))}
+              onClick={() =>
+                user ? navigate("/dashboard") : navigate("/login")
+              }
               style={s.primaryBtn}
               onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.9")}
               onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
@@ -170,14 +172,12 @@ export default function LandingPage() {
                 if (!demoLoading) {
                   e.currentTarget.style.backgroundColor =
                     "rgba(249,115,22,0.1)";
-                  e.currentTarget.style.borderColor =
-                    "rgba(249,115,22,0.6)";
+                  e.currentTarget.style.borderColor = "rgba(249,115,22,0.6)";
                 }
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.backgroundColor = "transparent";
-                e.currentTarget.style.borderColor =
-                  "rgba(255,255,255,0.2)";
+                e.currentTarget.style.borderColor = "rgba(255,255,255,0.2)";
               }}
             >
               {demoLoading ? "Loading..." : "⚡ Try Demo"}
@@ -340,7 +340,11 @@ export default function LandingPage() {
               { name: "React + Vite", role: "Frontend", color: "#60a5fa" },
               { name: "MongoDB Atlas", role: "Database", color: "#22c55e" },
               { name: "FinBERT", role: "NLP Sentiment", color: "#f97316" },
-              { name: "Gemini 2.5 Flash", role: "AI Advisor", color: "#a78bfa" },
+              {
+                name: "Gemini 2.5 Flash",
+                role: "AI Advisor",
+                color: "#a78bfa",
+              },
               { name: "GNews API", role: "News Feed", color: "#f59e0b" },
               { name: "yfinance", role: "Market Data", color: "#38bdf8" },
               { name: "MFAPI.in", role: "MF NAV Data", color: "#fb923c" },
@@ -370,9 +374,7 @@ export default function LandingPage() {
       <section style={s.ctaSection}>
         <div style={s.sectionInner}>
           <div style={s.ctaCard}>
-            <h2 style={s.ctaHeading}>
-              Ready to understand your portfolio?
-            </h2>
+            <h2 style={s.ctaHeading}>Ready to understand your portfolio?</h2>
             <p style={s.ctaSubtext}>
               Free forever. No credit card. No broker login needed.
             </p>
@@ -398,14 +400,12 @@ export default function LandingPage() {
                   if (!demoLoading) {
                     e.currentTarget.style.backgroundColor =
                       "rgba(249,115,22,0.1)";
-                    e.currentTarget.style.borderColor =
-                      "rgba(249,115,22,0.6)";
+                    e.currentTarget.style.borderColor = "rgba(249,115,22,0.6)";
                   }
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.backgroundColor = "transparent";
-                  e.currentTarget.style.borderColor =
-                    "rgba(255,255,255,0.2)";
+                  e.currentTarget.style.borderColor = "rgba(255,255,255,0.2)";
                 }}
               >
                 {demoLoading ? "Loading..." : "⚡ Try Demo First"}

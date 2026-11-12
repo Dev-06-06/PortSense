@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../hooks/useAuth";
-import api from "../services/api";
+import api from "../axios/api";
 
-const ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL || "").trim().toLowerCase();
+const ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL || "")
+  .trim()
+  .toLowerCase();
 
 const companyDocumentTypes = [
   { label: "Annual Report", value: "annual_report" },
@@ -89,7 +91,9 @@ const emptyUploadResult = {
 };
 
 const getAskAiMessage = (error) =>
-  error?.response?.data?.detail || error?.response?.data?.message || "Unable to get an answer right now.";
+  error?.response?.data?.detail ||
+  error?.response?.data?.message ||
+  "Unable to get an answer right now.";
 
 const createUploadState = (defaultDocumentType) => ({
   ticker: "",
@@ -128,7 +132,7 @@ const formatTimestamp = (value) => {
 
 const normalizeChunksStored = (value) => {
   const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : value ?? null;
+  return Number.isFinite(parsed) ? parsed : (value ?? null);
 };
 
 export default function KnowledgeBasePage() {
@@ -148,7 +152,10 @@ export default function KnowledgeBasePage() {
   const [askTicker, setAskTicker] = useState("");
 
   const currentEmail = useMemo(
-    () => String(user?.email || decodedToken?.email || "").trim().toLowerCase(),
+    () =>
+      String(user?.email || decodedToken?.email || "")
+        .trim()
+        .toLowerCase(),
     [user, decodedToken],
   );
   const isAdmin = Boolean(ADMIN_EMAIL) && currentEmail === ADMIN_EMAIL;
@@ -157,7 +164,9 @@ export default function KnowledgeBasePage() {
     const seen = new Set();
 
     for (const upload of recentPersonalUploads) {
-      const ticker = String(upload?.ticker || "").trim().toUpperCase();
+      const ticker = String(upload?.ticker || "")
+        .trim()
+        .toUpperCase();
       if (!ticker || seen.has(ticker)) {
         continue;
       }
@@ -174,7 +183,9 @@ export default function KnowledgeBasePage() {
     }
 
     if (uploadedTickerOptions.length > 1) {
-      return uploadedTickerOptions.includes(askTicker) ? askTicker : uploadedTickerOptions[0];
+      return uploadedTickerOptions.includes(askTicker)
+        ? askTicker
+        : uploadedTickerOptions[0];
     }
 
     return "";
@@ -287,7 +298,9 @@ export default function KnowledgeBasePage() {
       if (trackRecentUpload) {
         setRecentPersonalUploads((previous) => [
           {
-            id: payload.doc_id || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            id:
+              payload.doc_id ||
+              `${Date.now()}-${Math.random().toString(16).slice(2)}`,
             ticker: nextResult.ticker,
             company: nextResult.company,
             documentType: nextResult.document_type,
@@ -414,7 +427,10 @@ export default function KnowledgeBasePage() {
       >
         <div style={{ display: "grid", gap: "1rem" }}>
           <div style={{ display: "grid", gap: "0.5rem" }}>
-            <label htmlFor={`${fileInputId}-ticker`} style={{ fontWeight: 700, fontSize: "0.9rem" }}>
+            <label
+              htmlFor={`${fileInputId}-ticker`}
+              style={{ fontWeight: 700, fontSize: "0.9rem" }}
+            >
               Ticker
             </label>
             <input
@@ -433,7 +449,10 @@ export default function KnowledgeBasePage() {
           </div>
 
           <div style={{ display: "grid", gap: "0.5rem" }}>
-            <label htmlFor={`${fileInputId}-company`} style={{ fontWeight: 700, fontSize: "0.9rem" }}>
+            <label
+              htmlFor={`${fileInputId}-company`}
+              style={{ fontWeight: 700, fontSize: "0.9rem" }}
+            >
               Company
             </label>
             <input
@@ -452,7 +471,10 @@ export default function KnowledgeBasePage() {
           </div>
 
           <div style={{ display: "grid", gap: "0.5rem" }}>
-            <label htmlFor={`${fileInputId}-document-type`} style={{ fontWeight: 700, fontSize: "0.9rem" }}>
+            <label
+              htmlFor={`${fileInputId}-document-type`}
+              style={{ fontWeight: 700, fontSize: "0.9rem" }}
+            >
               Document Type
             </label>
             <select
@@ -475,7 +497,10 @@ export default function KnowledgeBasePage() {
           </div>
 
           <div style={{ display: "grid", gap: "0.5rem" }}>
-            <label htmlFor={`${fileInputId}-file`} style={{ fontWeight: 700, fontSize: "0.9rem" }}>
+            <label
+              htmlFor={`${fileInputId}-file`}
+              style={{ fontWeight: 700, fontSize: "0.9rem" }}
+            >
               Upload PDF/TXT
             </label>
             <input
@@ -526,11 +551,19 @@ export default function KnowledgeBasePage() {
               lineHeight: 1.6,
             }}
           >
-            <div style={{ fontWeight: 700, marginBottom: "0.45rem" }}>{formState.success}</div>
+            <div style={{ fontWeight: 700, marginBottom: "0.45rem" }}>
+              {formState.success}
+            </div>
             <div style={{ display: "grid", gap: "0.25rem", color: "#dcfce7" }}>
               <div>Ticker: {formState.result?.ticker || "-"}</div>
               <div>Company: {formState.result?.company || "-"}</div>
-              <div>Document Type: {getDocumentTypeLabel(documentTypes, formState.result?.document_type || "")}</div>
+              <div>
+                Document Type:{" "}
+                {getDocumentTypeLabel(
+                  documentTypes,
+                  formState.result?.document_type || "",
+                )}
+              </div>
               <div>Chunks Stored: {formState.result?.chunks_stored ?? "-"}</div>
             </div>
           </div>
@@ -605,7 +638,8 @@ export default function KnowledgeBasePage() {
                 lineHeight: 1.6,
               }}
             >
-              Upload company knowledge documents or keep your own research in one place.
+              Upload company knowledge documents or keep your own research in
+              one place.
             </p>
           </div>
         </div>
@@ -613,7 +647,8 @@ export default function KnowledgeBasePage() {
         {isAdmin &&
           renderUploadCard({
             title: "Company Knowledge Base",
-            description: "Upload company documents into the shared knowledge base for all PortSense users.",
+            description:
+              "Upload company documents into the shared knowledge base for all PortSense users.",
             formState: companyForm,
             setFormState: setCompanyForm,
             endpoint: "/admin/upload-doc",
@@ -641,7 +676,8 @@ export default function KnowledgeBasePage() {
 
         {renderUploadCard({
           title: "Upload Personal Research",
-          description: "Upload private research files that stay scoped to your account.",
+          description:
+            "Upload private research files that stay scoped to your account.",
           formState: personalForm,
           setFormState: setPersonalForm,
           endpoint: "/user/upload-doc",
@@ -660,7 +696,8 @@ export default function KnowledgeBasePage() {
             lineHeight: 1.6,
           }}
         >
-          Note: uploaded files are used as context for AI insights only in AI Center.
+          Note: uploaded files are used as context for AI insights only in AI
+          Center.
         </div>
 
         <div style={{ ...cardStyle, padding: "1.5rem" }}>
@@ -687,7 +724,13 @@ export default function KnowledgeBasePage() {
             >
               My Uploaded Documents
             </h2>
-            <p style={{ margin: "0.45rem 0 0", color: "#94a3b8", lineHeight: 1.6 }}>
+            <p
+              style={{
+                margin: "0.45rem 0 0",
+                color: "#94a3b8",
+                lineHeight: 1.6,
+              }}
+            >
               Recent personal uploads from this session.
             </p>
           </div>
@@ -703,7 +746,8 @@ export default function KnowledgeBasePage() {
                 lineHeight: 1.6,
               }}
             >
-              Your uploaded personal documents will appear here after each successful upload.
+              Your uploaded personal documents will appear here after each
+              successful upload.
             </div>
           ) : (
             <div style={{ display: "grid", gap: "0.75rem" }}>
@@ -728,10 +772,16 @@ export default function KnowledgeBasePage() {
                       justifyContent: "space-between",
                     }}
                   >
-                    <div style={{ fontWeight: 800, color: "#ffffff" }}>{item.ticker}</div>
-                    <div style={{ color: "#94a3b8", fontSize: "0.85rem" }}>{formatTimestamp(item.uploadedAt)}</div>
+                    <div style={{ fontWeight: 800, color: "#ffffff" }}>
+                      {item.ticker}
+                    </div>
+                    <div style={{ color: "#94a3b8", fontSize: "0.85rem" }}>
+                      {formatTimestamp(item.uploadedAt)}
+                    </div>
                   </div>
-                  <div style={{ color: "#cbd5e1", lineHeight: 1.6 }}>{item.company}</div>
+                  <div style={{ color: "#cbd5e1", lineHeight: 1.6 }}>
+                    {item.company}
+                  </div>
                   <div
                     style={{
                       display: "flex",
@@ -741,7 +791,13 @@ export default function KnowledgeBasePage() {
                       fontSize: "0.9rem",
                     }}
                   >
-                    <span>Document Type: {getDocumentTypeLabel(personalDocumentTypes, item.documentType)}</span>
+                    <span>
+                      Document Type:{" "}
+                      {getDocumentTypeLabel(
+                        personalDocumentTypes,
+                        item.documentType,
+                      )}
+                    </span>
                     <span>Chunks Stored: {item.chunksStored ?? "-"}</span>
                     <span>File: {item.fileName}</span>
                   </div>
@@ -775,8 +831,15 @@ export default function KnowledgeBasePage() {
             >
               Ask AI
             </h2>
-            <p style={{ margin: "0.45rem 0 0", color: "#94a3b8", lineHeight: 1.6 }}>
-              Ask questions about your uploaded documents without leaving this page.
+            <p
+              style={{
+                margin: "0.45rem 0 0",
+                color: "#94a3b8",
+                lineHeight: 1.6,
+              }}
+            >
+              Ask questions about your uploaded documents without leaving this
+              page.
             </p>
           </div>
 
@@ -790,7 +853,10 @@ export default function KnowledgeBasePage() {
 
             {uploadedTickerOptions.length > 1 ? (
               <div style={{ display: "grid", gap: "0.5rem" }}>
-                <label htmlFor="ask-ai-ticker" style={{ fontWeight: 700, fontSize: "0.9rem" }}>
+                <label
+                  htmlFor="ask-ai-ticker"
+                  style={{ fontWeight: 700, fontSize: "0.9rem" }}
+                >
                   Search within
                 </label>
                 <select
@@ -813,18 +879,20 @@ export default function KnowledgeBasePage() {
             ) : null}
 
             <button
-                type="button"
-                onClick={submitAskAi}
-                disabled={askLoading}
+              type="button"
+              onClick={submitAskAi}
+              disabled={askLoading}
               style={{
                 ...buttonStyle,
-                  backgroundColor: askLoading ? "#334155" : "#f97316",
+                backgroundColor: askLoading ? "#334155" : "#f97316",
                 color: "#ffffff",
                 alignSelf: "start",
-                  opacity: askLoading ? 0.82 : 1,
+                opacity: askLoading ? 0.82 : 1,
               }}
             >
-                {askLoading ? <span className="kb-spin" style={spinnerStyle} /> : null}
+              {askLoading ? (
+                <span className="kb-spin" style={spinnerStyle} />
+              ) : null}
               Ask AI
             </button>
 
@@ -855,7 +923,7 @@ export default function KnowledgeBasePage() {
                 whiteSpace: "pre-wrap",
               }}
             >
-                {askAnswer || "AI responses will appear here."}
+              {askAnswer || "AI responses will appear here."}
             </div>
           </div>
         </div>

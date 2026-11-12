@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
-import api from "../services/api";
+import api from "../axios/api";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -478,7 +478,8 @@ const SentimentPage = () => {
                           lineHeight: 1.5,
                         }}
                       >
-                        No relevant news items were identified within the last seven days.
+                        No relevant news items were identified within the last
+                        seven days.
                         <br />
                         <span style={{ color: "#334155" }}>
                           Sentiment set to Neutral by default.
